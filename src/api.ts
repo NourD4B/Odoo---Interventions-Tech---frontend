@@ -58,6 +58,20 @@ export interface Intervention {
 export interface Interventions { debut: string; fin: string; odoo: number; hfsql: number;
   avertissements: string[]; interventions: Intervention[] }
 
+/** Dernière position GPS d'un appareil Traccar (pas de vitesse : interdit par la CNIL). */
+export interface PositionLive { id: string; nom: string; lat: number; lng: number; horodatage: string | null;
+  precision_m: number | null; batterie: number | null; statut: string | null }
+
+/** Lien Google Maps (gratuit, sans clé) pour démarrer le trajet vers une destination. */
+export function lienItineraire(i: { position: { lat: number; lng: number } | null; adresse: string | null;
+  ville: string | null }): string | null {
+  const destination = i.position
+    ? `${i.position.lat},${i.position.lng}`
+    : [i.adresse, i.ville].filter(Boolean).join(', ');
+  if (!destination) return null;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+}
+
 export interface EtatSource { nom: string; ok: boolean; detail: string }
 export interface Synthese { entite: string; total: number; concordant: number; ecart: number;
   odoo_seul: number; hfsql_seul: number; ambigu: number }
@@ -84,6 +98,7 @@ export const api = {
   affectations: (id: number) => lire<Affectation[]>(`/api/vehicules/${id}/affectations`),
   pv: (plaque: string, date: string) => lire<ResultatPV>('/api/pv', { plaque, date }),
   interventions: (debut: string, fin?: string) => lire<Interventions>('/api/interventions', { debut, fin }),
+  positionsLive: () => lire<PositionLive[]>('/api/positions/live'),
   reconciliation: () => lire<Synthese[]>('/api/reconciliation'),
   viderCache: () => fetch('/api/cache/vider', { method: 'POST' }),
 };
