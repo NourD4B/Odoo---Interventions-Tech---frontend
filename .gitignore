@@ -1,0 +1,10 @@
+# Secrets
+.env
+
+node_modules/
+dist/
+
+.vscode/
+.idea/
+Thumbs.db
+*.tsbuildinfo

@@ -1,0 +1,120 @@
+/* Jetons repris des maquettes Claude Design (« D4B Interventions – maquettes ») */
+:root {
+  --fond: #f4f5f7;
+  --surface: #ffffff;
+  --bordure: #e3e5ea;
+  --bordure-forte: #d5d8de;
+  --encre: #16181d;
+  --encre-2: #3a3f4b;
+  --encre-3: #5b6170;
+  --accent: #1d4ed8;
+  --accent-doux: #eaf0fd;
+  --sur-site: #1d4ed8;
+  --en-route: #b45309;
+  --en-route-doux: #fdf1e4;
+  --dispo: #0f766e;
+  --dispo-doux: #e3f4f1;
+  --alerte: #92400e;
+  --alerte-doux: #fef3c7;
+  --erreur: #b91c1c;
+  --erreur-doux: #fde8e8;
+  --neutre-doux: #eef0f3;
+  --rayon: 12px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fond); color: var(--encre); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+a { color: var(--accent); }
+h1 { margin: 0; font-size: 24px; font-weight: 700; }
+h2 { margin: 0; font-size: 15px; font-weight: 600; }
+
+.app { display: flex; flex-wrap: wrap; min-height: 100vh; }
+.barre-laterale { flex: 1 1 220px; max-width: 248px; background: var(--surface); border-right: 1px solid var(--bordure);
+  padding: 24px 16px; display: flex; flex-direction: column; gap: 24px; }
+.logo { display: flex; align-items: center; gap: 10px; padding: 0 8px; }
+.logo-carre { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: #fff; display: flex;
+  align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.logo small { display: block; color: var(--encre-3); font-size: 12px; }
+.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 12px; border-radius: 8px;
+  color: var(--encre-2); text-decoration: none; }
+.nav a.actif { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
+.sources { margin-top: auto; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--encre-3); }
+.source { display: flex; align-items: center; gap: 8px; }
+.point { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+.principal { flex: 999 1 560px; min-width: 0; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; }
+.entete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; }
+.sous-titre { color: var(--encre-3); font-size: 13px; margin-top: 4px; }
+
+.btn { min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--bordure-forte);
+  background: var(--surface); color: var(--encre); font: inherit; font-weight: 500; cursor: pointer; }
+.btn-primaire { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+.filtres { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.champ { display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 600; color: var(--encre-2); }
+.champ input, .champ select { min-height: 44px; min-width: 170px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--bordure-forte); background: var(--surface); font: inherit; font-weight: 400; color: var(--encre); }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.kpi { background: var(--surface); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: 16px; }
+.kpi span { display: block; font-size: 12px; font-weight: 600; color: var(--encre-3); }
+.kpi strong { display: block; font-size: 28px; margin-top: 4px; }
+
+.carte { background: var(--surface); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: 16px;
+  display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rangee { display: flex; flex-wrap: wrap; gap: 20px; align-items: stretch; }
+.rangee > .large { flex: 999 1 520px; }
+.rangee > .etroit { flex: 1 1 340px; }
+
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px;
+  font-weight: 600; white-space: nowrap; }
+.b-sur_site, .b-en_cours { background: var(--accent-doux); color: var(--accent); }
+.b-planifiee { background: var(--surface); color: var(--accent); border: 1px solid #a9c0f5; }
+.b-a_planifier { background: var(--neutre-doux); color: var(--encre-2); }
+.b-terminee, .b-annulee { background: var(--neutre-doux); color: var(--encre-3); }
+.b-concordant, .b-terrain_confirme { background: var(--dispo-doux); color: #115e59; }
+.b-ecart, .b-ambigu, .b-a_confirmer { background: var(--alerte-doux); color: var(--alerte); }
+.b-odoo_seul, .b-hfsql_seul { background: var(--en-route-doux); color: var(--alerte); }
+.b-exclu { background: var(--neutre-doux); color: var(--encre-3); }
+.b-source { background: var(--neutre-doux); color: var(--encre-2); font-weight: 500; }
+
+.avertissements { display: flex; flex-direction: column; gap: 8px; }
+.avertissement { background: var(--alerte-doux); color: var(--alerte); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.erreur { background: var(--erreur-doux); color: var(--erreur); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.vide { color: var(--encre-3); font-size: 13px; padding: 12px 0; }
+
+.defilement { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 12px; color: var(--encre-3); font-weight: 600; padding: 10px 12px; border-bottom: 1px solid var(--bordure); white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+.ecarts { margin: 4px 0 0; padding-left: 16px; color: var(--alerte); font-size: 12px; }
+.muet { color: var(--encre-3); font-size: 12px; }
+
+.liste-activite { display: flex; flex-direction: column; gap: 8px; }
+.ligne-activite { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--bordure); border-radius: 8px;
+  background: var(--surface); text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+.ligne-activite.selectionnee { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pastille { width: 36px; height: 36px; flex: none; border-radius: 50%; color: #fff; display: flex; align-items: center;
+  justify-content: center; font-size: 12px; font-weight: 700; }
+.carte-google { height: 520px; border-radius: 8px; overflow: hidden; background: #f7f8fa; }
+.marqueur { width: 34px; height: 34px; border-radius: 50%; border: 3px solid #fff; color: #fff; display: flex;
+  align-items: center; justify-content: center; font-size: 11px; font-weight: 700; box-shadow: 0 1px 4px rgba(22,24,29,.3); }
+
+.planning { min-width: 860px; display: grid; }
+.planning > div { padding: 8px; border-bottom: 1px solid #eef0f3; border-left: 1px solid #eef0f3; min-height: 56px;
+  display: flex; flex-direction: column; gap: 6px; }
+.planning .tete { font-size: 12px; font-weight: 600; color: var(--encre-3); min-height: 0; padding: 12px; }
+.planning .nom { border-left: 0; padding: 12px 16px; }
+.planning .jour-courant { background: #f5f8fe; }
+.bloc { padding: 6px 8px; border-radius: 6px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.bloc strong { font-weight: 600; }
+.bloc-planifiee, .bloc-a_planifier { background: #fff; color: var(--accent); border: 1px solid #a9c0f5; }
+.bloc-en_cours, .bloc-sur_site { background: var(--accent); color: #fff; }
+.bloc-terminee, .bloc-annulee { background: var(--neutre-doux); color: var(--encre-2); }
+
+@media (max-width: 720px) {
+  .principal { padding: 16px; }
+  .barre-laterale { max-width: none; }
+}
