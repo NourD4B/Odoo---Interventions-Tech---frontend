@@ -45,7 +45,7 @@ export interface Ressources {
 
 export interface AffectationProposee {
   service_id: number; service: string; matricules: string[]; equipe: string[]; vehicle_id: number | null;
-  vehicule: string | null; debut: string; fin: string; km_aller_retour: number;
+  vehicule: string | null; debut: string; fin: string; km_aller_retour: number; cout_estime: number | null;
   raison_techniciens: string; raison_vehicule: string;
 }
 export interface Proposition {
@@ -66,6 +66,7 @@ export interface CorpsAffectation {
 export interface Regle {
   code: string; libelle: string; niveau: 'obligatoire' | 'preference' | 'inactive'; poids: number;
   valeur: number | null; statut: 'a_confirmer' | 'validee';
+  categorie: 'obligatoire' | 'preference' | 'parametre'; unite: string | null;
 }
 export interface EntreeJournal {
   id: number; horodatage: string; auteur: string; action: string; objet_type: string; objet_id: string | null;

@@ -66,6 +66,7 @@ function CarteService({ s, jour, depuis, propose, onOuvrir, onVerrou }: {
         {!suite && a && (
           <span className="muet">
             {a.plaque ?? 'sans véhicule'}{propose ? ` · ${Math.round(propose.km_aller_retour)} km A/R` : ''}
+            {propose?.cout_estime != null ? ` · ≈ ${Math.round(propose.cout_estime)} €` : ''}
             {a.motif_derogation ? ' · dérogation' : ''}
           </span>
         )}
@@ -109,7 +110,8 @@ function PanneauAffectation({ s, techniciens, propose, enregistrer, onFermer }: 
         </div>
         <button type="button" className="btn" onClick={onFermer}>Fermer</button>
       </div>
-      {propose && <p className="raisons">{propose.raison_techniciens}<br />{propose.raison_vehicule}</p>}
+      {propose && <p className="raisons">{propose.raison_techniciens}<br />{propose.raison_vehicule}
+        {propose.cout_estime != null && <><br />Coût estimé : ≈ {Math.round(propose.cout_estime)} € (hors hôtel et repas)</>}</p>}
       {a?.motif_derogation && <p className="avertissement">Dérogation : {a.motif_derogation}</p>}
       {publie ? <p className="muet">Publié : l'affectation ne se modifie plus ici.</p> : (<>
         <div className="grille-champs">

@@ -24,7 +24,7 @@ function Details({ e }: { e: EntreeJournal }) {
   const avant = e.avant ?? {};
   const apres = e.apres ?? {};
   const cles = [...new Set([...Object.keys(avant), ...Object.keys(apres)])]
-    .filter((k) => k !== 'version' && JSON.stringify(avant[k]) !== JSON.stringify(apres[k]));
+    .filter((k) => !['version', 'categorie', 'unite'].includes(k) && JSON.stringify(avant[k]) !== JSON.stringify(apres[k]));
   if (!cles.length) return <span className="muet">—</span>;
   return (
     <ul className="details-journal">
