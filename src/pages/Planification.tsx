@@ -213,12 +213,15 @@ export default function Planification() {
     const a = s.affectation;
     const equipe = a ? [...new Set(a.matricules.map((m) => (m === glisse.depuis ? matricule : m)))] : [matricule];
     const finAff = plusOuvres(jour, a ? ouvresApres(a.debut, a.fin) : dureeService(s) - 1);
+    // Équipe ou jours changés : garder le véhicule s'il reste conforme, sinon prendre le premier conforme
     let vehicule = a?.vehicle_id ?? null;
-    if (vehicule === null) {
+    const inchange = !!a && a.debut === jour && [...a.matricules].sort().join() === [...equipe].sort().join();
+    if (!inchange) {
       try {
         const choix = await planif.vehicules(s.id, { matricules: equipe.join(','), debut: jour, fin: finAff });
-        vehicule = choix.find((v) => v.conforme)?.vehicle_id ?? null;
-      } catch { /* sans véhicule : la règle le signalera si besoin */ }
+        const actuel = choix.find((v) => v.vehicle_id === vehicule && v.conforme);
+        vehicule = actuel?.vehicle_id ?? choix.find((v) => v.conforme)?.vehicle_id ?? vehicule;
+      } catch { /* liste indisponible : véhicule actuel gardé, la règle le signalera si besoin */ }
     }
     await enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut: jour, fin: finAff, verrouiller: a?.etat === 'verrouille' });
   };

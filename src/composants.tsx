@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 /** Charge une donnée de l'API, avec état de chargement, erreur et rechargement. */
 export function useDonnees<T>(charger: () => Promise<T>, deps: unknown[]) {
@@ -6,14 +6,17 @@ export function useDonnees<T>(charger: () => Promise<T>, deps: unknown[]) {
   const [erreur, setErreur] = useState<string | null>(null);
   const [chargement, setChargement] = useState(true);
 
+  const dernier = useRef(0);       // seule la dernière requête lancée met l'écran à jour (semaine changée entre-temps)
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const recharger = useCallback(() => {
+    const numero = ++dernier.current;
     setChargement(true);
     setErreur(null);
     charger()
-      .then(setDonnees)
-      .catch((e: Error) => setErreur(e.message))
-      .finally(() => setChargement(false));
+      .then((d) => { if (numero === dernier.current) setDonnees(d); })
+      .catch((e: Error) => { if (numero === dernier.current) setErreur(e.message); })
+      .finally(() => { if (numero === dernier.current) setChargement(false); });
   }, deps);
 
   useEffect(() => { recharger(); }, [recharger]);

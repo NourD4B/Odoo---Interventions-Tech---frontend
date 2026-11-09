@@ -307,7 +307,8 @@ function LigneService({ s, refs, onModifier, onSupprimer }: { s: ServicePlanif; 
         </div>
       )}
       <div className="actions">
-        <button type="button" className="btn" onClick={onModifier}>Modifier</button>
+        <button type="button" className="btn" onClick={onModifier} disabled={s.statut_planification === 'publie'}
+          title={s.statut_planification === 'publie' ? 'Service publié : modification impossible' : undefined}>Modifier</button>
         <button type="button" className="btn" onClick={onSupprimer} disabled={s.statut_planification === 'publie'}
           title={s.statut_planification === 'publie' ? 'Service publié : suppression impossible' : undefined}>Supprimer</button>
       </div>
@@ -332,7 +333,7 @@ export default function Services() {
   const supprimer = async (s: ServicePlanif) => {
     setMessage(null);
     try {
-      await ecrire(() => planif.supprimerService(s.id));
+      await ecrire(() => planif.supprimerService(s.id, s.version));
       liste.recharger();
     } catch (e) { setMessage(e instanceof Error ? e.message : String(e)); }
   };

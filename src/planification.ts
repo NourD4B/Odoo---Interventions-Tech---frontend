@@ -156,7 +156,7 @@ export const planif = {
   creerService: (s: ServiceSaisie) => appel<ServicePlanif>('POST', '/services', { corps: s }),
   modifierService: (id: number, s: ServiceSaisie & { version: number }) =>
     appel<ServicePlanif>('PUT', `/services/${id}`, { corps: s }),
-  supprimerService: (id: number) => appel<void>('DELETE', `/services/${id}`),
+  supprimerService: (id: number, version?: number) => appel<void>('DELETE', `/services/${id}`, { params: { version } }),
   ressources: (debut: string, fin: string) => appel<Ressources>('GET', '/ressources', { params: { debut, fin } }),
   proposer: (debut: string, fin: string) => appel<Proposition>('POST', '/proposer', { corps: { debut, fin } }),
   vehicules: (serviceId: number, params?: { matricules?: string; debut?: string; fin?: string }) =>
