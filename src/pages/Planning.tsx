@@ -43,8 +43,8 @@ export default function Planning() {
     <>
       <div className="entete">
         <div>
-          <h1>Planning</h1>
-          <div className="sous-titre">Semaine du {jours[0]} au {jours[4]} · techniciens terrain confirmés</div>
+          <h1>Interventions</h1>
+          <div className="sous-titre">Semaine du {jours[0]} au {jours[4]} · interventions réelles Odoo et GestCo, techniciens terrain confirmés</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn" aria-label="Semaine précédente" onClick={() => setLundi(decaler(lundi, -7))}>‹</button>

@@ -133,7 +133,7 @@ tr:last-child td { border-bottom: 0; }
 .grille-champs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 14px; }
 .grille-champs .champ input, .grille-champs .champ select { min-width: 0; width: 100%; }
 .cases { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
-.libelle-groupe { font-size: 12px; font-weight: 600; color: var(--encre-2); flex-basis: 100%; }
+.libelle-groupe { font-size: 12px; font-weight: 600; color: var(--encre-2); width: 100%; }
 .case { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; font-size: 14px; }
 .case input { width: 18px; height: 18px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
@@ -168,6 +168,56 @@ tr:last-child td { border-bottom: 0; }
 .dialogue { background: var(--surface); border-radius: var(--rayon); padding: 20px; width: min(420px, 100%);
   display: flex; flex-direction: column; gap: 12px; box-shadow: 0 12px 40px rgba(22,24,29,.25); }
 .dialogue .champ input { min-width: 0; width: 100%; }
+
+/* Planification : tableau semaine × techniciens */
+.tableau { display: grid; grid-template-columns: 190px repeat(5, minmax(120px, 1fr)); min-width: 790px; }
+.tableau > div, .tableau .nom, .tableau .cellule { border-bottom: 1px solid #eef0f3; }
+.tableau .tete { font-size: 12px; font-weight: 600; color: var(--encre-3); padding: 12px 8px; border-left: 1px solid #eef0f3; }
+.tableau .tete.nom { border-left: 0; padding-left: 16px; }
+.tete-agence { grid-column: 1 / -1; background: var(--neutre-doux); font-size: 12px; font-weight: 700; color: var(--encre-2);
+  padding: 6px 16px; text-transform: uppercase; letter-spacing: .03em; }
+.tableau .nom { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px 10px 16px; min-width: 0;
+  position: sticky; left: 0; z-index: 2; background: var(--surface); }
+.tableau .nom > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tableau .nom .pastille { width: 30px; height: 30px; font-size: 11px; }
+.cellule { border-left: 1px solid #eef0f3; padding: 6px; min-height: 64px; display: flex; flex-direction: column; gap: 6px; }
+.cellule.jour-courant, .tableau .tete.jour-courant { background: #f5f8fe; }
+.cellule-absente { background: repeating-linear-gradient(-45deg, #f4f5f7, #f4f5f7 6px, #eceef2 6px, #eceef2 12px); }
+.cellule.survol { outline: 2px dashed var(--accent); outline-offset: -3px; background: var(--accent-doux); }
+.carte-service { display: flex; align-items: flex-start; gap: 4px; border-radius: 6px; font-size: 12px; background: #fff;
+  border: 1.5px solid #a9c0f5; color: var(--accent); }
+.carte-service[draggable="true"] { cursor: grab; }
+.carte-service.etat-propose { border-style: dashed; }
+.carte-service.etat-verrouille { border-color: var(--accent); background: var(--accent-doux); }
+.carte-service.etat-publie { background: var(--accent); border-color: var(--accent); color: #fff; }
+.carte-service.etat-publie .muet { color: #dbe5fb; }
+.carte-service.etat-a_planifier { border-color: var(--bordure-forte); color: var(--encre-2); }
+.carte-service.urgente { box-shadow: inset 3px 0 0 var(--erreur); }
+.carte-service-corps { flex: 1; min-width: 0; background: none; border: 0; padding: 6px 8px; text-align: left; font: inherit;
+  color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.carte-service-corps strong, .carte-service-corps span { overflow-wrap: break-word; hyphens: auto; }
+.cadenas { background: none; border: 0; cursor: pointer; font-size: 14px; padding: 6px; min-width: 32px; min-height: 32px; }
+.legende { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; }
+.legende .carte-service, .legende-absent { padding: 4px 10px; border-radius: 6px; }
+.legende-absent { border: 1px solid var(--bordure); color: var(--encre-3); }
+.colonne-a-planifier { display: flex; flex-direction: column; gap: 10px; }
+.colonne-a-planifier h2 { font-size: 16px; margin: 0; }
+.a-planifier { display: flex; flex-direction: column; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid #eef0f3; }
+.cause { font-size: 12px; color: var(--alerte); background: var(--alerte-doux); border-radius: 6px; padding: 4px 8px; }
+.succes { background: var(--dispo-doux); color: #115e59; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.panneau { display: flex; flex-direction: column; gap: 12px; border-color: var(--accent); }
+.panneau h2 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
+.raisons { font-size: 13px; color: var(--encre-2); background: var(--neutre-doux); border-radius: 8px; padding: 8px 10px; margin: 0; }
+.panneau fieldset { border: 0; padding: 0; margin: 0; }
+.valeur { font-size: 14px; font-weight: 500; color: var(--encre); min-height: 44px; display: flex; align-items: center; }
+.menu-vehicule { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.choix-vehicule { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--bordure);
+  border-radius: 8px; cursor: pointer; font-size: 13px; }
+.choix-vehicule.choisi { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.choix-vehicule.non-conforme { opacity: .6; background: var(--neutre-doux); }
+.choix-vehicule input { margin-top: 3px; }
+.choix-vehicule .raison { display: block; }
+.violations { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--erreur); }
 
 @media (max-width: 720px) {
   .principal { padding: 16px; }

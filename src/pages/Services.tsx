@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { aujourdhui } from '../api';
-import { Avertissements, Badge, DemandeAuteur, EtatChargement, useDonnees } from '../composants';
+import { Avertissements, Badge, EtatChargement, useDonnees } from '../composants';
+import { useEcriture } from '../composants/Ecriture';
 import {
-  auteur, AuteurManquant, definirAuteur, ErreurPlanif, erreursParChamp, LIBELLES_PRECISION, LIBELLES_STATUT_PLANIF,
+  ErreurPlanif, erreursParChamp, LIBELLES_PRECISION, LIBELLES_STATUT_PLANIF,
   planif, type AdresseClient, type ClientOdoo, type Referentiels, type ServicePlanif, type ServiceSaisie,
 } from '../planification';
 
@@ -318,7 +319,6 @@ export default function Services() {
   const [debut, setDebut] = useState(() => iso(lundi(aujourdhui())));
   const [fin, setFin] = useState(() => iso(plus(lundi(aujourdhui()), 11)));
   const [edition, setEdition] = useState<ServicePlanif | 'nouveau' | null>(null);
-  const [demandeAuteur, setDemandeAuteur] = useState<null | ((nom: string | null) => void)>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [filtre, setFiltre] = useState<'tous' | 'saisie' | 'simulation'>('tous');
 
@@ -327,19 +327,7 @@ export default function Services() {
   const services = useMemo(() => (liste.donnees ?? []).filter((s) => filtre === 'tous' || s.source === filtre),
     [liste.donnees, filtre]);
 
-  /** Exécute une écriture ; si le nom de l'auteur manque, le demande puis relance. */
-  const ecrire = async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
-    try {
-      return await action();
-    } catch (e) {
-      if (!(e instanceof AuteurManquant)) throw e;
-      const nom = await new Promise<string | null>((resolve) => setDemandeAuteur(() => resolve));
-      setDemandeAuteur(null);
-      if (!nom) return undefined;
-      definirAuteur(nom);
-      return action();
-    }
-  };
+  const { ecrire, dialogue } = useEcriture();
 
   const supprimer = async (s: ServicePlanif) => {
     setMessage(null);
@@ -387,9 +375,7 @@ export default function Services() {
         )}
       </section>
 
-      {demandeAuteur && (
-        <DemandeAuteur initial={auteur()} onValider={(nom) => demandeAuteur(nom)} onAnnuler={() => demandeAuteur(null)} />
-      )}
+      {dialogue}
     </>
   );
 }

@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
+import Planification from './pages/Planification';
 import Planning from './pages/Planning';
 import Reconciliation from './pages/Reconciliation';
 import Services from './pages/Services';
@@ -11,7 +12,8 @@ import Vehicules from './pages/Vehicules';
 const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
   { vers: '/services', libelle: 'Services sur site' },
-  { vers: '/planning', libelle: 'Planning' },
+  { vers: '/planification', libelle: 'Planification' },
+  { vers: '/planning', libelle: 'Interventions' },
   { vers: '/techniciens', libelle: 'Techniciens' },
   { vers: '/vehicules', libelle: 'Véhicules et PV' },
   { vers: '/reconciliation', libelle: 'Contrôle des données' },
@@ -46,6 +48,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/carte" replace />} />
           <Route path="/carte" element={<CarteLive />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/planification" element={<Planification />} />
           <Route path="/planning" element={<Planning />} />
           <Route path="/techniciens" element={<Techniciens />} />
           <Route path="/vehicules" element={<Vehicules />} />
