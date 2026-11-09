@@ -20,6 +20,28 @@ export function useDonnees<T>(charger: () => Promise<T>, deps: unknown[]) {
   return { donnees, erreur, chargement, recharger };
 }
 
+/** Nom de la personne qui modifie la planification (journal), demandé à la première écriture. */
+export function DemandeAuteur({ initial, onValider, onAnnuler }: { initial: string | null;
+  onValider: (nom: string) => void; onAnnuler: () => void }) {
+  const [nom, setNom] = useState(initial ?? '');
+  const valide = nom.trim().length >= 2 && nom.trim().length <= 80;
+  return (
+    <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-auteur">
+      <form className="dialogue" onSubmit={(e) => { e.preventDefault(); if (valide) onValider(nom.trim()); }}>
+        <h2 id="titre-auteur">Votre nom</h2>
+        <p className="muet">Chaque modification de la planification est enregistrée dans le journal avec ce nom.</p>
+        <label className="champ">Nom
+          <input autoFocus value={nom} maxLength={80} onChange={(e) => setNom(e.target.value)} placeholder="Prénom Nom" />
+        </label>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onAnnuler}>Annuler</button>
+          <button type="submit" className="btn btn-primaire" disabled={!valide}>Continuer</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export function Badge({ type, children }: { type: string; children: ReactNode }) {
   return <span className={`badge b-${type}`}>{children}</span>;
 }

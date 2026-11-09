@@ -4,11 +4,13 @@ import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
 import Planning from './pages/Planning';
 import Reconciliation from './pages/Reconciliation';
+import Services from './pages/Services';
 import Techniciens from './pages/Techniciens';
 import Vehicules from './pages/Vehicules';
 
 const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
+  { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planning', libelle: 'Planning' },
   { vers: '/techniciens', libelle: 'Techniciens' },
   { vers: '/vehicules', libelle: 'Véhicules et PV' },
@@ -43,6 +45,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/carte" replace />} />
           <Route path="/carte" element={<CarteLive />} />
+          <Route path="/services" element={<Services />} />
           <Route path="/planning" element={<Planning />} />
           <Route path="/techniciens" element={<Techniciens />} />
           <Route path="/vehicules" element={<Vehicules />} />

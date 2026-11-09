@@ -119,7 +119,58 @@ tr:last-child td { border-bottom: 0; }
 .bloc-en_cours, .bloc-sur_site { background: var(--accent); color: #fff; }
 .bloc-terminee, .bloc-annulee { background: var(--neutre-doux); color: var(--encre-2); }
 
+/* Services sur site : formulaire aux champs Odoo, liste, nom de l'auteur */
+.champ textarea { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--bordure-forte); font: inherit;
+  font-weight: 400; color: var(--encre); resize: vertical; }
+.champ-large { grid-column: 1 / -1; }
+.champ-large input { width: 100%; }
+.erreur-champ { color: var(--erreur); font-weight: 500; }
+.formulaire { display: flex; flex-direction: column; gap: 16px; }
+.formulaire h2, .dialogue h2 { font-size: 18px; margin: 0; }
+.formulaire fieldset { border: 1px solid var(--bordure); border-radius: 8px; padding: 16px; margin: 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 14px; }
+.formulaire legend { font-size: 13px; font-weight: 700; color: var(--encre-2); padding: 0 6px; }
+.grille-champs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 14px; }
+.grille-champs .champ input, .grille-champs .champ select { min-width: 0; width: 100%; }
+.cases { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.libelle-groupe { font-size: 12px; font-weight: 600; color: var(--encre-2); flex-basis: 100%; }
+.case { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; font-size: 14px; }
+.case input { width: 18px; height: 18px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.recherche { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.suggestions { position: absolute; top: 48px; left: 0; right: 0; z-index: 20; list-style: none; margin: 0; padding: 4px;
+  background: var(--surface); border: 1px solid var(--bordure-forte); border-radius: 8px; max-height: 280px;
+  overflow-y: auto; box-shadow: 0 6px 20px rgba(22,24,29,.12); }
+.suggestions button { width: 100%; text-align: left; background: none; border: 0; border-radius: 6px; padding: 8px 10px;
+  font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.suggestions button:hover, .suggestions button:focus-visible { background: var(--accent-doux); }
+.precision-faible { color: var(--alerte); }
+
+.liste-services { display: flex; flex-direction: column; gap: 10px; }
+.ligne-service { background: var(--surface); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ligne-service-titre { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.ligne-service-titre strong { overflow-wrap: anywhere; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.ligne-service-details { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--encre-2); }
+.ligne-service-details span { overflow-wrap: anywhere; }
+.ligne-service-affectation { font-size: 13px; background: var(--neutre-doux); border-radius: 8px; padding: 8px 10px; }
+.ligne-service .actions { justify-content: flex-start; }
+.b-simulation { background: #f3e8ff; color: #6b21a8; }
+.b-urgent { background: var(--erreur-doux); color: var(--erreur); }
+.b-planif-a_planifier { background: var(--neutre-doux); color: var(--encre-2); }
+.b-planif-propose { background: var(--surface); color: var(--accent); border: 1px solid #a9c0f5; }
+.b-planif-verrouille { background: var(--accent-doux); color: var(--accent); }
+.b-planif-publie { background: var(--dispo-doux); color: #115e59; }
+
+.voile { position: fixed; inset: 0; background: rgba(22,24,29,.45); display: flex; align-items: center;
+  justify-content: center; padding: 16px; z-index: 1000; }
+.dialogue { background: var(--surface); border-radius: var(--rayon); padding: 20px; width: min(420px, 100%);
+  display: flex; flex-direction: column; gap: 12px; box-shadow: 0 12px 40px rgba(22,24,29,.25); }
+.dialogue .champ input { min-width: 0; width: 100%; }
+
 @media (max-width: 720px) {
   .principal { padding: 16px; }
   .barre-laterale { max-width: none; }
+  .filtres .champ input { min-width: 0; }
 }
