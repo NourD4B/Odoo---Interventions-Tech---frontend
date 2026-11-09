@@ -1,27 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
-import { api, aujourdhui, LIBELLES_STATUT, lienItineraire, type Intervention, type PositionLive } from '../api';
-import { Avertissements, Badge, COULEURS_STATUT, EtatChargement, heure, initiales, useDonnees } from '../composants';
+import {
+  api, aujourdhui, LIBELLES_ACTIVITE, LIBELLES_STATUT, lienItineraire,
+  type ActiviteReponse, type ActiviteTechnicien, type Intervention, type PositionLive,
+} from '../api';
+import { Avertissements, Badge, COULEURS_ACTIVITE, COULEURS_STATUT, EtatChargement, heure, initiales, useDonnees } from '../composants';
 
 const FRANCE: [number, number] = [46.6, 2.4];
-const RAFRAICHISSEMENT_MS = 10_000;   // positions GPS toutes les 10 s
-const PERIME_MS = 5 * 60_000;         // au-delà : position grisée
+const RAFRAICHISSEMENT_MS = 10_000;   // positions GPS et activité toutes les 10 s
 const POINTS_MAX = 500;               // longueur maximale de la trace affichée
-
-/** Âge d'une position, en millisecondes. */
-function age(p: PositionLive): number {
-  return p.horodatage ? Date.now() - new Date(p.horodatage).getTime() : Infinity;
-}
+const GRIS = '#8892a6';
+const PRECISIONS_SITE = new Set(['adresse', 'rue', null]);
 
 function depuis(p: PositionLive): string {
-  const ms = age(p);
-  if (!Number.isFinite(ms)) return 'heure inconnue';
-  const min = Math.round(ms / 60_000);
+  if (!p.horodatage) return 'heure inconnue';
+  const min = Math.round((Date.now() - new Date(p.horodatage).getTime()) / 60_000);
   return min < 1 ? "à l'instant" : `il y a ${min} min`;
 }
 
-/** Échappe le texte injecté dans le HTML du marqueur (le nom vient de Traccar). */
+/** Échappe le texte injecté dans le HTML du marqueur (le nom vient de Traccar ou d'Odoo). */
 function echapper(texte: string): string {
   return texte.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
@@ -36,26 +34,51 @@ function icone(texte: string, couleur: string): L.DivIcon {
   });
 }
 
-/** Positions GPS en direct, avec la trace de chaque appareil depuis l'ouverture de la page. */
-function usePositions() {
-  const [positions, setPositions] = useState<PositionLive[]>([]);
+function couleur(a: ActiviteTechnicien): string {
+  return a.appareil && !a.en_direct ? GRIS : COULEURS_ACTIVITE[a.activite];
+}
+
+/** Phrase d'activité : « Sur site chez X depuis 14:35 », « En route vers X · 2,1 km »… */
+function resume(a: ActiviteTechnicien): string {
+  const i = a.intervention;
+  const client = i ? (i.client ?? i.titre) : '';
+  switch (a.activite) {
+    case 'sur_site': {
+      const visite = a.visites.find((v) => v.intervention_id === i?.id && !v.depart);
+      return `Sur site chez ${client}${visite ? ` depuis ${heure(visite.arrivee)}` : ''}`;
+    }
+    case 'en_route':
+      return `En route vers ${client}${i?.distance_km != null ? ` · ${i.distance_km.toLocaleString('fr-FR')} km` : ''}`
+        + `${heure(i?.debut ?? null) ? ` · prévue à ${heure(i!.debut)}` : ''}`;
+    case 'termine': return `Journée terminée (${a.terminees}/${a.total})`;
+    case 'sans_intervention': return "Aucune intervention aujourd'hui";
+    case 'sans_gps': return i ? `Pas de GPS · prochaine : ${client}` : 'Pas de GPS';
+    default: return 'Appareil non associé à un technicien';
+  }
+}
+
+/** Activité en direct, avec la trace de chaque appareil depuis l'ouverture de la page. */
+function useActivite() {
+  const [donnees, setDonnees] = useState<ActiviteReponse | null>(null);
   const [traces, setTraces] = useState<Record<string, [number, number][]>>({});
   const [erreur, setErreur] = useState<string | null>(null);
 
   useEffect(() => {
     let actif = true;
-    const charger = () => api.positionsLive()
-      .then((liste) => {
+    const charger = () => api.activite()
+      .then((reponse) => {
         if (!actif) return;
         setErreur(null);
-        setPositions(liste);
+        setDonnees(reponse);
         setTraces((avant) => {
           const apres = { ...avant };
-          for (const p of liste) {
-            const trace = apres[p.id] ?? [];
+          for (const a of reponse.techniciens) {
+            const p = a.appareil;
+            if (!p) continue;
+            const trace = apres[a.cle] ?? [];
             const dernier = trace[trace.length - 1];
             if (!dernier || dernier[0] !== p.lat || dernier[1] !== p.lng) {
-              apres[p.id] = [...trace, [p.lat, p.lng] as [number, number]].slice(-POINTS_MAX);
+              apres[a.cle] = [...trace, [p.lat, p.lng] as [number, number]].slice(-POINTS_MAX);
             }
           }
           return apres;
@@ -67,20 +90,20 @@ function usePositions() {
     return () => { actif = false; clearInterval(minuterie); };
   }, []);
 
-  return { positions, traces, erreur };
+  return { donnees, traces, erreur };
 }
 
-/** Centre la carte sur les appareils au premier chargement, puis sur l'appareil suivi. */
-function Cadrage({ positions, cible }: { positions: PositionLive[]; cible: PositionLive | null }) {
+/** Cadre la carte sur les techniciens et les sites au premier chargement, puis sur le technicien suivi. */
+function Cadrage({ points, cible }: { points: [number, number][]; cible: PositionLive | null }) {
   const map = useMap();
   const fait = useRef(false);
   useEffect(() => {
     if (cible) { map.setView([cible.lat, cible.lng], Math.max(map.getZoom(), 15)); return; }
-    if (fait.current || !positions.length) return;
+    if (fait.current || !points.length) return;
     fait.current = true;
-    if (positions.length === 1) map.setView([positions[0].lat, positions[0].lng], 15);
-    else map.fitBounds(L.latLngBounds(positions.map((p) => [p.lat, p.lng] as [number, number])), { padding: [40, 40] });
-  }, [map, positions, cible]);
+    if (points.length === 1) map.setView(points[0], 15);
+    else map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 15 });
+  }, [map, points, cible]);
   return null;
 }
 
@@ -91,7 +114,7 @@ export default function CarteLive() {
   const [suivi, setSuivi] = useState<string | null>(null);
 
   const interv = useDonnees(() => api.interventions(jour), [jour]);
-  const gps = usePositions();
+  const live = useActivite();
 
   const toutes = interv.donnees?.interventions ?? [];
   const options = useMemo(() => ({
@@ -99,9 +122,20 @@ export default function CarteLive() {
     societes: [...new Set(toutes.map((i) => i.societe).filter(Boolean) as string[])].sort(),
   }), [toutes]);
   const visibles = toutes.filter((i) => (!client || i.client === client) && (!societe || i.societe === societe));
-  const compter = (...statuts: string[]) => visibles.filter((i) => statuts.includes(i.statut)).length;
-  const cible = gps.positions.find((p) => p.id === suivi) ?? null;
-  const enDirect = gps.positions.filter((p) => age(p) <= PERIME_MS).length;
+
+  const lignes = live.donnees?.techniciens ?? [];
+  const avecGps = lignes.filter((a) => a.appareil);
+  // Cadrage initial une fois les positions ET les interventions chargées
+  const pret = live.donnees !== null && !interv.chargement;
+  const aCadrer = pret ? [
+    ...avecGps.map((a) => [a.appareil!.lat, a.appareil!.lng] as [number, number]),
+    ...visibles.filter((i) => i.position).map((i) => [i.position!.lat, i.position!.lng] as [number, number]),
+  ] : [];
+  const cible = avecGps.find((a) => a.cle === suivi)?.appareil ?? null;
+  const rayon = live.donnees?.rayon_m ?? 150;
+  const compter = (activite: string) => lignes.filter((a) => a.activite === activite).length;
+  const avertissements = [...(live.donnees?.avertissements ?? []),
+    ...(interv.donnees?.avertissements ?? [])].filter((a, n, liste) => liste.indexOf(a) === n);
 
   return (
     <>
@@ -109,7 +143,8 @@ export default function CarteLive() {
         <div>
           <h1>Carte live</h1>
           <div className="sous-titre">
-            {gps.positions.length} appareil(s) GPS, dont {enDirect} en direct · actualisé toutes les 10 s
+            {avecGps.length} technicien(s) suivi(s) par GPS, dont {avecGps.filter((a) => a.en_direct).length} en direct
+            {' '}· actualisé toutes les 10 s
           </div>
         </div>
         <button type="button" className="btn" onClick={() => { api.viderCache().then(interv.recharger); }}>
@@ -123,15 +158,15 @@ export default function CarteLive() {
         <Choix libelle="Société" valeur={societe} onChange={setSociete} options={options.societes} tous="Toutes" />
       </form>
 
-      {gps.erreur && <div className="erreur" role="alert">Positions GPS : {gps.erreur}</div>}
+      {live.erreur && <div className="erreur" role="alert">Activité en direct : {live.erreur}</div>}
       <EtatChargement chargement={interv.chargement} erreur={interv.erreur} />
-      <Avertissements liste={interv.donnees?.avertissements} />
+      <Avertissements liste={avertissements} />
 
       <div className="kpis">
-        <div className="kpi"><span>GPS en direct</span><strong style={{ color: '#0f766e' }}>{enDirect}</strong></div>
-        <div className="kpi"><span>Sur site</span><strong style={{ color: '#1d4ed8' }}>{compter('sur_site')}</strong></div>
-        <div className="kpi"><span>Planifiées</span><strong style={{ color: '#b45309' }}>{compter('planifiee', 'a_planifier', 'en_cours')}</strong></div>
-        <div className="kpi"><span>Terminées</span><strong>{compter('terminee')}</strong></div>
+        <Kpi libelle="Sur site" valeur={compter('sur_site')} couleur={COULEURS_ACTIVITE.sur_site} />
+        <Kpi libelle="En route" valeur={compter('en_route')} couleur={COULEURS_ACTIVITE.en_route} />
+        <Kpi libelle="Journée terminée" valeur={compter('termine')} couleur={COULEURS_ACTIVITE.termine} />
+        <Kpi libelle="Sans GPS" valeur={compter('sans_gps')} couleur={COULEURS_ACTIVITE.sans_gps} />
       </div>
 
       <div className="rangee">
@@ -141,46 +176,30 @@ export default function CarteLive() {
             <MapContainer center={FRANCE} zoom={6} style={{ height: '100%', width: '100%' }}>
               <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19}
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
-              <Cadrage positions={gps.positions} cible={cible} />
+              <Cadrage points={aCadrer} cible={cible} />
 
-              {/* Sites d'intervention (secondaires) */}
+              {/* Sites d'intervention : cercle de détection de l'arrivée, puis le site */}
               {visibles.filter((i) => i.position).map((i) => (
-                <CircleMarker key={i.id} center={[i.position!.lat, i.position!.lng]} radius={7}
-                  pathOptions={{ color: COULEURS_STATUT[i.statut], fillColor: '#ffffff', fillOpacity: 1, weight: 3 }}>
-                  <Tooltip>{i.client ?? i.titre} · {LIBELLES_STATUT[i.statut]}</Tooltip>
-                </CircleMarker>
+                <SiteIntervention key={i.id} i={i} rayon={rayon} />
               ))}
 
-              {/* Appareils GPS : trace, précision, position */}
-              {gps.positions.map((p) => (
-                <PositionAppareil key={p.id} p={p} trace={gps.traces[p.id] ?? []} />
-              ))}
+              {/* Techniciens suivis : trace, précision, position */}
+              {avecGps.map((a) => <PositionTechnicien key={a.cle} a={a} trace={live.traces[a.cle] ?? []} />)}
             </MapContainer>
           </div>
           <p className="muet">
-            Pastille verte : position reçue il y a moins de 5 min ; grise : plus ancienne. Cercles blancs : sites d'intervention.
+            Couleur du technicien : son activité (gris : position de plus de 10 min). Cercle pointillé autour d'un
+            site : zone de {rayon} m où l'arrivée est détectée.
           </p>
         </section>
 
-        <section className="carte etroit" aria-label="Appareils et interventions">
-          <h2>Appareils GPS</h2>
-          {!gps.positions.length && !gps.erreur && <div className="vide">Aucune position reçue de Traccar.</div>}
+        <section className="carte etroit" aria-label="Techniciens et interventions">
+          <h2>Techniciens</h2>
+          {!lignes.length && !live.erreur && <div className="vide">Aucun technicien suivi ni intervention aujourd'hui.</div>}
           <div className="liste-activite">
-            {gps.positions.map((p) => (
-              <button key={p.id} type="button" className={`ligne-activite${p.id === suivi ? ' selectionnee' : ''}`}
-                onClick={() => setSuivi(p.id === suivi ? null : p.id)} aria-pressed={p.id === suivi}>
-                <span className="pastille" style={{ background: age(p) > PERIME_MS ? '#8892a6' : '#0f766e' }}>
-                  {initiales(p.nom)}
-                </span>
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
-                  <strong>{p.nom}</strong>
-                  <span className="muet">
-                    {depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}
-                    {p.batterie != null ? ` · batterie ${Math.round(p.batterie)} %` : ''}
-                    {p.id === suivi ? ' · suivi' : ''}
-                  </span>
-                </span>
-              </button>
+            {lignes.map((a) => (
+              <LigneTechnicien key={a.cle} a={a} suivi={a.cle === suivi}
+                onSuivre={a.appareil ? () => setSuivi(a.cle === suivi ? null : a.cle) : undefined} />
             ))}
           </div>
 
@@ -195,24 +214,85 @@ export default function CarteLive() {
   );
 }
 
-function PositionAppareil({ p, trace }: { p: PositionLive; trace: [number, number][] }) {
-  const perime = age(p) > PERIME_MS;
-  const couleur = perime ? '#8892a6' : '#0f766e';
+function Kpi({ libelle, valeur, couleur: c }: { libelle: string; valeur: number; couleur: string }) {
+  return <div className="kpi"><span>{libelle}</span><strong style={{ color: c }}>{valeur}</strong></div>;
+}
+
+function SiteIntervention({ i, rayon }: { i: Intervention; rayon: number }) {
+  const { lat, lng, precision } = i.position!;
+  const c = COULEURS_STATUT[i.statut];
   return (
     <>
-      {trace.length > 1 && <Polyline positions={trace} pathOptions={{ color: couleur, weight: 4, opacity: 0.8 }} />}
+      {PRECISIONS_SITE.has(precision) && i.statut !== 'annulee' && (
+        <Circle center={[lat, lng]} radius={rayon}
+          pathOptions={{ color: c, weight: 1, dashArray: '4 4', fillOpacity: 0.05 }} />
+      )}
+      <CircleMarker center={[lat, lng]} radius={7}
+        pathOptions={{ color: c, fillColor: '#ffffff', fillOpacity: 1, weight: 3 }}>
+        <Tooltip>
+          {i.client ?? i.titre} · {LIBELLES_STATUT[i.statut]}
+          {precision && !PRECISIONS_SITE.has(precision) ? ` · position approximative (${precision})` : ''}
+        </Tooltip>
+      </CircleMarker>
+    </>
+  );
+}
+
+function PositionTechnicien({ a, trace }: { a: ActiviteTechnicien; trace: [number, number][] }) {
+  const p = a.appareil!;
+  const c = couleur(a);
+  return (
+    <>
+      {trace.length > 1 && <Polyline positions={trace} pathOptions={{ color: c, weight: 4, opacity: 0.8 }} />}
       {p.precision_m ? (
-        <Circle center={[p.lat, p.lng]} radius={p.precision_m}
-          pathOptions={{ color: couleur, weight: 1, fillOpacity: 0.08 }} />
+        <Circle center={[p.lat, p.lng]} radius={p.precision_m} pathOptions={{ color: c, weight: 1, fillOpacity: 0.08 }} />
       ) : null}
-      <Marker position={[p.lat, p.lng]} icon={icone(initiales(p.nom), couleur)}>
+      <Marker position={[p.lat, p.lng]} icon={icone(initiales(a.nom), c)}>
         <Popup>
-          <strong>{p.nom}</strong><br />
-          {depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}
-          {perime && <><br />Position ancienne : téléphone éteint, hors réseau ou suivi arrêté.</>}
+          <strong>{a.nom}</strong> · {LIBELLES_ACTIVITE[a.activite]}<br />
+          {resume(a)}<br />
+          <span className="muet">{depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}</span>
         </Popup>
       </Marker>
     </>
+  );
+}
+
+function LigneTechnicien({ a, suivi, onSuivre }: { a: ActiviteTechnicien; suivi: boolean; onSuivre?: () => void }) {
+  const p = a.appareil;
+  const contenu = (
+    <>
+      <span className="pastille" style={{ background: couleur(a) }}>{initiales(a.nom)}</span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
+        <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <strong>{a.nom}</strong>
+          <Badge type={a.activite}>{LIBELLES_ACTIVITE[a.activite]}</Badge>
+        </span>
+        <span>{resume(a)}</span>
+        {p && (
+          <span className="muet">
+            {depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}
+            {p.batterie != null ? ` · batterie ${Math.round(p.batterie)} %` : ''}
+            {a.total ? ` · ${a.terminees}/${a.total} terminée(s)` : ''}
+            {suivi ? ' · suivi' : ''}
+          </span>
+        )}
+        {a.visites.length > 0 && (
+          <span className="muet">
+            Passages : {a.visites.map((v) =>
+              `${v.client ?? 'site'} ${heure(v.arrivee)}–${v.depart ? heure(v.depart) : '…'} (${v.duree_min} min)`).join(' · ')}
+          </span>
+        )}
+        {a.alertes.length > 0 && <ul className="ecarts">{a.alertes.map((x) => <li key={x}>{x}</li>)}</ul>}
+      </span>
+    </>
+  );
+  if (!onSuivre) return <div className="ligne-activite" style={{ cursor: 'default' }}>{contenu}</div>;
+  return (
+    <button type="button" className={`ligne-activite${suivi ? ' selectionnee' : ''}`} onClick={onSuivre}
+      aria-pressed={suivi} title={suivi ? 'Arrêter de suivre' : 'Suivre sur la carte'}>
+      {contenu}
+    </button>
   );
 }
 

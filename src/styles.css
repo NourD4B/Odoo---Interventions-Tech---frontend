@@ -76,6 +76,10 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .b-concordant, .b-terrain_confirme { background: var(--dispo-doux); color: #115e59; }
 .b-ecart, .b-ambigu, .b-a_confirmer { background: var(--alerte-doux); color: var(--alerte); }
 .b-odoo_seul, .b-hfsql_seul { background: var(--en-route-doux); color: var(--alerte); }
+.b-en_route { background: var(--en-route-doux); color: var(--en-route); }
+.b-termine, .b-non_associe { background: var(--neutre-doux); color: var(--encre-3); }
+.b-sans_intervention { background: var(--dispo-doux); color: #115e59; }
+.b-sans_gps { background: var(--alerte-doux); color: var(--alerte); }
 .b-exclu { background: var(--neutre-doux); color: var(--encre-3); }
 .b-source { background: var(--neutre-doux); color: var(--encre-2); font-weight: 500; }
 

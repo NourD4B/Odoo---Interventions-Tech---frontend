@@ -52,8 +52,11 @@ export interface Intervention {
   technicien_ids: string[];
   societe: string | null;
   heures: number | null;
-  position: { lat: number; lng: number; origine: 'odoo' | 'geocodage' } | null;
+  position: Position | null;
 }
+
+/** Position d'un site ; `precision` : adresse | rue | lieu-dit | commune | null (inconnue). */
+export interface Position { lat: number; lng: number; origine: 'odoo' | 'geocodage'; precision: string | null }
 
 export interface Interventions { debut: string; fin: string; odoo: number; hfsql: number;
   avertissements: string[]; interventions: Intervention[] }
@@ -61,6 +64,32 @@ export interface Interventions { debut: string; fin: string; odoo: number; hfsql
 /** Dernière position GPS d'un appareil Traccar (pas de vitesse : interdit par la CNIL). */
 export interface PositionLive { id: string; nom: string; lat: number; lng: number; horodatage: string | null;
   precision_m: number | null; batterie: number | null; statut: string | null }
+
+export type Activite = 'sur_site' | 'en_route' | 'termine' | 'sans_intervention' | 'sans_gps' | 'non_associe';
+
+/** Passage sur un site, déduit du GPS. `depart` null : encore sur place. */
+export interface VisiteSite { intervention_id: string; client: string | null; arrivee: string;
+  depart: string | null; duree_min: number }
+
+export interface InterventionProche { id: string; titre: string; client: string | null; ville: string | null;
+  debut: string | null; statut: StatutIntervention; position: Position | null; distance_km: number | null }
+
+export interface ActiviteTechnicien {
+  cle: string;
+  technicien_id: string | null;
+  nom: string;
+  activite: Activite;
+  en_direct: boolean;
+  appareil: PositionLive | null;
+  intervention: InterventionProche | null;
+  total: number;
+  terminees: number;
+  visites: VisiteSite[];
+  alertes: string[];
+}
+
+export interface ActiviteReponse { date: string; rayon_m: number; avertissements: string[];
+  techniciens: ActiviteTechnicien[] }
 
 /** Lien Google Maps (gratuit, sans clé) pour démarrer le trajet vers une destination. */
 export function lienItineraire(i: { position: { lat: number; lng: number } | null; adresse: string | null;
@@ -99,6 +128,7 @@ export const api = {
   pv: (plaque: string, date: string) => lire<ResultatPV>('/api/pv', { plaque, date }),
   interventions: (debut: string, fin?: string) => lire<Interventions>('/api/interventions', { debut, fin }),
   positionsLive: () => lire<PositionLive[]>('/api/positions/live'),
+  activite: () => lire<ActiviteReponse>('/api/activite'),
   reconciliation: () => lire<Synthese[]>('/api/reconciliation'),
   viderCache: () => fetch('/api/cache/vider', { method: 'POST' }),
 };
@@ -111,6 +141,11 @@ export const aujourdhui = () => {
 export const LIBELLES_STATUT: Record<StatutIntervention, string> = {
   a_planifier: 'À planifier', planifiee: 'Planifiée', en_cours: 'En cours',
   sur_site: 'Sur site', terminee: 'Terminée', annulee: 'Annulée',
+};
+
+export const LIBELLES_ACTIVITE: Record<Activite, string> = {
+  sur_site: 'Sur site', en_route: 'En route', termine: 'Terminé', sans_intervention: 'Disponible',
+  sans_gps: 'Sans GPS', non_associe: 'Non associé',
 };
 
 export const LIBELLES_RAPPROCHEMENT: Record<Rapprochement, string> = {

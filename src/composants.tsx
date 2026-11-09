@@ -40,13 +40,18 @@ export function EtatChargement({ chargement, erreur }: { chargement: boolean; er
 }
 
 export function initiales(nom: string): string {
-  const mots = nom.split(/\s+/).filter(Boolean);
+  const mots = nom.split(/\s+/).map((m) => m.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
   return ((mots[0]?.[0] ?? '') + (mots[1]?.[0] ?? '')).toUpperCase();
 }
 
 export const COULEURS_STATUT: Record<string, string> = {
   sur_site: '#1d4ed8', en_cours: '#1d4ed8', planifiee: '#b45309', a_planifier: '#b45309',
   terminee: '#5b6170', annulee: '#5b6170',
+};
+
+export const COULEURS_ACTIVITE: Record<string, string> = {
+  sur_site: '#1d4ed8', en_route: '#b45309', termine: '#5b6170', sans_intervention: '#0f766e',
+  sans_gps: '#92400e', non_associe: '#8892a6',
 };
 
 export function heure(iso: string | null): string {
