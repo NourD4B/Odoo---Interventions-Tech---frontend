@@ -81,6 +81,10 @@ export interface Referentiels {
                    vehicule_requis: VehiculeRequis; nb_techniciens_defaut: number }[];
   avertissements: string[];
 }
+export interface AgencePlanif {
+  code: string; nom: string; adresse: string; statut: 'active' | 'a_confirmer'; lat: number | null; lng: number | null;
+  company_id: number | null; warehouse_id: number | null;
+}
 export interface ClientOdoo { id: number; nom: string; telephone: string | null; adresse: string }
 export interface AdresseClient { id: number; nom: string; adresse: string; siege: boolean }
 
@@ -166,6 +170,7 @@ export const planif = {
   journal: (filtre: { objet_type?: string; objet_id?: string; limite?: number } = {}) =>
     appel<EntreeJournal[]>('GET', '/journal', { params: filtre }),
   referentiels: () => appel<Referentiels>('GET', '/referentiels'),
+  agences: () => appel<AgencePlanif[]>('GET', '/agences'),
   clients: (q: string) => appel<ClientOdoo[]>('GET', '/clients', { params: { q } }),
   adressesClient: (id: number) => appel<AdresseClient[]>('GET', `/clients/${id}/adresses`),
 };

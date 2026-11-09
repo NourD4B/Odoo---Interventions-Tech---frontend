@@ -2,9 +2,11 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
+import Journal from './pages/Journal';
 import Planification from './pages/Planification';
 import Planning from './pages/Planning';
 import Reconciliation from './pages/Reconciliation';
+import Reglages from './pages/Reglages';
 import Services from './pages/Services';
 import Techniciens from './pages/Techniciens';
 import Vehicules from './pages/Vehicules';
@@ -14,6 +16,8 @@ const LIENS = [
   { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/planning', libelle: 'Interventions' },
+  { vers: '/reglages', libelle: 'Réglages' },
+  { vers: '/journal', libelle: 'Journal' },
   { vers: '/techniciens', libelle: 'Techniciens' },
   { vers: '/vehicules', libelle: 'Véhicules et PV' },
   { vers: '/reconciliation', libelle: 'Contrôle des données' },
@@ -50,6 +54,8 @@ export default function App() {
           <Route path="/services" element={<Services />} />
           <Route path="/planification" element={<Planification />} />
           <Route path="/planning" element={<Planning />} />
+          <Route path="/reglages" element={<Reglages />} />
+          <Route path="/journal" element={<Journal />} />
           <Route path="/techniciens" element={<Techniciens />} />
           <Route path="/vehicules" element={<Vehicules />} />
           <Route path="/reconciliation" element={<Reconciliation />} />
