@@ -198,13 +198,15 @@ function DialogueReglages({ service: s, refs, ecrire, onFini, onConflit }: {
             </label>
           </div>
           <p className="muet">Fenêtre : jours où le solveur peut placer le service quand Odoo n'a pas de date planifiée.</p>
-          <div className="cases" role="group" aria-labelledby="titre-competences">
-            <span id="titre-competences" className="libelle-groupe">Compétences requises (aucune = tout technicien terrain)</span>
-            {refs.competences.map((c) => (
-              <label key={c.code} className="case"><input type="checkbox" checked={r.competences_requises.includes(c.code)}
-                onChange={() => basculer(c.code)} />{c.libelle}</label>
-            ))}
-          </div>
+          {refs.competences_actives && (
+            <div className="cases" role="group" aria-labelledby="titre-competences">
+              <span id="titre-competences" className="libelle-groupe">Compétences requises (aucune = tout technicien terrain)</span>
+              {refs.competences.map((c) => (
+                <label key={c.code} className="case"><input type="checkbox" checked={r.competences_requises.includes(c.code)}
+                  onChange={() => basculer(c.code)} />{c.libelle}</label>
+              ))}
+            </div>
+          )}
         </fieldset>
 
         <section aria-labelledby="titre-position" className="bloc-position">
@@ -277,7 +279,8 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
           <div className="mini-titre">Réglages</div>
           <div>{s.nb_techniciens} technicien{s.nb_techniciens > 1 ? 's' : ''}{s.vehicule_requis === 'utilitaire' ? ' · utilitaire' : ''}
             {type && <> · {type}</>}</div>
-          <div className="muet">{competences.length ? competences.join(', ') : 'toutes compétences'}{f && <> · {f}</>}</div>
+          <div className="muet">{refs?.competences_actives ? (competences.length ? competences.join(', ') : 'toutes compétences')
+            : null}{refs?.competences_actives && f ? ' · ' : ''}{f ?? (refs?.competences_actives ? '' : 'sans fenêtre')}</div>
         </div>
         <div>
           <div className="mini-titre">Planification</div>
@@ -349,7 +352,7 @@ export default function Services() {
       </div>
 
       <div className="info">Nouveau service : le créer dans Odoo (application Services sur site), puis « Synchroniser ».
-        Il arrive ici « À planifier » ; régler ensuite ce qu'Odoo ne connaît pas : compétences, équipe, véhicule, fenêtre.</div>
+        Il arrive ici « À planifier » ; régler ensuite ce qu'Odoo ne connaît pas : taille d'équipe, véhicule, fenêtre.</div>
 
       <div className="filtres" role="search">
         <label className="champ champ-recherche">Rechercher

@@ -49,7 +49,8 @@ export interface Ressources {
 
 export interface AffectationProposee {
   service_id: number; service: string; matricules: string[]; equipe: string[]; vehicle_id: number | null;
-  vehicule: string | null; debut: string; fin: string; km_aller_retour: number; cout_estime: number | null;
+  vehicule: string | null; debut: string; fin: string; km_aller_retour: number | null;   // null : distance inconnue
+  cout_estime: number | null;
   raison_techniciens: string; raison_vehicule: string;
 }
 export interface Proposition {
@@ -78,6 +79,7 @@ export interface EntreeJournal {
 }
 
 export interface Referentiels {
+  competences_actives: boolean;            // règle « compétences » active (sinon les écrans les masquent)
   competences: { code: string; libelle: string }[];
   types_service: { id: number; nom: string; duree_defaut_h: number; competences: string[];
                    vehicule_requis: VehiculeRequis; nb_techniciens_defaut: number }[];
