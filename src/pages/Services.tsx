@@ -327,6 +327,7 @@ export default function Services() {
   const refs = useDonnees(() => planif.referentiels(), []);
   const [filtre, setFiltre] = useState<Filtre>('tous');
   const [texte, setTexte] = useState('');
+  const [projet, setProjet] = useState<number | ''>('');
   const [simules, setSimules] = useState(true);
   const [edition, setEdition] = useState<ServicePlanif | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -334,11 +335,23 @@ export default function Services() {
 
   const base = useMemo(() => (liste.donnees ?? []).filter((s) => simules || !s.simule)
     .sort((a, b) => cleTri(a).localeCompare(cleTri(b)) || a.name.localeCompare(b.name, 'fr')), [liste.donnees, simules]);
+  /** Projets présents dans la liste (project_id Odoo), avec leur nombre de services, par nom. */
+  const projets = useMemo(() => {
+    const m = new Map<number, { id: number; nom: string; n: number }>();
+    for (const s of base) {
+      const p = m.get(s.project_id) ?? { id: s.project_id, nom: s.project_name ?? `Projet n° ${s.project_id} (pas encore synchronisé)`, n: 0 };
+      p.n += 1;
+      m.set(s.project_id, p);
+    }
+    return [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  }, [base]);
+  const projetActif = projet !== '' && projets.some((p) => p.id === projet) ? projet : '';
+  const dansProjet = useMemo(() => base.filter((s) => projetActif === '' || s.project_id === projetActif), [base, projetActif]);
   const services = useMemo(() => {
     const q = sansAccents(texte.trim());
-    return base.filter((s) => garde(filtre, s)
+    return dansProjet.filter((s) => garde(filtre, s)
       && (!q || sansAccents([s.name, s.partner_name, s.project_name, s.site_adresse].filter(Boolean).join(' ')).includes(q)));
-  }, [base, filtre, texte]);
+  }, [dansProjet, filtre, texte]);
   const nbSimules = (liste.donnees ?? []).filter((s) => s.simule).length;
 
   return (
@@ -358,11 +371,17 @@ export default function Services() {
         <label className="champ champ-recherche">Rechercher
           <input type="search" value={texte} placeholder="Service, client, projet, adresse" onChange={(e) => setTexte(e.target.value)} />
         </label>
+        <label className="champ champ-projet">Projet
+          <select value={projetActif} onChange={(e) => setProjet(e.target.value === '' ? '' : Number(e.target.value))}>
+            <option value="">Tous les projets ({base.length})</option>
+            {projets.map((p) => <option key={p.id} value={p.id}>{p.nom} ({p.n})</option>)}
+          </select>
+        </label>
         <div className="segmente" role="radiogroup" aria-label="Statut de planification">
           {FILTRES.map((f) => (
             <button key={f.cle} type="button" role="radio" aria-checked={filtre === f.cle}
                     className={filtre === f.cle ? 'actif' : ''} onClick={() => setFiltre(f.cle)}>
-              {f.libelle} <span className="compteur">{base.filter((s) => garde(f.cle, s)).length}</span></button>
+              {f.libelle} <span className="compteur">{dansProjet.filter((s) => garde(f.cle, s)).length}</span></button>
           ))}
         </div>
         {nbSimules > 0 && <label className="case"><input type="checkbox" checked={simules} onChange={(e) => setSimules(e.target.checked)} />
