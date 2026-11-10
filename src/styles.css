@@ -51,6 +51,8 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; }
   background: var(--surface); color: var(--encre); font: inherit; font-weight: 500; cursor: pointer; }
 .btn-primaire { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn-danger { color: var(--erreur); border-color: var(--erreur); background: transparent; }
+.btn-danger:hover { background: var(--erreur-doux); }
 .btn-petit { min-height: 36px; padding: 0 12px; font-size: 13px; display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
 
 .filtres { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }

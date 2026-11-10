@@ -4,7 +4,7 @@ import { planif, type EntreeJournal } from '../planification';
 
 const ACTIONS: Record<string, string> = {
   creer: 'Création', modifier: 'Modification', supprimer: 'Suppression', proposer: 'Proposition du solveur',
-  affecter: 'Affectation', publier: 'Publication', regle: 'Règle modifiée',
+  affecter: 'Affectation', retirer: 'Affectation retirée', publier: 'Publication', regle: 'Règle modifiée',
 };
 const OBJETS: Record<string, string> = { service: 'Service', periode: 'Période', regle: 'Règle' };
 

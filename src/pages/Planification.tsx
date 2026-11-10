@@ -84,9 +84,10 @@ function CarteService({ s, jour, depuis, propose, onOuvrir, onVerrou }: {
 
 // ---------- panneau d'affectation (aussi utilisable au doigt, sans glisser) ----------
 
-function PanneauAffectation({ s, techniciens, propose, enregistrer, onFermer }: {
+function PanneauAffectation({ s, techniciens, propose, enregistrer, retirer, onFermer }: {
   s: ServicePlanif; techniciens: TechnicienPlanif[]; propose: AffectationProposee | undefined;
   enregistrer: (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>) => Promise<boolean>;
+  retirer: (s: ServicePlanif) => Promise<boolean>;
   onFermer: () => void;
 }) {
   const a = s.affectation;
@@ -135,6 +136,10 @@ function PanneauAffectation({ s, techniciens, propose, enregistrer, onFermer }: 
         <label className="case"><input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />
           Verrouiller (le solveur ne le changera plus)</label>
         <div className="actions">
+          {a && (
+            <button type="button" className="btn btn-danger" title="Le service repasse « à planifier » ; un nouveau calcul pourra le reproposer"
+              onClick={async () => { if (await retirer(s)) onFermer(); }}>Retirer l'affectation</button>
+          )}
           <button type="button" className="btn btn-primaire" disabled={!equipe.length}
             onClick={async () => { if (await enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou })) onFermer(); }}>
             Enregistrer l'affectation</button>
@@ -171,6 +176,7 @@ export default function Planification() {
   const causes = useMemo(() => new Map((proposition?.non_planifies ?? []).map((n) => [n.service_id, n.cause])), [proposition]);
   const aPlanifier = liste.filter((s) => !s.affectation);
   const aPublier = liste.filter((s) => s.affectation && s.statut_planification !== 'publie');
+  const duSolveur = liste.filter((s) => s.affectation?.etat === 'propose' && s.affectation.propose_par === 'solveur');
   const groupes = useMemo(() => {
     const par = new Map<string, TechnicienPlanif[]>();
     for (const t of [...techniciens].sort((x, y) => x.nom.localeCompare(y.nom))) par.set(t.agence, [...(par.get(t.agence) ?? []), t]);
@@ -244,6 +250,33 @@ export default function Planification() {
     } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
   };
 
+  const retirer = async (s: ServicePlanif): Promise<boolean> => {
+    setMessage(null);
+    try {
+      const r = await ecrire(() => planif.retirerAffectation(s.id, s.version));
+      if (!r) return false;
+      setMessage({ type: 'ok', texte: `« ${s.name} » : affectation retirée, repassé « à planifier » — journalisé.` });
+      recharger();
+      return true;
+    } catch (e) {
+      setMessage({ type: 'erreur', texte: erreurTexte(e) });
+      if (e instanceof ErreurPlanif && e.statut === 409) recharger();
+      return false;
+    }
+  };
+
+  const retirerPropositions = async () => {
+    setMessage(null); setOccupe(true);
+    try {
+      const r = await ecrire(() => planif.retirerPropositions(debut, fin));
+      if (r) {
+        setProposition(null);
+        setMessage({ type: 'ok', texte: `${r.services} proposition(s) du solveur retirée(s) ; verrouillés et choix du dispatcher gardés.` });
+        recharger();
+      }
+    } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
+  };
+
   const publier = async () => {
     setConfirmerPublication(false); setMessage(null); setOccupe(true);
     try {
@@ -270,6 +303,9 @@ export default function Planification() {
           <button type="button" className="btn" aria-label="Semaine suivante" onClick={() => setLundi(decaler(lundi, 7))}>›</button>
           <button type="button" className="btn btn-primaire" disabled={occupe} onClick={() => void proposer()}>
             {occupe ? 'Calcul…' : 'Proposer'}</button>
+          <button type="button" className="btn" disabled={occupe || !duSolveur.length} onClick={() => void retirerPropositions()}
+            title="Retire les propositions du solveur de la semaine ; garde les verrouillés, les publiés et vos choix">
+            Retirer les propositions ({duSolveur.length})</button>
           <button type="button" className="btn" disabled={occupe || !aPublier.length} onClick={() => setConfirmerPublication(true)}>
             Publier la semaine ({aPublier.length})</button>
         </div>
@@ -287,7 +323,7 @@ export default function Planification() {
 
       {selection && (
         <PanneauAffectation key={`${selection.id}-${selection.version}`} s={selection} techniciens={techniciens}
-          propose={proposes.get(selection.id)} enregistrer={enregistrer} onFermer={() => setOuvert(null)} />
+          propose={proposes.get(selection.id)} enregistrer={enregistrer} retirer={retirer} onFermer={() => setOuvert(null)} />
       )}
 
       <div className="rangee">
