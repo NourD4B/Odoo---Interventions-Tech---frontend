@@ -3,7 +3,7 @@
 // cliquer pour ouvrir sa fiche (équipe, dates, véhicule, verrou). Le solveur propose, le dispatcher décide.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent,
   type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
 import DialogueDerogation from '../composants/DialogueDerogation';
@@ -328,7 +328,11 @@ function segmentsDe(matricule: string, liste: ServicePlanif[], jours: string[]):
 }
 
 export default function Planification() {
-  const [lundi, setLundi] = useState(() => lundiDe(aujourdhui()));
+  const [params] = useSearchParams();                    // ?semaine=AAAA-MM-JJ (lien depuis le plan de charge)
+  const [lundi, setLundi] = useState(() => {
+    const s = params.get('semaine');
+    return lundiDe(s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : aujourdhui());
+  });
   const jours = JOURS.map((_, k) => iso(decaler(lundi, k)));
   const [debut, fin] = [jours[0], jours[4]];
   const auj = aujourdhui();

@@ -85,6 +85,26 @@ export interface Referentiels {
                    vehicule_requis: VehiculeRequis; nb_techniciens_defaut: number }[];
   avertissements: string[];
 }
+/** Plan de charge : un jour par date de la période ; une cellule par technicien et par jour. */
+export type EtatJour = 'libre' | 'intervention' | 'conge' | 'conflit' | 'ferie' | 'weekend';
+export interface JourCharge { date: string; ouvre: boolean; ferie: string | null; weekend: boolean }
+export interface CelluleCharge { etat: EtatJour; heures: number; services: number[] }
+export interface TechnicienCharge {
+  matricule: string; nom: string; agence: string; agence_a_confirmer: boolean; jours: CelluleCharge[];
+  ouvres: number; conges: number; occupes: number; conflits: number; libres: number; charge_pct: number | null;
+  semaines: { lundi: string; charge_pct: number | null; occupes: number; disponibles: number }[];
+}
+export interface ServiceCharge {
+  id: number; nom: string; client: string | null; etat: StatutPlanif; priorite: 'normale' | 'urgente'; simule: boolean;
+  debut: string; fin: string; matricules: string[]; nb_techniciens: number; allocated_hours: number; site: string | null;
+}
+export interface PlanDeCharge {
+  periode: { debut: string; fin: string }; avertissements: string[]; agences: { code: string; nom: string }[];
+  jours: JourCharge[]; techniciens: TechnicienCharge[]; services: Record<string, ServiceCharge>;
+  equipe: { date: string; occupes: number; conges: number; libres: number; conflits: number }[];
+  semaines: { lundi: string; ouvres: number }[];
+}
+
 export interface AgencePlanif {
   code: string; nom: string; id_entrepot: number | null; adresse: string; statut: 'active' | 'a_confirmer';
   lat: number | null; lng: number | null; precision: string | null;
@@ -158,6 +178,7 @@ export const planif = {
   modifierPlanification: (id: number, corps: ReglagesPlanif & { version: number }) =>
     appel<ServicePlanif>('PUT', `/services/${id}/planification`, { corps }),
   ressources: (debut: string, fin: string) => appel<Ressources>('GET', '/ressources', { params: { debut, fin } }),
+  charge: (debut: string, fin: string) => appel<PlanDeCharge>('GET', '/charge', { params: { debut, fin } }),
   proposer: (debut: string, fin: string) => appel<Proposition>('POST', '/proposer', { corps: { debut, fin } }),
   vehicules: (serviceId: number, params?: { matricules?: string; debut?: string; fin?: string }) =>
     appel<ChoixVehicule[]>('GET', `/vehicules/${serviceId}`, { params }),
