@@ -265,10 +265,14 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
               onChoisir={(v) => setVehicule(v?.vehicle_id ?? null)} />
           </section>
 
-          <label className="champ pl-note">Motif <span className="muet">(facultatif, enregistré dans le journal ; utile si une règle est enfreinte)</span>
-            <textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)}
+          <section className="pl-bloc pl-note" aria-labelledby="pl-motif">
+            <div className="pl-bloc-tete">
+              <h3 id="pl-motif">Motif</h3>
+              <span className="muet">facultatif · enregistré dans le journal, utile si une règle est enfreinte</span>
+            </div>
+            <textarea aria-labelledby="pl-motif" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="Ex. : congé annulé par téléphone" />
-          </label>
+          </section>
 
           <label className="pl-interrupteur">
             <input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />

@@ -479,8 +479,11 @@ tr:last-child td { border-bottom: 0; }
 .pl-fermer-avert { flex: none; border: 0; background: transparent; color: inherit; font-size: 18px; line-height: 1;
   cursor: pointer; padding: 0 4px; min-width: 32px; min-height: 32px; border-radius: 6px; }
 .pl-fermer-avert:hover { background: rgba(146, 64, 14, .1); }
-.pl-note textarea { width: 100%; resize: vertical; }
-.pl-note .muet { font-weight: 400; }
+.pl-note textarea { width: 100%; resize: vertical; min-height: 60px; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--bordure-forte); font: inherit; color: var(--encre); background: var(--surface); }
+.pl-note textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.pl-note .pl-bloc-tete { flex-wrap: wrap; row-gap: 2px; }
+.pl-note .muet { font-size: 12px; }
 @media (max-width: 720px) { .pl { --pl-col-tech: 150px; } .pl-tech .pl-avatar { display: none; } }
 @media (max-width: 1100px) {
   .pl-corps { grid-template-columns: 1fr; }
