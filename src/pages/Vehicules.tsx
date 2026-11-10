@@ -1,8 +1,43 @@
+// Véhicules : la flotte (photos, modèles, fiches constructeur, corrections Odoo), le rapprochement Odoo ↔ SPOC
+// et la recherche du conducteur pour un PV.
 import { useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, aujourdhui, LIBELLES_RAPPROCHEMENT, type Affectation, type ResultatPV } from '../api';
 import { Avertissements, Badge, EtatChargement, ListeEcarts, useDonnees } from '../composants';
+import Flotte from './Flotte';
+
+const ONGLETS = [
+  { cle: 'flotte', libelle: 'Flotte', aide: 'Photos, modèles, fiches constructeur et corrections à faire dans Odoo' },
+  { cle: 'rapprochement', libelle: 'Odoo ↔ SPOC', aide: 'Fleet (Odoo) rapproché du parc SPOC (HFSQL), historique des conducteurs' },
+  { cle: 'pv', libelle: 'PV', aide: 'Qui conduisait ? (PV à désigner sous 45 jours)' },
+] as const;
 
 export default function Vehicules() {
+  const [params, setParams] = useSearchParams();
+  const onglet = ONGLETS.find((o) => o.cle === params.get('vue')) ?? ONGLETS[0];
+  return (
+    <>
+      <div className="entete">
+        <div>
+          <h1>Véhicules</h1>
+          <div className="sous-titre">{onglet.aide}</div>
+        </div>
+        <div className="segmente" role="tablist" aria-label="Vue">
+          {ONGLETS.map((o) => (
+            <button key={o.cle} type="button" role="tab" aria-selected={onglet.cle === o.cle}
+              className={onglet.cle === o.cle ? 'actif' : ''}
+              onClick={() => setParams(o.cle === 'flotte' ? {} : { vue: o.cle }, { replace: true })}>{o.libelle}</button>
+          ))}
+        </div>
+      </div>
+      {onglet.cle === 'flotte' && <Flotte />}
+      {onglet.cle === 'rapprochement' && <Rapprochement />}
+      {onglet.cle === 'pv' && <RecherchePV />}
+    </>
+  );
+}
+
+function Rapprochement() {
   const { donnees, erreur, chargement } = useDonnees(() => api.vehicules(), []);
   const [historique, setHistorique] = useState<{ plaque: string; lignes: Affectation[] } | null>(null);
   const vehicules = donnees?.vehicules ?? [];
@@ -14,14 +49,7 @@ export default function Vehicules() {
 
   return (
     <>
-      <div className="entete">
-        <div>
-          <h1>Véhicules et PV</h1>
-          <div className="sous-titre">Fleet (Odoo) rapproché du parc SPOC (HFSQL) · {vehicules.length} véhicule(s), dont {pool} en pool</div>
-        </div>
-      </div>
-
-      <RecherchePV />
+      <p className="muet rapprochement-resume">{vehicules.length} véhicule(s), dont {pool} en pool</p>
       <EtatChargement chargement={chargement} erreur={erreur} />
       <Avertissements liste={donnees?.avertissements} />
 
