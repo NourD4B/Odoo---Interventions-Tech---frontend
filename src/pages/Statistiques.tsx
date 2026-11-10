@@ -2,8 +2,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EtatChargement, useDonnees } from '../composants';
-import { Barre, GraphiqueJours, TableServices, Tuile } from '../composants/Statistiques';
-import { dateHeure, euros, heures, nombre, stats, type EtatSynchro, type Tableau } from '../statistiques';
+import { Barre, GraphiqueJours, SynchroOdoo, TableServices, Tuile } from '../composants/Statistiques';
+import { euros, heures, nombre, stats, type Tableau } from '../statistiques';
 
 function iso(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -24,38 +24,13 @@ const REGROUPEMENTS: { cle: Regroupement; libelle: string }[] = [
   { cle: 'par_type_service', libelle: 'Type de service' },
 ];
 
-function Synchro({ etat, onSynchroniser, occupe }: { etat: EtatSynchro | null; onSynchroniser: () => void; occupe: boolean }) {
-  const taches = etat?.modeles.find((m) => m.modele === 'project.task');
-  const erreur = etat?.modeles.find((m) => m.erreur)?.erreur;
-  return (
-    <div className="synchro">
-      <span className={`point ${erreur ? 'point-erreur' : 'point-ok'}`} />
-      <span>{taches?.derniere_synchro
-        ? <>Copie Odoo du {dateHeure(taches.derniere_synchro)} UTC · {taches.nb_local} tâches</>
-        : 'Copie Odoo jamais synchronisée'}
-        {erreur && <span className="muet" title={erreur}> · dernière erreur : {erreur.slice(0, 60)}</span>}</span>
-      <button type="button" className="btn btn-petit" disabled={occupe || etat?.en_cours} onClick={onSynchroniser}>
-        {occupe ? 'Synchronisation…' : 'Synchroniser'}</button>
-    </div>
-  );
-}
-
 export default function Statistiques() {
   const [debut, setDebut] = useState(() => iso(lundi(new Date())));
   const [fin, setFin] = useState(() => plus(iso(lundi(new Date())), 6));
   const [simules, setSimules] = useState(true);
   const [regroupement, setRegroupement] = useState<Regroupement>('par_projet');
-  const [occupe, setOccupe] = useState(false);
   const t = useDonnees(() => stats.tableau(debut, fin, simules), [debut, fin, simules]);
-  const synchro = useDonnees(() => stats.synchro(), []);
   const semaine = (n: number) => { setDebut(plus(debut, 7 * n)); setFin(plus(fin, 7 * n)); };
-
-  const synchroniser = async () => {
-    setOccupe(true);
-    try { await stats.synchroniser(); } catch { /* l'état affiche l'erreur */ } finally {
-      setOccupe(false); synchro.recharger(); t.recharger();
-    }
-  };
 
   const d = t.donnees;
   const maxJours = Math.max(1, ...(d?.par_technicien.map((x) => x.jours_ouvres) ?? [1]));
@@ -70,7 +45,7 @@ export default function Statistiques() {
           <div className="sous-titre">Services planifiés et réalisés · copie Odoo (lecture seule) + planification ·
             les valeurs « estimées » suivent les règles du solveur</div>
         </div>
-        <Synchro etat={synchro.donnees} onSynchroniser={() => void synchroniser()} occupe={occupe} />
+        <SynchroOdoo onFini={t.recharger} />
       </div>
 
       <div className="filtres" role="group" aria-label="Période">

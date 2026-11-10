@@ -2,7 +2,9 @@
 // Couleurs des séries (palette de référence validée : bleu, orange ; contrôles CVD réussis) dans styles.css.
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { euros, heures, jourCourt, LIBELLES_ETAT, nombre, type EtatService, type LigneService } from '../statistiques';
+import { useDonnees } from '../composants';
+import { dateHeure, euros, heures, jourCourt, LIBELLES_ETAT, nombre, stats, type EtatService,
+         type LigneService } from '../statistiques';
 
 export function BadgeEtat({ etat }: { etat: EtatService }) {
   return <span className={`badge etat-${etat}`}>{LIBELLES_ETAT[etat]}</span>;
@@ -128,6 +130,32 @@ export function TableServices({ lignes, vide }: { lignes: LigneService[]; vide?:
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Fraîcheur de la copie locale d'Odoo et bouton « Synchroniser » (Odoo reste en lecture seule). */
+export function SynchroOdoo({ onFini }: { onFini?: () => void }) {
+  const etat = useDonnees(() => stats.synchro(), []);
+  const [occupe, setOccupe] = useState(false);
+  const [echec, setEchec] = useState<string | null>(null);
+  const taches = etat.donnees?.modeles.find((m) => m.modele === 'project.task');
+  const erreur = echec ?? etat.donnees?.modeles.find((m) => m.erreur)?.erreur ?? etat.erreur;
+  const synchroniser = async () => {
+    setOccupe(true); setEchec(null);
+    try { await stats.synchroniser(); } catch (e) { setEchec(e instanceof Error ? e.message : String(e)); } finally {
+      setOccupe(false); etat.recharger(); onFini?.();
+    }
+  };
+  return (
+    <div className="synchro" role="status">
+      <span className={`point ${erreur ? 'point-erreur' : 'point-ok'}`} />
+      <span>{taches?.derniere_synchro
+        ? <>Copie Odoo du {dateHeure(taches.derniere_synchro)} UTC · {taches.nb_local} tâches</>
+        : 'Copie Odoo jamais synchronisée'}
+        {erreur && <span className="muet" title={erreur}> · erreur : {erreur.slice(0, 60)}</span>}</span>
+      <button type="button" className="btn btn-petit" disabled={occupe || etat.donnees?.en_cours}
+              onClick={() => void synchroniser()}>{occupe ? 'Synchronisation…' : 'Synchroniser'}</button>
     </div>
   );
 }

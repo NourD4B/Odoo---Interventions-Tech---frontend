@@ -303,6 +303,37 @@ tr:last-child td { border-bottom: 0; }
 .chiffres dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chiffres.colonne dd { font-weight: 500; }
 
+/* ---------- Services sur site (Odoo en lecture seule + réglages de planification) ---------- */
+.info { background: var(--accent-doux); color: #1e3a8a; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.mini-titre { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--encre-3); }
+.champ-recherche { flex: 1 1 260px; }
+.champ-recherche input { width: 100%; }
+.compteur { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 12px;
+  background: var(--neutre-doux); color: var(--encre-2); font-variant-numeric: tabular-nums; }
+.segmente button.actif .compteur { background: rgba(255, 255, 255, .25); color: #fff; }
+.service-colonnes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 20px; font-size: 13px; }
+.service-colonnes > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.alertes-service { margin: 0; padding: 8px 10px 8px 26px; background: var(--alerte-doux); color: var(--alerte);
+  border-radius: 8px; font-size: 13px; }
+.dialogue-large { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; gap: 16px; }
+.dialogue-large .sous-titre { overflow-wrap: anywhere; }
+.bloc-odoo { background: var(--neutre-doux); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.bloc-odoo .chiffres dd { font-weight: 500; overflow-wrap: anywhere; }
+.champs-reglages { border: 1px solid var(--bordure); border-radius: 8px; padding: 12px; margin: 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 12px; }
+.champs-reglages legend { padding: 0 6px; }
+.champs-reglages p { margin: 0; }
+.champs-reglages .champ select, .champs-reglages .champ input { min-width: 0; width: 100%; }
+.champs-reglages .segmente { align-self: flex-start; }
+.aide { font-weight: 400; }
+.champs-reglages:disabled input, .champs-reglages:disabled select { background: var(--neutre-doux); color: var(--encre-2); }
+.champs-reglages:disabled .segmente button { cursor: not-allowed; opacity: .7; }
+.champs-reglages:disabled .case { color: var(--encre-2); }
+.bloc-position { display: flex; flex-direction: column; gap: 6px; }
+.carte-site { height: 240px; border-radius: 8px; overflow: hidden; border: 1px solid var(--bordure); }
+.carte-site-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-doux); }
+.carte-site-active .leaflet-container { cursor: crosshair; }
+
 @media (max-width: 720px) {
   .principal { padding: 16px; }
   .barre-laterale { max-width: none; }

@@ -11,22 +11,26 @@ export interface AffectationResume {
   raison: string | null; motif_derogation: string | null;
 }
 
-/** Champs saisis (POST / PUT). Dates-heures : « AAAA-MM-JJTHH:MM » = heure de Paris. */
-export interface ServiceSaisie {
-  name: string; project_id: number; partner_id: number | null; partner_name: string | null;
-  partner_phone: string | null; planned_date_begin: string | null; date_deadline: string | null;
-  allocated_hours: number; priority: '0' | '1'; description: string | null; tag_ids: number[];
-  worksheet_template_id: number | null; under_warranty: boolean;
-  site_partner_id: number | null; site_adresse: string | null; site_lat: number | null; site_lng: number | null;
+/** Réglages de planification (absents d'Odoo), seuls champs modifiables ici. Dates « AAAA-MM-JJ ».
+ *  Position du site : seulement pour corriger un géocodage absent ou faux (précision « saisie »). */
+export interface ReglagesPlanif {
   type_service_id: number | null; nb_techniciens: number; competences_requises: string[];
   vehicule_requis: VehiculeRequis; fenetre_debut: string | null; fenetre_fin: string | null;
+  site_lat: number | null; site_lng: number | null;
 }
 
-export interface ServicePlanif extends ServiceSaisie {
-  id: number; company_id: number | null; stage: number; statut_planification: StatutPlanif;
-  source: 'saisie' | 'simulation' | 'odoo'; site_precision: string | null; odoo_task_id: number | null;
-  version: number; sale_order_id: number | null; sale_line_id: number | null;
-  affectation: AffectationResume | null;
+/** Service sur site = tâche Odoo Field Service (id = id de la tâche) + réglages de planification.
+ *  Les champs Odoo (nom, projet, client, dates, heures, priorité, adresse) se modifient dans Odoo. Dates-heures :
+ *  ISO avec décalage, heure de Paris. */
+export interface ServicePlanif extends ReglagesPlanif {
+  id: number; name: string; project_id: number; project_name: string | null; company_id: number | null;
+  partner_id: number | null; partner_name: string | null; partner_phone: string | null;
+  planned_date_begin: string | null; date_deadline: string | null; allocated_hours: number; priority: '0' | '1';
+  tag_ids: number[]; worksheet_template_id: number | null; under_warranty: boolean;
+  sale_order_id: number | null; sale_line_id: number | null;
+  site_partner_id: number | null; site_adresse: string | null; site_precision: string | null;
+  stage: number; statut_planification: StatutPlanif; source: string; odoo_task_id: number | null;
+  odoo_url: string | null; simule: boolean; version: number; affectation: AffectationResume | null;
 }
 
 export interface TechnicienPlanif {
@@ -74,9 +78,6 @@ export interface EntreeJournal {
 }
 
 export interface Referentiels {
-  projets: { id: number; nom: string; company_id: number }[];
-  modeles_feuille: { id: number; nom: string }[];
-  etiquettes: { id: number; nom: string }[];
   competences: { code: string; libelle: string }[];
   types_service: { id: number; nom: string; duree_defaut_h: number; competences: string[];
                    vehicule_requis: VehiculeRequis; nb_techniciens_defaut: number }[];
@@ -87,8 +88,6 @@ export interface AgencePlanif {
   lat: number | null; lng: number | null; precision: string | null;
   company_id: number | null; societe: string | null; warehouse_id: number | null; entrepot_odoo: string | null;
 }
-export interface ClientOdoo { id: number; nom: string; telephone: string | null; adresse: string }
-export interface AdresseClient { id: number; nom: string; adresse: string; siege: boolean }
 
 // ---------- auteur (journal) ----------
 
@@ -141,7 +140,7 @@ async function appel<T>(methode: string, chemin: string, options: { corps?: unkn
   return (reponse.status === 204 ? undefined : await reponse.json()) as T;
 }
 
-/** Erreurs 422 de validation, par champ : { project_id: "…" }. */
+/** Erreurs 422 de validation, par champ : { fenetre_fin: "…" }. */
 export function erreursParChamp(e: unknown): Record<string, string> {
   if (!(e instanceof ErreurPlanif) || e.statut !== 422 || !Array.isArray(e.detail)) return {};
   const champs: Record<string, string> = {};
@@ -154,10 +153,8 @@ export function erreursParChamp(e: unknown): Record<string, string> {
 
 export const planif = {
   services: (debut?: string, fin?: string) => appel<ServicePlanif[]>('GET', '/services', { params: { debut, fin } }),
-  creerService: (s: ServiceSaisie) => appel<ServicePlanif>('POST', '/services', { corps: s }),
-  modifierService: (id: number, s: ServiceSaisie & { version: number }) =>
-    appel<ServicePlanif>('PUT', `/services/${id}`, { corps: s }),
-  supprimerService: (id: number, version?: number) => appel<void>('DELETE', `/services/${id}`, { params: { version } }),
+  modifierPlanification: (id: number, corps: ReglagesPlanif & { version: number }) =>
+    appel<ServicePlanif>('PUT', `/services/${id}/planification`, { corps }),
   ressources: (debut: string, fin: string) => appel<Ressources>('GET', '/ressources', { params: { debut, fin } }),
   proposer: (debut: string, fin: string) => appel<Proposition>('POST', '/proposer', { corps: { debut, fin } }),
   vehicules: (serviceId: number, params?: { matricules?: string; debut?: string; fin?: string }) =>
@@ -177,8 +174,6 @@ export const planif = {
     appel<EntreeJournal[]>('GET', '/journal', { params: filtre }),
   referentiels: () => appel<Referentiels>('GET', '/referentiels'),
   agences: () => appel<{ avertissements: string[]; agences: AgencePlanif[] }>('GET', '/agences'),
-  clients: (q: string) => appel<ClientOdoo[]>('GET', '/clients', { params: { q } }),
-  adressesClient: (id: number) => appel<AdresseClient[]>('GET', `/clients/${id}/adresses`),
 };
 
 export const LIBELLES_STATUT_PLANIF: Record<StatutPlanif, string> = {
