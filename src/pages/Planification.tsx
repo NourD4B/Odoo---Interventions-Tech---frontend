@@ -58,7 +58,8 @@ function titreSemaine(debut: string, fin: string) {
 const dureeService = (s: ServicePlanif) => Math.max(1, Math.ceil(s.allocated_hours / Math.max(1, s.nb_techniciens) / 8));
 const nombreH = (h: number) => `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(h)} h`;
 const client = (s: ServicePlanif) => s.partner_name ?? 'Client non renseigné';
-const etatDe = (s: ServicePlanif) => s.affectation?.etat ?? 'a_planifier';
+/** État affiché ; « brouillon » = équipe en cours de composition (jamais renvoyé par l'API). */
+const etatDe = (s: ServicePlanif): string => s.affectation?.etat ?? 'a_planifier';
 const absentSur = (t: TechnicienPlanif, du: string, au: string) => t.absences.some((a) => a.du <= au && a.au >= du);
 
 function contrainteDate(s: ServicePlanif): string | null {
@@ -83,6 +84,9 @@ function IconeVerrou({ ouvert = false }: { ouvert?: boolean }) {
 // ---------- glisser-déposer ----------
 
 type Glisse = { serviceId: number; depuis: string | null };
+/** Équipe en cours de composition (service à plusieurs techniciens) : rien n'est enregistré avant qu'elle soit
+ *  complète ; chaque dépôt sur un technicien l'ajoute, sur la période du premier dépôt. */
+type Brouillon = { serviceId: number; debut: string; fin: string; matricules: string[] };
 const TYPE_GLISSE = 'application/x-d4b-service';
 
 function lireGlisse(e: DragEvent): Glisse | null {
@@ -90,11 +94,11 @@ function lireGlisse(e: DragEvent): Glisse | null {
 }
 
 /** Élément glissable et activable au clavier (Entrée / Espace = ouvrir la fiche). */
-function Glissable({ s, depuis, className, style, titre, onOuvrir, onDebut, onFin, children }: {
-  s: ServicePlanif; depuis: string | null; className: string; style?: CSSProperties; titre: string;
+function Glissable({ s, depuis, className, style, titre, fixe = false, onOuvrir, onDebut, onFin, children }: {
+  s: ServicePlanif; depuis: string | null; className: string; style?: CSSProperties; titre: string; fixe?: boolean;
   onOuvrir: () => void; onDebut: (g: Glisse) => void; onFin: () => void; children: ReactNode;
 }) {
-  const mobile = etatDe(s) !== 'publie';
+  const mobile = !fixe && etatDe(s) !== 'publie';
   return (
     <div role="button" tabIndex={0} className={className} style={style} title={titre} draggable={mobile}
       aria-label={`${client(s)}, ${s.name}`}
@@ -127,8 +131,9 @@ function ChoixTechnicien({ t, choisi, absent, onBasculer }: {
   );
 }
 
-function DialogueService({ s, techniciens, agences, propose, cause, refs, enregistrer, retirer, depublier, onFermer }: {
-  s: ServicePlanif; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
+function DialogueService({ s, brouillon, techniciens, agences, propose, cause, refs, enregistrer, retirer, depublier,
+  onFermer }: {
+  s: ServicePlanif; brouillon: Brouillon | null; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
   propose: AffectationProposee | undefined; cause: string | undefined; refs: Referentiels | null;
   enregistrer: (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>) => Promise<boolean>;
   retirer: (s: ServicePlanif) => Promise<boolean>;
@@ -138,9 +143,10 @@ function DialogueService({ s, techniciens, agences, propose, cause, refs, enregi
   const a = s.affectation;
   const publie = s.statut_planification === 'publie';
   const [motif, setMotif] = useState<string | null>(null);         // null : pas en train de retirer la publication
-  const [equipe, setEquipe] = useState<string[]>(a?.matricules ?? []);
-  const [debut, setDebut] = useState(a?.debut ?? s.planned_date_begin?.slice(0, 10) ?? s.fenetre_debut ?? aujourdhui());
-  const [jours, setJours] = useState(a ? ouvresApres(a.debut, a.fin) + 1 : dureeService(s));
+  const b = !a && brouillon?.serviceId === s.id ? brouillon : null;
+  const [equipe, setEquipe] = useState<string[]>(a?.matricules ?? b?.matricules ?? []);
+  const [debut, setDebut] = useState(a?.debut ?? b?.debut ?? s.planned_date_begin?.slice(0, 10) ?? s.fenetre_debut ?? aujourdhui());
+  const [jours, setJours] = useState(a ? ouvresApres(a.debut, a.fin) + 1 : b ? ouvresApres(b.debut, b.fin) + 1 : dureeService(s));
   const [vehicule, setVehicule] = useState<number | null>(a?.vehicle_id ?? null);
   const [verrou, setVerrou] = useState(a?.etat === 'verrouille');
   const [envoi, setEnvoi] = useState(false);
@@ -337,6 +343,7 @@ export default function Planification() {
   const [derogation, setDerogation] = useState<{ violations: Violation[]; resoudre: (motif: string | null) => void } | null>(null);
   const [confirmerPublication, setConfirmerPublication] = useState(false);
   const [glisse, setGlisse] = useState<Glisse | null>(null);
+  const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [survol, setSurvol] = useState<string | null>(null);
   const { ecrire, dialogue } = useEcriture();
 
@@ -357,6 +364,20 @@ export default function Planification() {
     return [...par.entries()].sort(([a], [b]) => (agences.get(a) ?? a).localeCompare(agences.get(b) ?? b, 'fr'));
   }, [techniciens, agences]);
   const glisseAffecte = glisse ? !!parId.get(glisse.serviceId)?.affectation : false;
+  // brouillon d'équipe : affiché en barre (pointillés) sur les techniciens déjà choisis, sans être enregistré
+  const listeAffichee = useMemo(() => {
+    const s = brouillon && parId.get(brouillon.serviceId);
+    if (!s || s.affectation) return liste;
+    const nom = (m: string) => techniciens.find((x) => x.matricule === m)?.nom ?? m;
+    const faux = { ...s, affectation: { matricules: brouillon.matricules, equipe: brouillon.matricules.map(nom),
+      vehicle_id: null, plaque: null, debut: brouillon.debut, fin: brouillon.fin, etat: 'brouillon',
+      propose_par: 'dispatcher', raison: null, motif_derogation: null } } as unknown as ServicePlanif;
+    return [...liste, faux];
+  }, [liste, brouillon, parId, techniciens]);
+  useEffect(() => { setBrouillon(null); }, [debut]);                                // autre semaine : abandonné
+  useEffect(() => {                                                                  // affecté (fiche, autre écran)
+    if (brouillon && parId.get(brouillon.serviceId)?.affectation) setBrouillon(null);
+  }, [brouillon, parId]);
 
   const recharger = () => { services.recharger(); };
   const erreurTexte = (e: unknown) =>
@@ -395,22 +416,49 @@ export default function Planification() {
     if (!g || !s || s.statut_planification === 'publie') return;
     const a = s.affectation;
     if (a && a.debut === jour && g.depuis === matricule) return;                       // reposé au même endroit
-    const equipe = a ? [...new Set(a.matricules.map((m) => (m === g.depuis ? matricule : m)))] : [matricule];
+    const nb = Math.max(1, s.nb_techniciens || 1);
+    const nom = (m: string) => techniciens.find((x) => x.matricule === m)?.nom ?? m;
     // durée gardée si déjà affecté ; sinon celle du solveur s'il l'a proposé (trajet compris), sinon les heures
     const suggestion = proposes.get(s.id);
-    const finAff = plusOuvres(jour, a ? ouvresApres(a.debut, a.fin)
+    let debutAff = jour;
+    let finAff = plusOuvres(jour, a ? ouvresApres(a.debut, a.fin)
       : suggestion ? ouvresApres(suggestion.debut, suggestion.fin) : dureeService(s) - 1);
+    let equipe: string[];
+    let texteOk: string;
+    if (!a && nb > 1) {
+      // service à plusieurs techniciens : composer l'équipe dépôt après dépôt, enregistrer quand elle est complète
+      const b = brouillon?.serviceId === s.id ? brouillon : null;
+      equipe = b ? [...new Set([...b.matricules, matricule])] : [matricule];
+      if (b) { debutAff = b.debut; finAff = b.fin; }
+      if (equipe.length < nb) {
+        setBrouillon({ serviceId: s.id, debut: debutAff, fin: finAff, matricules: equipe });
+        setMessage({ type: 'ok', texte: `« ${client(s)} » : équipe ${equipe.length}/${nb} (${equipe.map(nom).join(', ')}). `
+          + `Glissez la carte sur ${nb - equipe.length === 1 ? 'un autre technicien' : `${nb - equipe.length} autres techniciens`} ; `
+          + "elle sera enregistrée quand l'équipe sera complète." });
+        return;
+      }
+      texteOk = `« ${client(s)} » affecté à ${equipe.map(nom).join(', ')}, ${jourLong(debutAff)}`
+        + `${finAff !== debutAff ? ` → ${jourLong(finAff)}` : ''}.`;
+    } else if (a && a.matricules.length < nb && !a.matricules.includes(matricule)) {
+      // équipe incomplète : le technicien visé rejoint l'équipe, mêmes dates
+      equipe = [...a.matricules, matricule];
+      [debutAff, finAff] = [a.debut, a.fin];
+      texteOk = `${nom(matricule)} rejoint l'équipe de « ${client(s)} » (${equipe.length}/${nb}).`;
+    } else {
+      equipe = a ? [...new Set(a.matricules.map((m) => (m === g.depuis ? matricule : m)))] : [matricule];
+      texteOk = `« ${client(s)} » affecté à ${nom(matricule)}, ${jourLong(jour)}.`;
+    }
     // Équipe ou jours changés : garder le véhicule s'il reste conforme, sinon prendre le premier conforme
     let vehicule = a?.vehicle_id ?? null;
     try {
-      const choix = await planif.vehicules(s.id, { matricules: equipe.join(','), debut: jour, fin: finAff });
+      const choix = await planif.vehicules(s.id, { matricules: equipe.join(','), debut: debutAff, fin: finAff });
       const actuel = choix.find((v) => v.vehicle_id === vehicule && v.conforme);
       vehicule = actuel?.vehicle_id ?? choix.find((v) => v.conforme)?.vehicle_id ?? vehicule;
     } catch { /* liste indisponible : véhicule actuel gardé, la règle le signalera si besoin */ }
-    if (await enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut: jour, fin: finAff,
+    if (await enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut: debutAff, fin: finAff,
       verrouiller: a?.etat === 'verrouille' })) {
-      const t = techniciens.find((x) => x.matricule === matricule);
-      setMessage({ type: 'ok', texte: `« ${client(s)} » affecté à ${t?.nom ?? matricule}, ${jourLong(jour)}.` });
+      if (brouillon?.serviceId === s.id) setBrouillon(null);
+      setMessage({ type: 'ok', texte: texteOk });
     }
   };
 
@@ -547,7 +595,7 @@ export default function Planification() {
               <div key={code} className="pl-agence" role="group" aria-label={agences.get(code) ?? code}>
                 <div className="pl-agence-nom">{agences.get(code) ?? code}<span>{techs.length}</span></div>
                 {techs.map((t) => {
-                  const { segments, voies } = segmentsDe(t.matricule, liste, jours);
+                  const { segments, voies } = segmentsDe(t.matricule, listeAffichee, jours);
                   const occupes = joursOccupes(t.matricule);
                   return (
                     <div key={t.matricule} className="pl-ligne" style={{ gridTemplateRows: `repeat(${voies}, minmax(58px, auto))` }}>
@@ -579,6 +627,7 @@ export default function Planification() {
                         const p = proposes.get(s.id);
                         return (
                           <Glissable key={s.id} s={s} depuis={t.matricule} titre={titreBarre(s)}
+                            fixe={etatDe(s) === 'brouillon'}
                             className={`pl-service etat-${etatDe(s)}${s.priority === '1' ? ' urgent' : ''}`
                               + `${coupeAvant ? ' coupe-avant' : ''}${coupeApres ? ' coupe-apres' : ''}`
                               + `${glisse?.serviceId === s.id ? ' en-glisse' : ''}`}
@@ -586,13 +635,15 @@ export default function Planification() {
                             onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
                             <span className="pl-service-client">{client(s)}</span>
                             <span className="pl-service-nom">{s.name}</span>
-                            <span className="pl-service-meta">
+                            {etatDe(s) === 'brouillon' ? (
+                              <span className="pl-service-meta">Équipe {s.affectation!.matricules.length}/{s.nb_techniciens} · à compléter</span>
+                            ) : <span className="pl-service-meta">
                               {etatDe(s) === 'verrouille' && <IconeVerrou />}
                               {s.affectation?.plaque ?? 'sans véhicule'}
                               {p?.km_aller_retour != null && <> · {Math.round(p.km_aller_retour)} km</>}
                               {s.affectation && s.affectation.matricules.length > 1 && <> · {s.affectation.matricules.length} tech.</>}
                               {s.affectation?.motif_derogation && <> · dérogation</>}
-                            </span>
+                            </span>}
                           </Glissable>
                         );
                       })}
@@ -615,14 +666,17 @@ export default function Planification() {
           </div>
           {glisse && glisseAffecte
             ? <div className="pl-depot">Déposer ici pour retirer l'affectation</div>
-            : <p className="pl-aide">Glissez une carte sur un technicien et un jour, ou cliquez dessus pour l'affecter.</p>}
+            : <p className="pl-aide">Glissez une carte sur un technicien et un jour, ou cliquez dessus pour l'affecter.
+                Service à plusieurs techniciens : glissez-la sur chacun.</p>}
           <div className="pl-cartes">
             {aPlanifier.map((s) => {
               const cause = causes.get(s.id);
               const quand = contrainteDate(s);
+              const enCours = brouillon?.serviceId === s.id ? brouillon : null;
               return (
                 <Glissable key={s.id} s={s} depuis={null} titre={`${client(s)} — ${s.name}`}
-                  className={`pl-carte${s.priority === '1' ? ' urgent' : ''}${glisse?.serviceId === s.id ? ' en-glisse' : ''}`}
+                  className={`pl-carte${s.priority === '1' ? ' urgent' : ''}${glisse?.serviceId === s.id ? ' en-glisse' : ''}`
+                    + `${enCours ? ' en-cours' : ''}`}
                   onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
                   <span className="pl-carte-client">{client(s)}</span>
                   <span className="pl-carte-nom">{s.name}</span>
@@ -633,6 +687,14 @@ export default function Planification() {
                     {quand && <span>{quand}</span>}
                   </span>
                   {cause && <span className="pl-carte-cause">{cause}</span>}
+                  {enCours && (
+                    <span className="pl-carte-equipe">
+                      <span>Équipe {enCours.matricules.length}/{s.nb_techniciens} : {enCours.matricules
+                        .map((m) => techniciens.find((x) => x.matricule === m)?.nom ?? m).join(', ')}</span>
+                      <button type="button" className="lien-bouton" onClick={(e) => { e.stopPropagation(); setBrouillon(null); }}>
+                        Annuler</button>
+                    </span>
+                  )}
                 </Glissable>
               );
             })}
@@ -642,7 +704,7 @@ export default function Planification() {
       </div>
 
       {selection && (
-        <DialogueService key={`${selection.id}-${selection.version}`} s={selection} techniciens={techniciens}
+        <DialogueService key={`${selection.id}-${selection.version}`} s={selection} brouillon={brouillon} techniciens={techniciens}
           agences={agences} propose={proposes.get(selection.id)} cause={causes.get(selection.id)} refs={refs.donnees}
           enregistrer={enregistrer} retirer={retirer} depublier={depublier} onFermer={() => setOuvert(null)} />
       )}

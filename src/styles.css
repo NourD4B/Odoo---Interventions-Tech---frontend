@@ -365,6 +365,12 @@ tr:last-child td { border-bottom: 0; }
 .pl-service.etat-verrouille { background: var(--accent-doux); border: 1px solid #b9cbf7; }
 .pl-service.etat-publie { background: var(--accent); border: 1px solid var(--accent); color: #fff; cursor: pointer; }
 .pl-service.etat-publie .pl-service-nom, .pl-service.etat-publie .pl-service-meta { color: #dbe5fb; }
+.pl-service.etat-brouillon { border: 1.5px dotted var(--encre-3); color: var(--encre-2); cursor: pointer;
+  background: repeating-linear-gradient(-45deg, #fafbfc 0 6px, #f1f2f5 6px 12px); }
+.pl-carte.en-cours { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.pl-carte-equipe { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; font-size: 12px;
+  color: var(--accent); font-weight: 500; }
+.pl-carte-equipe .lien-bouton { padding: 0; font-size: 12px; }
 .pl-service.coupe-avant { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: 0; border-left-style: solid; }
 .pl-service.coupe-apres { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: 0; border-right-style: solid; }
 .pl-service-client { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
