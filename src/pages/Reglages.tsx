@@ -13,7 +13,7 @@ const NIVEAUX: Record<Regle['categorie'], { valeur: Niveau; libelle: string }[]>
 };
 const SECTIONS: { categorie: Regle['categorie']; titre: string; aide: string }[] = [
   { categorie: 'obligatoire', titre: 'Règles obligatoires',
-    aide: "Le solveur ne les enfreint jamais ; le dispatcher peut déroger avec un motif (journalisé). Inactive : ignorée partout." },
+    aide: "Le solveur ne les enfreint jamais ; le dispatcher peut déroger, motif facultatif (règles enfreintes journalisées). Inactive : ignorée partout." },
   { categorie: 'preference', titre: 'Préférences (score du solveur)',
     aide: "Plus le poids est fort, plus le solveur en tient compte face aux autres. Planifier reste prioritaire : son poids doit rester bien au-dessus des autres." },
   { categorie: 'parametre', titre: 'Paramètres de calcul',

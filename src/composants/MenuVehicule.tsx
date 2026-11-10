@@ -4,7 +4,7 @@ import { planif, type ChoixVehicule } from '../planification';
 const VISIBLES = 4;
 
 /** Véhicules pour une équipe et des dates : conformes d'abord (avec la raison), les premiers seulement ;
- *  non conformes repliés, sélectionnables quand même — l'enregistrement passera alors par la dérogation. */
+ *  non conformes repliés, sélectionnables quand même (dérogation : enregistrée avec un avertissement, motif facultatif). */
 export default function MenuVehicule({ serviceId, matricules, debut, fin, actuel, onChoisir }: {
   serviceId: number; matricules: string[]; debut: string; fin: string; actuel: number | null;
   onChoisir: (v: ChoixVehicule | null) => void;

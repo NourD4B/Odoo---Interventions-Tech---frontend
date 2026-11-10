@@ -31,6 +31,7 @@ export interface ServicePlanif extends ReglagesPlanif {
   site_partner_id: number | null; site_adresse: string | null; site_precision: string | null;
   stage: number; statut_planification: StatutPlanif; source: string; odoo_task_id: number | null;
   odoo_url: string | null; simule: boolean; version: number; affectation: AffectationResume | null;
+  violations?: Violation[];                    // règles obligatoires enfreintes (réponse de planif.affecter seulement)
 }
 
 export interface TechnicienPlanif {
@@ -127,7 +128,7 @@ export function definirAuteur(nom: string): void {
 
 // ---------- appels ----------
 
-/** Erreur de l'API : statut HTTP + `detail` brut (422 : liste pydantic, ou { violations } pour une dérogation). */
+/** Erreur de l'API : statut HTTP + `detail` brut (422 : liste pydantic). */
 export class ErreurPlanif extends Error {
   constructor(message: string, readonly statut: number, readonly detail: unknown) { super(message); }
 }
@@ -184,7 +185,7 @@ export const planif = {
     appel<ChoixVehicule[]>('GET', `/vehicules/${serviceId}`, { params }),
   affecter: (serviceId: number, corps: CorpsAffectation) =>
     appel<ServicePlanif>('PUT', `/affectations/${serviceId}`, { corps }),
-  depublier: (serviceId: number, version: number, motif: string) =>
+  depublier: (serviceId: number, version: number, motif: string | null) =>
     appel<ServicePlanif>('POST', `/services/${serviceId}/depublier`, { corps: { version, motif } }),
   retirerAffectation: (serviceId: number, version: number) =>
     appel<ServicePlanif>('DELETE', `/affectations/${serviceId}`, { params: { version } }),

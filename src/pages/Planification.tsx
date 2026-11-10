@@ -6,12 +6,11 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEven
 import { Link, useSearchParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
-import DialogueDerogation from '../composants/DialogueDerogation';
 import { useEcriture } from '../composants/Ecriture';
 import MenuVehicule from '../composants/MenuVehicule';
 import {
   ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type Proposition, type Referentiels,
-  type ServicePlanif, type TechnicienPlanif, type Violation,
+  type ServicePlanif, type TechnicienPlanif,
 } from '../planification';
 
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
@@ -124,7 +123,7 @@ function ChoixTechnicien({ t, choisi, absent, onBasculer }: {
   return (
     <button type="button" role="checkbox" aria-checked={choisi} onClick={onBasculer}
       className={`pl-choix-tech${choisi ? ' choisi' : ''}${absent ? ' absent' : ''}`}
-      title={absent ? `${t.nom} est absent sur ces dates (dérogation demandée à l'enregistrement)` : t.nom}>
+      title={absent ? `${t.nom} est absent sur ces dates (enregistrable quand même : dérogation signalée)` : t.nom}>
       <span className="pl-avatar petit">{initiales(t.nom)}</span>
       <span className="pl-choix-tech-nom">{t.nom}{absent && <em> · absent</em>}</span>
     </button>
@@ -135,9 +134,9 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
   onFermer }: {
   s: ServicePlanif; brouillon: Brouillon | null; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
   propose: AffectationProposee | undefined; cause: string | undefined; refs: Referentiels | null;
-  enregistrer: (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>) => Promise<boolean>;
+  enregistrer: (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>, motif?: string | null) => Promise<boolean>;
   retirer: (s: ServicePlanif) => Promise<boolean>;
-  depublier: (s: ServicePlanif, motif: string) => Promise<boolean>;
+  depublier: (s: ServicePlanif, motif: string | null) => Promise<boolean>;
   onFermer: () => void;
 }) {
   const a = s.affectation;
@@ -149,6 +148,7 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
   const [jours, setJours] = useState(a ? ouvresApres(a.debut, a.fin) + 1 : b ? ouvresApres(b.debut, b.fin) + 1 : dureeService(s));
   const [vehicule, setVehicule] = useState<number | null>(a?.vehicle_id ?? null);
   const [verrou, setVerrou] = useState(a?.etat === 'verrouille');
+  const [note, setNote] = useState(a?.motif_derogation ?? '');      // motif facultatif (dérogation), journalisé
   const [envoi, setEnvoi] = useState(false);
   const fermer = useRef<HTMLButtonElement>(null);
   const fin = plusOuvres(debut, Math.max(1, jours) - 1);
@@ -225,11 +225,9 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
               <p className="muet">Publiée : figée. Pour la modifier ou la retirer, retirez d'abord la publication
                 (elle repasse « verrouillée », équipe, dates et véhicule gardés).</p>
             ) : (
-              <label className="champ">Pourquoi retirer la publication ? (enregistré dans le journal)
+              <label className="champ">Pourquoi retirer la publication ? <span className="muet">(facultatif, enregistré dans le journal)</span>
                 <textarea autoFocus rows={2} maxLength={500} value={motif} onChange={(e) => setMotif(e.target.value)}
                   placeholder="Ex. : le client a déplacé le rendez-vous" />
-                {motif.trim().length > 0 && motif.trim().length < 3 &&
-                  <span className="erreur-champ">3 caractères au moins.</span>}
               </label>
             )}
           </div>
@@ -267,6 +265,11 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
               onChoisir={(v) => setVehicule(v?.vehicle_id ?? null)} />
           </section>
 
+          <label className="champ pl-note">Motif <span className="muet">(facultatif, enregistré dans le journal ; utile si une règle est enfreinte)</span>
+            <textarea rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="Ex. : congé annulé par téléphone" />
+          </label>
+
           <label className="pl-interrupteur">
             <input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />
             <span className="pl-piste" aria-hidden="true" />
@@ -288,14 +291,15 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
             <button type="button" className="btn pl-btn-retirer" onClick={() => setMotif('')}>Retirer la publication</button>
           )}
           {publie && motif !== null && (
-            <button type="button" className="btn btn-primaire" disabled={envoi || motif.trim().length < 3}
-              onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim()); } finally { setEnvoi(false); } }}>
+            <button type="button" className="btn btn-primaire" disabled={envoi}
+              onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim() || null); } finally { setEnvoi(false); } }}>
               {envoi ? 'Retrait…' : 'Confirmer le retrait'}</button>
           )}
           <button type="button" className="btn" onClick={onFermer} disabled={envoi}>{publie ? 'Fermer' : 'Annuler'}</button>
           {!publie && (
             <button type="button" className="btn btn-primaire" disabled={!equipe.length || envoi}
-              onClick={() => void agir(() => enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou }))}>
+              onClick={() => void agir(() => enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou },
+                note.trim() || null))}>
               {envoi ? 'Enregistrement…' : a ? 'Enregistrer' : 'Affecter'}</button>
           )}
         </footer>
@@ -344,7 +348,7 @@ export default function Planification() {
   const [ouvert, setOuvert] = useState<number | null>(null);
   const [message, setMessage] = useState<{ type: 'erreur' | 'ok'; texte: string } | null>(null);
   const [occupe, setOccupe] = useState(false);
-  const [derogation, setDerogation] = useState<{ violations: Violation[]; resoudre: (motif: string | null) => void } | null>(null);
+  const [enfreintes, setEnfreintes] = useState<{ client: string; regles: string[] } | null>(null);   // dernière dérogation
   const [confirmerPublication, setConfirmerPublication] = useState(false);
   const [glisse, setGlisse] = useState<Glisse | null>(null);
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
@@ -388,25 +392,20 @@ export default function Planification() {
     (e instanceof ErreurPlanif && e.statut === 409 ? CONFLIT : e instanceof Error ? e.message : String(e));
   const finGlisse = () => { setGlisse(null); setSurvol(null); };
 
-  /** Enregistre un choix du dispatcher ; règles enfreintes -> dialogue de dérogation (motif) puis renvoi. */
-  const enregistrer = async (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>): Promise<boolean> => {
+  /** Enregistre un choix du dispatcher. Règles obligatoires enfreintes : enregistré quand même (dérogation, motif
+   *  facultatif, journalisée), puis avertissement listant les règles. */
+  const enregistrer = async (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>,
+    motif: string | null = null): Promise<boolean> => {
     setMessage(null);
-    const envoyer = (motif: string | null) => planif.affecter(s.id, { ...corps, motif, version: s.version });
+    setEnfreintes(null);
     try {
-      const r = await ecrire(() => envoyer(null));
+      const r = await ecrire(() => planif.affecter(s.id, { ...corps, motif, version: s.version }));
       if (!r) return false;
+      if (r.violations?.length) setEnfreintes({ client: client(s), regles: [...new Set(r.violations.map((v) => v.message))] });
     } catch (e) {
-      const violations = e instanceof ErreurPlanif && e.statut === 422
-        ? (e.detail as { violations?: Violation[] } | null)?.violations : undefined;
-      if (!violations) {
-        setMessage({ type: 'erreur', texte: erreurTexte(e) });
-        if (e instanceof ErreurPlanif && e.statut === 409) recharger();
-        return false;
-      }
-      const motif = await new Promise<string | null>((resoudre) => setDerogation({ violations, resoudre }));
-      setDerogation(null);
-      if (!motif) return false;
-      try { await ecrire(() => envoyer(motif)); } catch (e2) { setMessage({ type: 'erreur', texte: erreurTexte(e2) }); return false; }
+      setMessage({ type: 'erreur', texte: erreurTexte(e) });
+      if (e instanceof ErreurPlanif && e.statut === 409) recharger();
+      return false;
     }
     recharger();
     return true;
@@ -482,12 +481,12 @@ export default function Planification() {
   };
 
   /** Retire la publication : le service repasse « verrouillé » ; la fiche reste ouverte, de nouveau modifiable. */
-  const depublier = async (s: ServicePlanif, motif: string): Promise<boolean> => {
+  const depublier = async (s: ServicePlanif, motif: string | null): Promise<boolean> => {
     setMessage(null);
     try {
       const r = await ecrire(() => planif.depublier(s.id, s.version, motif));
       if (!r) return false;
-      setMessage({ type: 'ok', texte: `« ${client(s)} » n'est plus publié : verrouillé, de nouveau modifiable — journalisé.` });
+      setMessage({ type: 'ok', texte: `« ${client(s)} » n'est plus publié : verrouillé, de nouveau modifiable${motif ? ' — motif journalisé' : ''}.` });
       recharger();
       return true;
     } catch (e) {
@@ -580,6 +579,13 @@ export default function Planification() {
       </div>
 
       {message && <div className={message.type === 'erreur' ? 'erreur' : 'succes'} role={message.type === 'erreur' ? 'alert' : 'status'}>{message.texte}</div>}
+      {enfreintes && (
+        <div className="avertissement pl-enfreintes" role="status">
+          <span><strong>« {enfreintes.client} » enregistré malgré {enfreintes.regles.length > 1 ? 'des règles obligatoires' : 'une règle obligatoire'}</strong>
+            {' '}(dérogation journalisée) : {enfreintes.regles.join(' · ')}</span>
+          <button type="button" className="pl-fermer-avert" aria-label="Fermer l'avertissement" onClick={() => setEnfreintes(null)}>×</button>
+        </div>
+      )}
       <EtatChargement chargement={(services.chargement && !services.donnees) || (ressources.chargement && !ressources.donnees)}
                       erreur={services.erreur ?? ressources.erreur} />
       <Avertissements liste={[...new Set([...(ressources.donnees?.avertissements ?? []), ...(proposition?.avertissements ?? [])])]} />
@@ -724,10 +730,6 @@ export default function Planification() {
             </div>
           </div>
         </div>
-      )}
-      {derogation && (
-        <DialogueDerogation violations={derogation.violations} onConfirmer={(m) => derogation.resoudre(m)}
-          onAnnuler={() => derogation.resoudre(null)} />
       )}
       {dialogue}
     </div>
