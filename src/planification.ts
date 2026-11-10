@@ -30,7 +30,7 @@ export interface ServicePlanif extends ServiceSaisie {
 }
 
 export interface TechnicienPlanif {
-  matricule: string; nom: string; fonction: string; agence: string; agence_a_confirmer: boolean;
+  matricule: string; nom: string; fonction: string; agence: string; agence_a_confirmer: boolean; note: string | null;
   employee_id: number | null; competences: string[]; absences: { du: string; au: string }[];
 }
 export interface VehiculeRessource {
@@ -83,8 +83,9 @@ export interface Referentiels {
   avertissements: string[];
 }
 export interface AgencePlanif {
-  code: string; nom: string; adresse: string; statut: 'active' | 'a_confirmer'; lat: number | null; lng: number | null;
-  company_id: number | null; warehouse_id: number | null;
+  code: string; nom: string; id_entrepot: number | null; adresse: string; statut: 'active' | 'a_confirmer';
+  lat: number | null; lng: number | null; precision: string | null;
+  company_id: number | null; societe: string | null; warehouse_id: number | null; entrepot_odoo: string | null;
 }
 export interface ClientOdoo { id: number; nom: string; telephone: string | null; adresse: string }
 export interface AdresseClient { id: number; nom: string; adresse: string; siege: boolean }
@@ -171,7 +172,7 @@ export const planif = {
   journal: (filtre: { objet_type?: string; objet_id?: string; limite?: number } = {}) =>
     appel<EntreeJournal[]>('GET', '/journal', { params: filtre }),
   referentiels: () => appel<Referentiels>('GET', '/referentiels'),
-  agences: () => appel<AgencePlanif[]>('GET', '/agences'),
+  agences: () => appel<{ avertissements: string[]; agences: AgencePlanif[] }>('GET', '/agences'),
   clients: (q: string) => appel<ClientOdoo[]>('GET', '/clients', { params: { q } }),
   adressesClient: (id: number) => appel<AdresseClient[]>('GET', `/clients/${id}/adresses`),
 };

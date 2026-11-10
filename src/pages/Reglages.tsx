@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Badge, EtatChargement, useDonnees } from '../composants';
+import { lienItineraire } from '../api';
+import { Avertissements, Badge, EtatChargement, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
-import { ErreurPlanif, planif, type Regle } from '../planification';
+import { ErreurPlanif, LIBELLES_PRECISION, planif, type Regle } from '../planification';
 
 type Niveau = Regle['niveau'];
 /** Niveaux proposés selon la catégorie : une règle obligatoire s'impose ou s'ignore ; une préférence pèse ou s'ignore. */
@@ -77,6 +78,12 @@ function LigneRegle({ r, enregistrer }: { r: Regle; enregistrer: (r: Regle, maj:
 export default function Reglages() {
   const regles = useDonnees(() => planif.regles(), []);
   const agences = useDonnees(() => planif.agences(), []);
+  const techniciens = useDonnees(() => {
+    const d = new Date();
+    const jour = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    const fin = new Date(d); fin.setDate(d.getDate() + 6);
+    return planif.ressources(jour(d), jour(fin));
+  }, []);
   const [message, setMessage] = useState<{ type: 'erreur' | 'ok'; texte: string } | null>(null);
   const { ecrire, dialogue } = useEcriture();
 
@@ -126,22 +133,62 @@ export default function Reglages() {
 
       <section className="carte" aria-labelledby="titre-agences">
         <h2 id="titre-agences">Agences (points de départ)</h2>
-        <p className="muet">Source : backend/config/agences.json. Une agence « à confirmer » n'est pas utilisée par le solveur.</p>
+        <p className="muet">Liste : entrepôts GestCo (HFSQL, table Entrepot). Adresse et liens Odoo : backend/config/agences.json.
+          Position : adresse géocodée (Géoplateforme IGN). Une agence sans adresse est « à confirmer » et n'est pas utilisée par le solveur.</p>
         <EtatChargement chargement={agences.chargement} erreur={agences.erreur} />
+        <Avertissements liste={agences.donnees?.avertissements} />
         <div className="defilement">
           <table>
-            <thead><tr><th>Agence</th><th>Adresse</th><th>Statut</th><th>Position</th><th>Société / entrepôt Odoo</th></tr></thead>
+            <thead><tr><th>Entrepôt GestCo</th><th>Adresse</th><th>Statut</th><th>Position</th><th>Odoo : société · entrepôt</th><th>Carte</th></tr></thead>
             <tbody>
-              {agences.donnees?.map((a) => (
+              {agences.donnees?.agences.map((a) => (
                 <tr key={a.code}>
-                  <td><strong>{a.nom}</strong><div className="muet">{a.code}</div></td>
-                  <td>{a.adresse}</td>
+                  <td><strong>{a.nom}</strong><div className="muet">n° {a.id_entrepot ?? '—'} · {a.code}</div></td>
+                  <td>{a.adresse || <span className="precision-faible">adresse à renseigner</span>}</td>
                   <td>{a.statut === 'active' ? <Badge type="concordant">active</Badge> : <Badge type="a_confirmer">à confirmer</Badge>}</td>
-                  <td>{a.lat !== null && a.lng !== null ? `${a.lat.toFixed(4)}, ${a.lng.toFixed(4)}`
-                    : <span className="precision-faible">non géocodée</span>}</td>
-                  <td className="muet">company {a.company_id ?? '—'} · entrepôt {a.warehouse_id ?? '—'}</td>
+                  <td>{a.lat !== null && a.lng !== null ? (<>
+                    {a.lat.toFixed(5)}, {a.lng.toFixed(5)}
+                    <div className={`muet${a.precision === 'adresse' ? '' : ' precision-faible'}`}>
+                      {LIBELLES_PRECISION[a.precision ?? ''] ?? 'précision inconnue'}</div>
+                  </>) : <span className="muet">—</span>}</td>
+                  <td>{a.company_id !== null || a.warehouse_id !== null ? (<>
+                    <div>{a.societe ?? `société ${a.company_id ?? '—'}`}</div>
+                    <div className="muet">{a.entrepot_odoo ?? `entrepôt ${a.warehouse_id ?? '—'}`}</div>
+                  </>) : <span className="muet">—</span>}</td>
+                  <td className="nowrap">{a.lat !== null && a.lng !== null ? (
+                    <div className="actions" style={{ justifyContent: 'flex-start' }}>
+                      <a className="btn btn-petit" href={`https://www.openstreetmap.org/?mlat=${a.lat}&mlon=${a.lng}#map=18/${a.lat}/${a.lng}`}
+                        target="_blank" rel="noreferrer">Voir</a>
+                      <a className="btn btn-petit" href={lienItineraire({ position: { lat: a.lat, lng: a.lng }, adresse: null, ville: null }) ?? '#'}
+                        target="_blank" rel="noreferrer">Itinéraire</a>
+                    </div>) : <span className="muet">—</span>}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="carte" aria-labelledby="titre-techniciens">
+        <h2 id="titre-techniciens">Techniciens terrain et site de départ</h2>
+        <p className="muet">Site : fiche de présence (fixe). Les techniciens absents de la fiche partent de Noisy en attendant, « à confirmer ».</p>
+        <EtatChargement chargement={techniciens.chargement} erreur={techniciens.erreur} />
+        <div className="defilement">
+          <table>
+            <thead><tr><th>Technicien</th><th>Site de départ</th><th>Source</th><th>Compétences</th></tr></thead>
+            <tbody>
+              {techniciens.donnees?.techniciens.map((t) => {
+                const agence = agences.donnees?.agences.find((a) => a.code === t.agence);
+                return (
+                  <tr key={t.matricule}>
+                    <td><strong>{t.nom}</strong><div className="muet">{t.matricule} · {t.fonction}</div></td>
+                    <td>{agence?.nom ?? t.agence}</td>
+                    <td>{t.agence_a_confirmer ? <Badge type="a_confirmer">à confirmer</Badge> : <Badge type="concordant">fiche de présence</Badge>}
+                      {t.agence_a_confirmer && t.note && <div className="muet">{t.note.split(' — ').slice(1).join(' — ')}</div>}</td>
+                    <td className="muet">{t.competences.join(', ')}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
