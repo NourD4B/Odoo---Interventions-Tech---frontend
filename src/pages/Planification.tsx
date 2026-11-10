@@ -127,15 +127,17 @@ function ChoixTechnicien({ t, choisi, absent, onBasculer }: {
   );
 }
 
-function DialogueService({ s, techniciens, agences, propose, cause, refs, enregistrer, retirer, onFermer }: {
+function DialogueService({ s, techniciens, agences, propose, cause, refs, enregistrer, retirer, depublier, onFermer }: {
   s: ServicePlanif; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
   propose: AffectationProposee | undefined; cause: string | undefined; refs: Referentiels | null;
   enregistrer: (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>) => Promise<boolean>;
   retirer: (s: ServicePlanif) => Promise<boolean>;
+  depublier: (s: ServicePlanif, motif: string) => Promise<boolean>;
   onFermer: () => void;
 }) {
   const a = s.affectation;
   const publie = s.statut_planification === 'publie';
+  const [motif, setMotif] = useState<string | null>(null);         // null : pas en train de retirer la publication
   const [equipe, setEquipe] = useState<string[]>(a?.matricules ?? []);
   const [debut, setDebut] = useState(a?.debut ?? s.planned_date_begin?.slice(0, 10) ?? s.fenetre_debut ?? aujourdhui());
   const [jours, setJours] = useState(a ? ouvresApres(a.debut, a.fin) + 1 : dureeService(s));
@@ -213,7 +215,17 @@ function DialogueService({ s, techniciens, agences, propose, cause, refs, enregi
             <h3>Affectation publiée</h3>
             <p>{a?.equipe.join(', ')} · {a?.plaque ?? 'sans véhicule'} · {a && (a.debut === a.fin ? jourLong(a.debut)
               : `${jourLong(a.debut)} → ${jourLong(a.fin)}`)}</p>
-            <p className="muet">Publiée : elle ne se modifie plus ici.</p>
+            {motif === null ? (
+              <p className="muet">Publiée : figée. Pour la modifier ou la retirer, retirez d'abord la publication
+                (elle repasse « verrouillée », équipe, dates et véhicule gardés).</p>
+            ) : (
+              <label className="champ">Pourquoi retirer la publication ? (enregistré dans le journal)
+                <textarea autoFocus rows={2} maxLength={500} value={motif} onChange={(e) => setMotif(e.target.value)}
+                  placeholder="Ex. : le client a déplacé le rendez-vous" />
+                {motif.trim().length > 0 && motif.trim().length < 3 &&
+                  <span className="erreur-champ">3 caractères au moins.</span>}
+              </label>
+            )}
           </div>
         ) : (<>
           <section className="pl-bloc" aria-labelledby="pl-equipe">
@@ -265,6 +277,14 @@ function DialogueService({ s, techniciens, agences, propose, cause, refs, enregi
           {!publie && a && (
             <button type="button" className="btn pl-btn-retirer" disabled={envoi} onClick={() => void agir(() => retirer(s))}>
               Retirer l'affectation</button>
+          )}
+          {publie && motif === null && (
+            <button type="button" className="btn pl-btn-retirer" onClick={() => setMotif('')}>Retirer la publication</button>
+          )}
+          {publie && motif !== null && (
+            <button type="button" className="btn btn-primaire" disabled={envoi || motif.trim().length < 3}
+              onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim()); } finally { setEnvoi(false); } }}>
+              {envoi ? 'Retrait…' : 'Confirmer le retrait'}</button>
           )}
           <button type="button" className="btn" onClick={onFermer} disabled={envoi}>{publie ? 'Fermer' : 'Annuler'}</button>
           {!publie && (
@@ -400,6 +420,22 @@ export default function Planification() {
       const r = await ecrire(() => planif.retirerAffectation(s.id, s.version));
       if (!r) return false;
       setMessage({ type: 'ok', texte: `« ${client(s)} » est revenu dans « À planifier ».` });
+      recharger();
+      return true;
+    } catch (e) {
+      setMessage({ type: 'erreur', texte: erreurTexte(e) });
+      if (e instanceof ErreurPlanif && e.statut === 409) recharger();
+      return false;
+    }
+  };
+
+  /** Retire la publication : le service repasse « verrouillé » ; la fiche reste ouverte, de nouveau modifiable. */
+  const depublier = async (s: ServicePlanif, motif: string): Promise<boolean> => {
+    setMessage(null);
+    try {
+      const r = await ecrire(() => planif.depublier(s.id, s.version, motif));
+      if (!r) return false;
+      setMessage({ type: 'ok', texte: `« ${client(s)} » n'est plus publié : verrouillé, de nouveau modifiable — journalisé.` });
       recharger();
       return true;
     } catch (e) {
@@ -608,7 +644,7 @@ export default function Planification() {
       {selection && (
         <DialogueService key={`${selection.id}-${selection.version}`} s={selection} techniciens={techniciens}
           agences={agences} propose={proposes.get(selection.id)} cause={causes.get(selection.id)} refs={refs.donnees}
-          enregistrer={enregistrer} retirer={retirer} onFermer={() => setOuvert(null)} />
+          enregistrer={enregistrer} retirer={retirer} depublier={depublier} onFermer={() => setOuvert(null)} />
       )}
       {confirmerPublication && (
         <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-publier">

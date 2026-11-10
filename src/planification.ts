@@ -163,6 +163,8 @@ export const planif = {
     appel<ChoixVehicule[]>('GET', `/vehicules/${serviceId}`, { params }),
   affecter: (serviceId: number, corps: CorpsAffectation) =>
     appel<ServicePlanif>('PUT', `/affectations/${serviceId}`, { corps }),
+  depublier: (serviceId: number, version: number, motif: string) =>
+    appel<ServicePlanif>('POST', `/services/${serviceId}/depublier`, { corps: { version, motif } }),
   retirerAffectation: (serviceId: number, version: number) =>
     appel<ServicePlanif>('DELETE', `/affectations/${serviceId}`, { params: { version } }),
   retirerPropositions: (debut: string, fin: string) =>

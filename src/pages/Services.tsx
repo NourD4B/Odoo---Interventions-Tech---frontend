@@ -155,8 +155,8 @@ function DialogueReglages({ service: s, refs, ecrire, onFini, onConflit }: {
           </dl>
         </section>
 
-        {publie && <div className="avertissement">Service publié : ses réglages sont figés. Retirer la publication dans
-          Planification pour les modifier.</div>}
+        {publie && <div className="avertissement">Service publié : ses réglages sont figés. Pour les modifier : page
+          <a href="/planification"> Planification</a>, cliquer sur le service puis « Retirer la publication ».</div>}
         {erreur && (
           <div className="erreur" role="alert">{erreur.texte}
             {erreur.conflit && <> <button type="button" className="btn btn-petit" onClick={onConflit}>Recharger</button></>}
