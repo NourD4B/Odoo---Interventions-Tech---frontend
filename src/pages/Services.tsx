@@ -146,7 +146,7 @@ function DialogueReglages({ service: s, refs, ecrire, onFini, onConflit }: {
               : <span className="muet">simulé : n'existe pas dans Odoo</span>}
           </div>
           <dl className="chiffres">
-            <div><dt>Projet</dt><dd>{s.project_name ?? `n° ${s.project_id}`}</dd></div>
+            <div><dt>Projet</dt><dd>{s.project_name ?? <span className="muet">pas encore dans la copie (n° {s.project_id}) : Synchroniser</span>}</dd></div>
             <div><dt>Client</dt><dd>{s.partner_name ?? '—'}{s.partner_phone && <div className="muet">{s.partner_phone}</div>}</dd></div>
             <div><dt>Dates planifiées</dt><dd>{datesOdoo(s)}</dd></div>
             <div><dt>Temps alloué</dt><dd>{nombreH(s.allocated_hours)}</dd></div>
@@ -259,7 +259,7 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
       <div className="ligne-service-titre">
         <div>
           <Link id={`service-${s.id}`} to={`/statistiques/services/${s.id}`}><strong>{s.name}</strong></Link>
-          <div className="muet">{s.project_name ?? `Projet n° ${s.project_id}`} · {s.partner_name ?? 'client non renseigné'}
+          <div className="muet">{s.project_name ?? `Projet pas encore synchronisé (n° ${s.project_id})`} · {s.partner_name ?? 'client non renseigné'}
             {s.partner_phone && <> · {s.partner_phone}</>}</div>
         </div>
         <div className="badges">
