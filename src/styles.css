@@ -242,6 +242,67 @@ tr:last-child td { border-bottom: 0; }
 .details-journal del { color: var(--encre-3); }
 .motif { color: var(--alerte); }
 
+/* ---------- Statistiques ----------
+   Séries de données (palette de référence validée, mode clair : contrôles CVD et contraste réussis) :
+   série 1 = planifiés, série 2 = faits. Le texte reste dans les encres, jamais dans la couleur de série. */
+:root { --serie-1: #2a78d6; --serie-2: #eb6834; --grille: #eef0f3; }
+.badge.etat-a_planifier { background: var(--neutre-doux); color: var(--encre-2); }
+.badge.etat-planifie { background: var(--surface); color: var(--accent); border: 1px solid #a9c0f5; }
+.badge.etat-en_retard { background: var(--erreur-doux); color: var(--erreur); }
+.badge.etat-fait { background: var(--dispo-doux); color: #115e59; }
+.badge.etat-facture { background: var(--accent); color: #fff; }
+.etat-compte { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+.kpi-alerte { border-color: #f3b4b4; }
+.kpi-alerte strong { color: var(--erreur); }
+.kpi-estime { border-style: dashed; }
+.kpi .muet { margin-top: 4px; }
+.nombre { text-align: right; font-variant-numeric: tabular-nums; }
+.negatif { color: var(--erreur); }
+.ligne-libre td { color: var(--encre-3); }
+
+.barre { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.barre-piste { flex: 1 1 80px; height: 8px; background: var(--grille); border-radius: 4px; overflow: hidden; min-width: 60px; }
+.barre-remplie { height: 100%; background: var(--serie-1); border-radius: 4px; }
+.barre-remplie.serie-2 { background: var(--serie-2); }
+.compacte th, .compacte td { padding: 8px 6px; }
+.barre-texte { font-size: 12px; color: var(--encre-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.graphique { margin: 0; display: flex; flex-direction: column; gap: 8px; position: relative; }
+.graphique svg { display: block; overflow: visible; }
+.graphique .serie-1 { fill: var(--serie-1); }
+.graphique .serie-2 { fill: var(--serie-2); }
+.graphique .grille { stroke: var(--grille); stroke-width: 1; }
+.graphique .ligne-base { stroke: var(--bordure-forte); stroke-width: 1; }
+.graphique .axe { fill: var(--encre-3); font-size: 11px; }
+.graphique .valeur { fill: var(--encre-2); font-size: 11px; font-weight: 600; }
+.graphique g[tabindex]:focus { outline: none; }
+.graphique g[tabindex]:focus rect, .graphique g[tabindex]:hover rect { fill: rgba(22, 24, 29, 0.04); }
+.legende-graphique { display: flex; gap: 16px; font-size: 12px; color: var(--encre-2); }
+.legende-graphique span { display: inline-flex; align-items: center; gap: 6px; }
+.legende-graphique i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legende-graphique i.serie-1 { background: var(--serie-1); }
+.legende-graphique i.serie-2 { background: var(--serie-2); }
+.infobulle { align-self: flex-start; background: var(--encre); color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+.visuellement-cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.synchro { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--encre-2);
+  background: var(--surface); border: 1px solid var(--bordure); border-radius: var(--rayon); padding: 8px 12px; }
+.point-ok { background: var(--dispo); }
+.point-erreur { background: var(--erreur); }
+
+.surveiller { display: flex; flex-direction: column; gap: 4px; }
+.surveiller-titre { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.surveiller ul, .liste-cochee { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.liste-cochee { list-style: none; padding-left: 0; }
+.liste-cochee .cochee { color: var(--encre-3); }
+
+.grille-projets { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.chiffres { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px 16px; }
+.chiffres.colonne { grid-template-columns: 1fr; }
+.chiffres dt { font-size: 12px; color: var(--encre-3); font-weight: 600; }
+.chiffres dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chiffres.colonne dd { font-weight: 500; }
+
 @media (max-width: 720px) {
   .principal { padding: 16px; }
   .barre-laterale { max-width: none; }

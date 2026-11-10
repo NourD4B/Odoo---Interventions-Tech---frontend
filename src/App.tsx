@@ -2,10 +2,13 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
+import FicheService from './pages/FicheService';
 import Journal from './pages/Journal';
 import Planification from './pages/Planification';
 import Planning from './pages/Planning';
+import { DetailProjet, ListeProjets } from './pages/Projets';
 import Reconciliation from './pages/Reconciliation';
+import Statistiques from './pages/Statistiques';
 import Reglages from './pages/Reglages';
 import Services from './pages/Services';
 import Techniciens from './pages/Techniciens';
@@ -13,6 +16,8 @@ import Vehicules from './pages/Vehicules';
 
 const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
+  { vers: '/statistiques', libelle: 'Statistiques' },
+  { vers: '/projets', libelle: 'Projets' },
   { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/planning', libelle: 'Interventions' },
@@ -51,6 +56,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/carte" replace />} />
           <Route path="/carte" element={<CarteLive />} />
+          <Route path="/statistiques" element={<Statistiques />} />
+          <Route path="/statistiques/services/:id" element={<FicheService />} />
+          <Route path="/projets" element={<ListeProjets />} />
+          <Route path="/projets/:id" element={<DetailProjet />} />
           <Route path="/services" element={<Services />} />
           <Route path="/planification" element={<Planification />} />
           <Route path="/planning" element={<Planning />} />
