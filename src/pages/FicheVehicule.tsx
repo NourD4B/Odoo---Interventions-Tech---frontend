@@ -7,16 +7,16 @@ import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
+import { ListePieces, PastillePiece, usePieces, type Pieces } from '../composants/Pieces';
 import {
   electrifie, energieDe, FicheConstructeur, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
 } from '../composants/Vehicule';
 import {
   BOITES, flotte, type AffectationFleet, type ConducteurDuJour, type ConducteurVehicule, type DetailVehicule,
-  type MissionVehicule, type PieceJointe, type VehiculeFlotte,
+  type MissionVehicule, type VehiculeFlotte,
 } from '../flotte';
-import { auteur, LIBELLES_STATUT_PLANIF, type StatutPlanif } from '../planification';
+import { LIBELLES_STATUT_PLANIF, type StatutPlanif } from '../planification';
 
-const EN_LIGNE = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const JOUR_MS = 86_400_000;
 const date = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`);
 const duree = (debut: string | null, fin: string | null) =>
@@ -33,62 +33,6 @@ function plage(debut: string, fin: string) {
 const periode = (debut: string | null, fin: string | null) =>
   (debut && fin ? plage(debut, fin) : `${debut ? jour(debut) : 'date inconnue'} → ${fin ? jour(fin) : 'en cours'}`);
 const initiales = (nom: string) => nom.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]).join('').toUpperCase();
-const taille = (o: number) => (o >= 1_048_576 ? `${nombre(o / 1_048_576)} Mo` : `${nombre(Math.max(1, o / 1024), 0)} Ko`);
-function genre(p: PieceJointe) {
-  if (p.type === 'application/pdf') return 'PDF';
-  if (p.type?.startsWith('image/')) return 'Image';
-  return (p.nom.split('.').pop() ?? 'Fichier').toUpperCase().slice(0, 5);
-}
-
-// ---------- pièces jointes : lues dans Odoo, consultation journalisée ----------
-
-function usePieces() {
-  const { ecrire, dialogue } = useEcriture();
-  const [erreur, setErreur] = useState<string | null>(null);
-  const [enCours, setEnCours] = useState<number | null>(null);
-
-  const telecharger = (url: string, nom: string) => {
-    const a = document.createElement('a');
-    a.href = url; a.download = nom; document.body.appendChild(a); a.click(); a.remove();
-  };
-  const ouvrir = async (p: PieceJointe) => {
-    setErreur(null); setEnCours(p.id);
-    const enLigne = EN_LIGNE.includes(p.type ?? '');
-    // onglet ouvert pendant le clic (sinon bloqué comme fenêtre surgissante), rempli une fois la pièce lue
-    const onglet = enLigne && auteur() ? window.open('', '_blank') : null;
-    try {
-      const contenu = await ecrire(() => flotte.piece(p.id));
-      if (!contenu) { onglet?.close(); return; }
-      const url = URL.createObjectURL(contenu);
-      if (!enLigne) telecharger(url, p.nom);
-      else if (onglet) onglet.location.href = url;
-      else if (!window.open(url, '_blank')) telecharger(url, p.nom);
-      window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
-    } catch (e) {
-      onglet?.close();
-      setErreur(`${p.nom} : ${e instanceof Error ? e.message : String(e)}`);
-    } finally { setEnCours(null); }
-  };
-  return { ouvrir, enCours, erreur, dialogue };
-}
-type Pieces = ReturnType<typeof usePieces>;
-
-function ListePieces({ liste, pieces, vide = 'Aucune pièce jointe.' }: { liste: PieceJointe[]; pieces: Pieces; vide?: string }) {
-  if (!liste.length) return <p className="fv-sans-piece">{vide}</p>;
-  return (
-    <ul className="fv-pieces">{liste.map((p) => (
-      <li key={p.id}>
-        <button type="button" className="fv-piece" onClick={() => void pieces.ouvrir(p)} disabled={pieces.enCours === p.id}
-          title={EN_LIGNE.includes(p.type ?? '') ? 'Ouvrir dans un nouvel onglet (lu dans Odoo)' : 'Télécharger (lu dans Odoo)'}>
-          <span className={`fv-piece-type${genre(p) === 'PDF' ? ' pdf' : ''}`} aria-hidden="true">{genre(p)}</span>
-          <span className="fv-piece-nom">{p.nom}</span>
-          <span className="fv-piece-meta">{pieces.enCours === p.id ? 'Ouverture…'
-            : [taille(p.taille), p.ajoutee_le && `ajoutée le ${jour(p.ajoutee_le)}`].filter(Boolean).join(' · ')}</span>
-        </button>
-      </li>))}
-    </ul>
-  );
-}
 
 // ---------- en-tête : photo et valeurs exactes ----------
 
@@ -387,17 +331,6 @@ function Conducteurs({ d, pieces, repere }: { d: DetailVehicule; pieces: Pieces;
   );
 }
 
-/** Pièce jointe en pastille compacte (nom complet, taille et date en info-bulle) : un clic l'ouvre. */
-function PastillePiece({ p, pieces }: { p: PieceJointe; pieces: Pieces }) {
-  return (
-    <button type="button" className="fv-pastille-piece" onClick={() => void pieces.ouvrir(p)} disabled={pieces.enCours === p.id}
-      title={`${p.nom} · ${taille(p.taille)}${p.ajoutee_le ? ` · ajoutée le ${jour(p.ajoutee_le)}` : ''}`}>
-      <span className={`fv-piece-type${genre(p) === 'PDF' ? ' pdf' : ''}`} aria-hidden="true">{genre(p)}</span>
-      <span className="fv-pastille-nom">{pieces.enCours === p.id ? 'Ouverture…' : p.nom}</span>
-    </button>
-  );
-}
-
 // ---------- missions planifiées ----------
 
 const PROPOSE_PAR: Record<string, string> = { solveur: 'le solveur', dispatcher: 'un dispatcher' };
@@ -450,7 +383,7 @@ export default function FicheVehicule() {
   const { id } = useParams();
   const vid = Number(id);
   const donnees = useDonnees<DetailVehicule>(() => flotte.vehicule(vid), [vid]);
-  const pieces = usePieces();
+  const pieces = usePieces(flotte.piece);
   const [repere, setRepere] = useState<string | null>(null);
   const d = donnees.donnees;
 

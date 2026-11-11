@@ -120,10 +120,10 @@ async function envoyer<T>(methode: string, chemin: string, corps?: Blob, type?: 
 }
 
 /** Pièce jointe lue dans Odoo ; consultation journalisée, donc nom de la personne obligatoire (X-Auteur). */
-async function lirePiece(id: number): Promise<Blob> {
+export async function lireAvecAuteur(url: string): Promise<Blob> {
   const nom = auteur();
   if (!nom) throw new AuteurManquant('Indiquez votre nom : chaque consultation de pièce est journalisée');
-  const reponse = await fetch(`/api/flotte/pieces/${id}`, { headers: { 'X-Auteur': encodeURIComponent(nom) } });
+  const reponse = await fetch(url, { headers: { 'X-Auteur': encodeURIComponent(nom) } });
   if (!reponse.ok) {
     let detail: unknown = null;
     try { detail = (await reponse.json()).detail; } catch { /* corps non JSON */ }
@@ -137,7 +137,7 @@ export const flotte = {
   vehicule: (id: number) => envoyer<DetailVehicule>('GET', `/vehicules/${id}`),
   conducteurLe: (id: number, jour: string) =>
     envoyer<ConducteurDuJour>('GET', `/vehicules/${id}/conducteur?date=${encodeURIComponent(jour)}`),
-  piece: lirePiece,
+  piece: (id: number) => lireAvecAuteur(`/api/flotte/pieces/${id}`),
   deposerPhoto: (id: number, fichier: File) => envoyer<PhotoVehicule>('PUT', `/vehicules/${id}/photo`, fichier,
     fichier.type || 'image/jpeg'),
   retirerPhoto: (id: number) => envoyer<void>('DELETE', `/vehicules/${id}/photo`),

@@ -71,7 +71,8 @@ export function DetailProjet() {
         <div><Link to="/projets" className="muet">‹ Projets</Link>
           <h1>{d?.nom ?? 'Projet'}</h1>
           {d && <div className="sous-titre">{d.client ?? 'client non renseigné'} · {d.services} service(s)</div>}</div>
-        {d && <BadgeSimule simule={d.simule} />}
+        {d && <div className="badges"><BadgeSimule simule={d.simule} />
+          <Link to={`/dossiers/${id}`} className="btn btn-petit">Dossier complet du projet</Link></div>}
       </div>
       <EtatChargement chargement={p.chargement && !d} erreur={p.erreur} />
       {d && (<>

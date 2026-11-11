@@ -2,6 +2,8 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
+import DossierProjet from './pages/DossierProjet';
+import Dossiers from './pages/Dossiers';
 import FicheVehicule from './pages/FicheVehicule';
 import FicheService from './pages/FicheService';
 import Journal from './pages/Journal';
@@ -19,6 +21,7 @@ const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
   { vers: '/statistiques', libelle: 'Statistiques' },
   { vers: '/projets', libelle: 'Projets' },
+  { vers: '/dossiers', libelle: 'Dossiers projets' },
   { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/planning', libelle: 'Interventions' },
@@ -61,6 +64,8 @@ export default function App() {
           <Route path="/statistiques/services/:id" element={<FicheService />} />
           <Route path="/projets" element={<ListeProjets />} />
           <Route path="/projets/:id" element={<DetailProjet />} />
+          <Route path="/dossiers" element={<Dossiers />} />
+          <Route path="/dossiers/:id" element={<DossierProjet />} />
           <Route path="/services" element={<Services />} />
           <Route path="/planification" element={<Planification />} />
           <Route path="/planning" element={<Planning />} />
