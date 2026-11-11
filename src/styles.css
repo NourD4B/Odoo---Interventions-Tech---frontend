@@ -1117,8 +1117,6 @@ tr:last-child td { border-bottom: 0; }
 .dp-vehicule small { font-size: 12px; }
 .dp-vehicule:hover, .dp-vehicule:focus-visible { background: var(--neutre-doux); }
 .dp-sans-plaque { padding: 2px 6px; border: 1px dashed var(--bordure-forte); border-radius: 4px; font-size: 12px; font-weight: 600; }
-.dp-pv { padding: 3px 10px; border-radius: 999px; background: var(--erreur-doux); color: var(--erreur); font-size: 12px; font-weight: 700;
-  text-decoration: none; }
 .dp-mesures { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 10px 0;
   border-block: 1px solid #eef0f3; }
 .dp-mesures dt { font-size: 12px; font-weight: 600; color: var(--encre-3); }
@@ -1166,18 +1164,13 @@ tr:last-child td { border-bottom: 0; }
 .dp-veh { display: flex; flex-direction: column; gap: 8px; }
 .dp-veh + .dp-veh { padding-top: 12px; border-top: 1px solid #eef0f3; }
 .dp-veh-tete { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.dp-veh-tete a { color: inherit; text-decoration: none; }
-.dp-veh-compte { font-size: 12px; font-weight: 600; color: var(--encre-3); }
-.dp-veh-compte.avec { color: var(--erreur); }
-.dp-veh-missions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.dp-veh-missions li { display: flex; flex-direction: column; gap: 4px; padding: 9px 11px; border-radius: 8px; background: #f7f8fa; }
-.dp-veh-dates { font-size: 12px; font-weight: 700; color: var(--encre-2); }
-.dp-veh-service { font-size: 13px; }
-.dp-veh-cond { font-size: 12px; color: var(--encre-3); }
-.dp-veh-cond strong { color: var(--encre); }
-.dp-veh .fv-puces-pieces { flex-direction: column; align-items: stretch; }
-.dp-veh .fv-pastille-piece { max-width: none; background: var(--surface); }
-.dp-veh .fv-pastille-nom { white-space: normal; text-align: left; }
+.dp-veh-lien { font-size: 13px; font-weight: 600; text-decoration: none; }
+.dp-veh-lien:hover, .dp-veh-lien:focus-visible { text-decoration: underline; }
+.dp-veh-missions { list-style: none; margin: 0; padding: 0; }
+.dp-veh-missions li { display: grid; grid-template-columns: 128px minmax(0, 1fr); gap: 10px; padding: 7px 0; font-size: 13px;
+  border-top: 1px solid #eef0f3; }
+.dp-veh-dates { font-size: 12px; font-weight: 600; color: var(--encre-2); }
+.dp-veh-service small { display: block; font-size: 12px; color: var(--encre-3); }
 .dp-commande { display: flex; flex-direction: column; gap: 8px; }
 .dp-commande + .dp-commande { padding-top: 12px; border-top: 1px solid #eef0f3; }
 .dp-commande-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }

@@ -1,18 +1,17 @@
 // Dossier d'un projet, tout au même endroit : carte des sites et des agences de départ (itinéraires Google Maps),
-// missions dans l'ordre des dates (équipe, véhicule, conducteur Fleet, PV), coûts et marge, véhicules et pièces
-// jointes Fleet (PV), commandes et leurs pièces jointes, tâches Odoo. Lecture seule ; pièces lues dans Odoo à
-// l'ouverture et chaque consultation journalisée.
+// missions dans l'ordre des dates (équipe, véhicule et conducteur désigné), coûts et marge, véhicules, commandes et
+// leurs pièces jointes, tâches Odoo. Conducteurs Fleet et PV : fiche du véhicule (lien). Lecture seule ; pièces
+// lues dans Odoo à l'ouverture et chaque consultation journalisée.
 import L from 'leaflet';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet';
 import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
-import { ListePieces, PastillePiece, usePieces, type Pieces } from '../composants/Pieces';
+import { ListePieces, usePieces, type Pieces } from '../composants/Pieces';
 import { BadgeEtat } from '../composants/Statistiques';
 import { Plaque } from '../composants/Vehicule';
-import { dossiers, type Dossier, type Itineraire, type MissionDossier, type ServiceDossier, type TacheDossier } from '../dossiers';
-import { flotte, type PieceJointe } from '../flotte';
+import { dossiers, type Dossier, type Itineraire, type ServiceDossier, type TacheDossier } from '../dossiers';
 import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, type EtatService } from '../statistiques';
 
 const ETATS: EtatService[] = ['en_retard', 'planifie', 'a_planifier', 'fait', 'facture'];   // ordre d'urgence
@@ -41,13 +40,6 @@ function villeDe(adresse: string | null) {
   return v ? v.trim().toLowerCase().replace(/(^|[\s-])\p{L}/gu, (c) => c.toUpperCase()) : null;
 }
 const echapper = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const piecesDe = (m: MissionDossier | undefined) => {
-  const vues = new Map<number, PieceJointe>();
-  m?.affectations.forEach((a) => a.pieces.forEach((p) => vues.set(p.id, p)));
-  return [...vues.values()];
-};
-const conducteursDe = (m: MissionDossier | undefined) =>
-  [...new Set((m?.affectations ?? []).map((a) => a.employe ?? (a.pool ? null : a.conducteur)).filter((n): n is string => !!n))];
 
 // ---------- carte : sites, agences de départ, trajets ----------
 
@@ -296,7 +288,6 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol }: {
 }) {
   const v = s.planification.vehicule;
   const mission = d.vehicules.flatMap((x) => x.missions).find((m) => m.service_id === s.id);
-  const pv = piecesDe(mission), conducteurs = conducteursDe(mission);
   const plaque = v ? v.plaque ?? d.vehicules.find((x) => x.vehicle_id === v.id)?.plaque ?? null : null;
   const agence = (code: string | null) => d.agences.find((a) => a.code === code)?.nom ?? code;
   const marge = s.couts_estimes.marge_estimee;
@@ -319,10 +310,7 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol }: {
             : <span className="dp-a-faire">Équipe à planifier</span>}
           {v && <Link to={`/vehicules/${v.id}`} className="dp-vehicule" title="Fiche du véhicule">
             {plaque ? <Plaque plaque={plaque} /> : <span className="dp-sans-plaque">véhicule {v.id}</span>}
-            {conducteurs.length > 0 && <small>conduit par {conducteurs.join(', ')}</small>}</Link>}
-          {pv.length > 0 && <a href="#vehicules-pv" className="dp-pv"
-            title="Pièces jointes aux affectations Fleet du véhicule sur ces dates (avis de contravention, désignation…)">
-            PV et pièces : {pv.length}</a>}
+            {mission?.conducteur && <small>conducteur : {mission.conducteur}</small>}</Link>}
         </div>
         <dl className="dp-mesures">
           <div><dt>Heures</dt><dd>{heures(s.realise.heures_passees)} <small>sur {heures(s.prevu.heures)}</small></dd></div>
@@ -447,35 +435,25 @@ function Departs({ d }: { d: Dossier }) {
   );
 }
 
-function VehiculesPV({ d, pieces }: { d: Dossier; pieces: Pieces }) {
+function Vehicules({ d }: { d: Dossier }) {
   return (
-    <section className="carte dp-bloc" id="vehicules-pv">
-      <h2>Véhicules et PV</h2>
-      {!d.fleet_disponible && <p className="avertissement">Historique Fleet indisponible : Odoo injoignable.</p>}
+    <section className="carte dp-bloc">
+      <h2>Véhicules</h2>
       {d.vehicules.length === 0 && <p className="vide">Aucun véhicule de service planifié sur ce projet.</p>}
       {d.vehicules.map((v) => (
         <div key={v.vehicle_id} className="dp-veh">
           <div className="dp-veh-tete">
-            <Link to={`/vehicules/${v.vehicle_id}`} title="Fiche du véhicule : traçabilité complète">
-              {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}</Link>
-            <span className={`dp-veh-compte${v.nb_pieces ? ' avec' : ''}`}>{v.nb_pieces
-              ? `${v.nb_pieces} pièce${v.nb_pieces > 1 ? 's' : ''} jointe${v.nb_pieces > 1 ? 's' : ''}` : 'aucun PV'}</span>
+            {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}
+            <Link to={`/vehicules/${v.vehicle_id}`} className="dp-veh-lien">Conducteurs et PV</Link>
           </div>
-          <ul className="dp-veh-missions">{v.missions.map((m) => {
-            const noms = conducteursDe(m), pj = piecesDe(m);
-            return (
-              <li key={m.service_id}>
-                <span className="dp-veh-dates">{m.debut === m.fin ? jourCourt(m.debut) : `${jourCourt(m.debut)} au ${jourCourt(m.fin)}`}</span>
-                <span className="dp-veh-service">{m.service}</span>
-                {d.fleet_disponible && <span className="dp-veh-cond">{noms.length
-                  ? <>Conducteur Fleet : <strong>{noms.join(', ')}</strong></> : "Pas d'affectation Fleet sur ces dates"}</span>}
-                {pj.length > 0 && <span className="fv-puces-pieces">{pj.map((p) => <PastillePiece key={p.id} p={p} pieces={pieces} />)}</span>}
-              </li>
-            );
-          })}</ul>
+          <ul className="dp-veh-missions">{v.missions.map((m) => (
+            <li key={m.service_id}>
+              <span className="dp-veh-dates">{m.debut === m.fin ? jourCourt(m.debut) : `${jourCourt(m.debut)} au ${jourCourt(m.fin)}`}</span>
+              <span className="dp-veh-service">{m.service}{m.conducteur && <small>conducteur : {m.conducteur}</small>}</span>
+            </li>))}
+          </ul>
         </div>
       ))}
-      {pieces.erreur && <p className="erreur">{pieces.erreur}</p>}
     </section>
   );
 }
@@ -539,7 +517,6 @@ function Taches({ d, onMission }: { d: Dossier; onMission: (id: number) => void 
 export default function DossierProjet() {
   const id = Number(useParams().id);
   const charge = useDonnees(() => dossiers.projet(id), [id]);
-  const piecesPV = usePieces(flotte.piece);
   const piecesCommandes = usePieces((aid) => dossiers.piece(id, aid));
   const [ouverts, setOuverts] = useState<Set<number>>(new Set());
   const [actif, setActif] = useState<number | null>(null);
@@ -576,12 +553,12 @@ export default function DossierProjet() {
         <Missions d={d} actif={actif} ouverts={ouverts} basculer={basculer} onSurvol={setActif} />
         <aside className="dp-cote">
           <Departs d={d} />
-          <VehiculesPV d={d} pieces={piecesPV} />
+          <Vehicules d={d} />
           <Documents d={d} pieces={piecesCommandes} />
           <Taches d={d} onMission={allerA} />
         </aside>
       </div>
-      {piecesPV.dialogue}{piecesCommandes.dialogue}
+      {piecesCommandes.dialogue}
     </div>
   );
 }
