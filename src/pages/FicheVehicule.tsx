@@ -189,7 +189,7 @@ function Entete({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
 
 function RecherchePV({ v, pieces, historique, onDate }: { v: VehiculeFlotte; pieces: Pieces; historique: AffectationFleet[];
   onDate: (d: string | null) => void }) {
-  const [quand, setQuand] = useState(aujourdhui());
+  const [quand, setQuand] = useState('');                       // à choisir : la date de l'avis, pas aujourd'hui
   const [resultat, setResultat] = useState<ConducteurDuJour | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [recherche, setRecherche] = useState(false);
@@ -211,7 +211,7 @@ function RecherchePV({ v, pieces, historique, onDate }: { v: VehiculeFlotte; pie
       <form className="fv-pv-form" onSubmit={chercher}>
         <label className="champ">Date de l’infraction
           <input type="date" value={quand} max={aujourdhui()} onChange={(e) => setQuand(e.target.value)} required /></label>
-        <button type="submit" className="btn btn-primaire" disabled={recherche}>{recherche ? 'Recherche…' : 'Rechercher'}</button>
+        <button type="submit" className="btn btn-primaire" disabled={recherche || !quand}>{recherche ? 'Recherche…' : 'Rechercher'}</button>
       </form>
       {erreur && <div className="erreur" role="alert">{erreur}</div>}
       {resultat && (
