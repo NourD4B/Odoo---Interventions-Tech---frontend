@@ -1,7 +1,7 @@
 // Pièces communes à la galerie de la flotte et à la fiche d'un véhicule. Les valeurs affichées sont les valeurs
 // retenues : celles d'Odoo, corrigées par le registre flotte de D4B quand Odoo se trompe (ex. « Fiat/Fiat »).
-import { useEffect, useState } from 'react';
-import { ENERGIES, flotte, type FicheModele, type VehiculeFlotte } from '../flotte';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { ENERGIES, flotte, type Cadrage, type FicheModele, type VehiculeFlotte } from '../flotte';
 import Silhouette, { carrosserieDe } from './Silhouette';
 
 export type Famille = 'utilitaire' | 'voiture' | 'deux_roues';
@@ -75,12 +75,20 @@ export function reperes(v: VehiculeFlotte): string[] {
 
 // ---------- visuel ----------
 
-export function Visuel({ v, grande = false }: { v: VehiculeFlotte; grande?: boolean }) {
+/** Cadrage enregistré (ou en cours de réglage) : point gardé au centre et zoom autour de ce point. */
+export function styleCadrage(c: Cadrage | null | undefined): CSSProperties | undefined {
+  if (!c) return undefined;
+  const point = `${c.cadrage_x}% ${c.cadrage_y}%`;
+  return { objectPosition: point, transformOrigin: point, transform: c.zoom > 1 ? `scale(${c.zoom})` : undefined };
+}
+
+export function Visuel({ v, grande = false, cadrage }: { v: VehiculeFlotte; grande?: boolean; cadrage?: Cadrage }) {
   const [echec, setEchec] = useState(false);
   useEffect(() => setEchec(false), [v.photo?.version]);
   if (v.photo && !echec) {
     return <img className="fl-photo" src={flotte.urlPhoto(v.id, v.photo, grande ? 'grande' : 'vignette')}
-      alt={`${titreDe(v)} ${v.plaque}`} loading="lazy" onError={() => setEchec(true)} />;
+      alt={`${titreDe(v)} ${v.plaque}`} loading="lazy" draggable={false} onError={() => setEchec(true)}
+      style={styleCadrage(cadrage ?? v.photo)} />;
   }
   return <Silhouette carrosserie={carrosserieDe(v.fiche?.statut === 'fiche' ? v.fiche : null, v.retenu.categorie)}
     couleur={v.retenu.couleur} titre={`${titreDe(v)} (silhouette, pas encore de photo)`} />;

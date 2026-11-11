@@ -2,7 +2,11 @@
 // photos ajoutées dans l'application (Odoo n'a que les logos des marques). Écritures : en-tête X-Auteur.
 import { auteur, AuteurManquant, ErreurPlanif } from './planification';
 
-export interface PhotoVehicule { version: number; largeur: number; hauteur: number; auteur: string; ajoutee_le: string }
+export interface PhotoVehicule {
+  version: number; largeur: number; hauteur: number; auteur: string; ajoutee_le: string;
+  cadrage_x: number; cadrage_y: number; zoom: number;      // point gardé au centre (%) et zoom, image jamais retaillée
+}
+export interface Cadrage { cadrage_x: number; cadrage_y: number; zoom: number }
 
 export interface SourceFiche { titre: string; url: string }
 export interface FicheModele {
@@ -141,6 +145,8 @@ export const flotte = {
   deposerPhoto: (id: number, fichier: File) => envoyer<PhotoVehicule>('PUT', `/vehicules/${id}/photo`, fichier,
     fichier.type || 'image/jpeg'),
   retirerPhoto: (id: number) => envoyer<void>('DELETE', `/vehicules/${id}/photo`),
+  cadrerPhoto: (id: number, c: Cadrage) => envoyer<PhotoVehicule>('PUT', `/vehicules/${id}/photo/cadrage`,
+    new Blob([JSON.stringify(c)], { type: 'application/json' }), 'application/json'),
   urlPhoto: (id: number, photo: PhotoVehicule, taille: 'vignette' | 'grande' = 'vignette') =>
     `/api/flotte/vehicules/${id}/photo?taille=${taille}&v=${photo.version}`,
 };

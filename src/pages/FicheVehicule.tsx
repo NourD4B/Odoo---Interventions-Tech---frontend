@@ -2,7 +2,7 @@
 // missions planifiées (service, site, équipe de techniciens, conducteur désigné) et traçabilité en cas de PV :
 // qui conduisait à une date, historique des conducteurs d'Odoo Fleet, pièces jointes (avis de contravention,
 // désignations…) lues dans Odoo à chaque ouverture, chaque consultation étant notée dans le journal.
-import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, useDonnees } from '../composants';
@@ -14,7 +14,7 @@ import {
 } from '../composants/Vehicule';
 import {
   BOITES, flotte, type AffectationFleet, type ConducteurDuJour, type ConducteurVehicule, type DetailVehicule,
-  type MissionVehicule, type VehiculeFlotte,
+  type Cadrage, type MissionVehicule, type VehiculeFlotte,
 } from '../flotte';
 import { LIBELLES_STATUT_PLANIF, type StatutPlanif } from '../planification';
 import { rse, type ProfilVehicule } from '../rse';
@@ -47,12 +47,24 @@ function Fait({ libelle, valeur }: { libelle: string; valeur: ReactNode }) {
   );
 }
 
+const ZOOM_MAX = 3;
+const borne = (x: number, min: number, max: number) => Math.min(max, Math.max(min, x));
+const pareils = (a: Cadrage, b: Cadrage) => a.cadrage_x === b.cadrage_x && a.cadrage_y === b.cadrage_y && a.zoom === b.zoom;
+
+/** Photo du véhicule : ajout (bouton ou glisser-déposer), retrait et recadrage. Recadrer = faire glisser la photo
+ * (point gardé au centre) et zoomer ; l'image d'origine n'est jamais retaillée, le cadrage vaut partout. */
 function Photo({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
   const { ecrire, dialogue } = useEcriture();
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [survol, setSurvol] = useState(false);
+  const [cadrage, setCadrage] = useState<Cadrage | null>(null);            // réglage en cours ; null : hors réglage
+  const [enregistre, setEnregistre] = useState<Cadrage | null>(null);      // affiché le temps du rechargement
+  const [saisie, setSaisie] = useState<{ x: number; y: number; depart: Cadrage } | null>(null);
   const entree = useRef<HTMLInputElement>(null);
+  const cadre = useRef<HTMLDivElement>(null);
+  useEffect(() => setEnregistre(null), [v.photo?.cadrage_x, v.photo?.cadrage_y, v.photo?.zoom, v.photo?.version]);
+
   const envoyer = async (fichier: File | undefined) => {
     if (!fichier) return;
     setErreur(null);
@@ -67,22 +79,102 @@ function Photo({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
     catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setEnvoi(false); }
   };
   const deposer = (e: DragEvent) => { e.preventDefault(); setSurvol(false); void envoyer(e.dataTransfer.files[0]); };
+
+  const debuter = () => {
+    if (!v.photo) return;
+    setErreur(null);
+    setCadrage(enregistre ?? { cadrage_x: v.photo.cadrage_x, cadrage_y: v.photo.cadrage_y, zoom: v.photo.zoom });
+    window.setTimeout(() => cadre.current?.focus(), 0);
+  };
+  /** Débordement de l'image hors du cadre (px) à ce zoom : ce qu'un glissement peut faire apparaître. */
+  const debord = (zoom: number) => {
+    const r = cadre.current?.getBoundingClientRect();
+    const p = v.photo;
+    if (!r || !p) return { x: 0, y: 0 };
+    const echelle = Math.max(r.width / p.largeur, r.height / p.hauteur);          // object-fit: cover
+    return { x: zoom * p.largeur * echelle - r.width, y: zoom * p.hauteur * echelle - r.height };
+  };
+  const glisser = (dx: number, dy: number, depart: Cadrage) => {
+    const d = debord(depart.zoom);
+    setCadrage({ ...depart,
+      cadrage_x: d.x > 0.5 ? borne(depart.cadrage_x - (100 * dx) / d.x, 0, 100) : depart.cadrage_x,
+      cadrage_y: d.y > 0.5 ? borne(depart.cadrage_y - (100 * dy) / d.y, 0, 100) : depart.cadrage_y });
+  };
+  const zoomer = (z: number) => cadrage && setCadrage({ ...cadrage, zoom: Math.round(borne(z, 1, ZOOM_MAX) * 100) / 100 });
+  const clavier = (e: KeyboardEvent) => {
+    if (!cadrage) return;
+    const pas = e.shiftKey ? 10 : 2;
+    const fleches: Record<string, [number, number]> = { ArrowLeft: [-pas, 0], ArrowRight: [pas, 0], ArrowUp: [0, -pas], ArrowDown: [0, pas] };
+    if (fleches[e.key]) {
+      e.preventDefault();
+      const [dx, dy] = fleches[e.key];
+      setCadrage({ ...cadrage, cadrage_x: borne(cadrage.cadrage_x + dx, 0, 100), cadrage_y: borne(cadrage.cadrage_y + dy, 0, 100) });
+    } else if (e.key === '+' || e.key === '=') zoomer(cadrage.zoom + 0.1);
+    else if (e.key === '-') zoomer(cadrage.zoom - 0.1);
+    else if (e.key === 'Escape') setCadrage(null);
+    else if (e.key === 'Enter') void enregistrer();
+  };
+  const enregistrer = async () => {
+    if (!cadrage || !v.photo) return;
+    const c = { cadrage_x: Math.round(cadrage.cadrage_x * 10) / 10, cadrage_y: Math.round(cadrage.cadrage_y * 10) / 10, zoom: cadrage.zoom };
+    if (pareils(c, { cadrage_x: v.photo.cadrage_x, cadrage_y: v.photo.cadrage_y, zoom: v.photo.zoom })) { setCadrage(null); return; }
+    setEnvoi(true); setErreur(null);
+    try {
+      const p = await ecrire(() => flotte.cadrerPhoto(v.id, c));
+      if (p) { setEnregistre(p); setCadrage(null); onPhoto(); }
+    } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setEnvoi(false); }
+  };
+
+  const reglage = cadrage !== null;
   return (
     <div className="fv-photo-bloc">
-      <div className={`fv-photo${survol ? ' survol' : ''}`}
-        onDragOver={(e) => { e.preventDefault(); setSurvol(true); }} onDragLeave={() => setSurvol(false)} onDrop={deposer}>
-        <Visuel v={v} grande />
-        <Plaque plaque={v.plaque} />
-        <div className="fl-actions-photo">
-          <input ref={entree} type="file" accept="image/jpeg,image/png,image/webp" hidden
-            onChange={(e) => { void envoyer(e.target.files?.[0]); e.target.value = ''; }} />
-          <button type="button" className="btn" disabled={envoi} onClick={() => entree.current?.click()}>
-            {envoi ? 'Envoi…' : v.photo ? 'Remplacer la photo' : 'Ajouter une photo'}</button>
-          {v.photo && <button type="button" className="btn fl-btn-retirer" disabled={envoi} onClick={() => void retirer()}>Retirer</button>}
-        </div>
+      <div ref={cadre} className={`fv-photo${survol ? ' survol' : ''}${reglage ? ' recadrage' : ''}${saisie ? ' saisie' : ''}`}
+        tabIndex={reglage ? 0 : undefined} onKeyDown={clavier}
+        role={reglage ? 'application' : undefined}
+        aria-label={reglage ? 'Repositionner la photo : glisser, flèches (Maj : plus vite), + et − pour zoomer, Entrée pour enregistrer' : undefined}
+        onPointerDown={(e) => {
+          if (!cadrage || e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setSaisie({ x: e.clientX, y: e.clientY, depart: cadrage });
+        }}
+        onPointerMove={(e) => { if (saisie) glisser(e.clientX - saisie.x, e.clientY - saisie.y, saisie.depart); }}
+        onPointerUp={() => setSaisie(null)} onPointerCancel={() => setSaisie(null)}
+        onDragOver={(e) => { if (reglage) return; e.preventDefault(); setSurvol(true); }} onDragLeave={() => setSurvol(false)}
+        onDrop={(e) => { if (!reglage) deposer(e); }}>
+        <Visuel v={v} grande cadrage={cadrage ?? enregistre ?? undefined} />
+        {reglage ? <>
+          <div className="fv-tiers" aria-hidden="true" />
+          <p className="fv-cadrage-aide" aria-hidden="true">Faites glisser la photo pour la repositionner</p>
+          <div className="fv-cadrage-barre" onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <div className="fv-cadrage-zoom">
+              <button type="button" className="btn" aria-label="Dézoomer" disabled={cadrage.zoom <= 1} onClick={() => zoomer(cadrage.zoom - 0.1)}>−</button>
+              <input type="range" min={1} max={ZOOM_MAX} step={0.05} value={cadrage.zoom} aria-label="Zoom"
+                onChange={(e) => zoomer(Number(e.target.value))} />
+              <button type="button" className="btn" aria-label="Zoomer" disabled={cadrage.zoom >= ZOOM_MAX} onClick={() => zoomer(cadrage.zoom + 0.1)}>+</button>
+              <span className="fv-cadrage-pct">{Math.round(cadrage.zoom * 100)} %</span>
+            </div>
+            <button type="button" className="btn" onClick={() => setCadrage({ cadrage_x: 50, cadrage_y: 50, zoom: 1 })}>Recentrer</button>
+            <button type="button" className="btn" onClick={() => setCadrage(null)}>Annuler</button>
+            <button type="button" className="btn btn-primaire" disabled={envoi} onClick={() => void enregistrer()}>
+              {envoi ? 'Enregistrement…' : 'Enregistrer le cadrage'}</button>
+          </div>
+        </> : <>
+          <Plaque plaque={v.plaque} />
+          <div className="fl-actions-photo">
+            <input ref={entree} type="file" accept="image/jpeg,image/png,image/webp" hidden
+              onChange={(e) => { void envoyer(e.target.files?.[0]); e.target.value = ''; }} />
+            {v.photo && <button type="button" className="btn" disabled={envoi} onClick={debuter}>Recadrer</button>}
+            <button type="button" className="btn" disabled={envoi} onClick={() => entree.current?.click()}>
+              {envoi ? 'Envoi…' : v.photo ? 'Remplacer la photo' : 'Ajouter une photo'}</button>
+            {v.photo && <button type="button" className="btn fl-btn-retirer" disabled={envoi} onClick={() => void retirer()}>Retirer</button>}
+          </div>
+        </>}
       </div>
-      <p className="fv-photo-note">{v.photo ? `Photo ajoutée par ${v.photo.auteur} le ${jour(v.photo.ajoutee_le)}`
-        : 'Glissez une photo sur l’image · réenregistrée sans métadonnées (GPS)'}</p>
+      {reglage && v.photo
+        ? <div className="fv-apercu-parc"><div className="fl-visuel fv-apercu-cadre"><Visuel v={v} cadrage={cadrage} /></div>
+            <span>Aperçu dans le parc : le même cadrage s'applique partout. L'image d'origine reste entière.</span></div>
+        : <p className="fv-photo-note">{v.photo ? `Photo ajoutée par ${v.photo.auteur} le ${jour(v.photo.ajoutee_le)}`
+            : 'Glissez une photo sur l’image · réenregistrée sans métadonnées (GPS)'}</p>}
       {erreur && <div className="erreur" role="alert">{erreur}</div>}
       {dialogue}
     </div>
