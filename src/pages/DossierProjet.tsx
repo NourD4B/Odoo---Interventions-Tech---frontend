@@ -320,7 +320,7 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol, onModifie }
           <div><dt>CA HT</dt><dd>{euros(s.argent.ca_ht)}</dd></div>
           <div><dt>Marge estimée</dt><dd className={marge < 0 ? 'negatif' : ''}>{euros(marge)}</dd></div>
           <div><dt>Score RSE</dt><dd className="dp-rse"><PastilleNote note={s.rse.note} />
-            {s.rse.mode ? <span><IconeMode mode={s.rse.mode} />{co2(s.rse.kg_co2e)}</span>
+            {s.rse.mode ? <span className="dp-rse-valeur"><IconeMode mode={s.rse.mode} />{co2(s.rse.kg_co2e)}</span>
               : <button type="button" className="dp-lien" onClick={ouvert ? undefined : onBasculer}>mode à choisir</button>}</dd></div>
         </dl>
         <div className="dp-pied">

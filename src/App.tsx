@@ -8,7 +8,6 @@ import FicheVehicule from './pages/FicheVehicule';
 import FicheService from './pages/FicheService';
 import Journal from './pages/Journal';
 import Planification from './pages/Planification';
-import Planning from './pages/Planning';
 import { DetailProjet, ListeProjets } from './pages/Projets';
 import Reconciliation from './pages/Reconciliation';
 import Statistiques from './pages/Statistiques';
@@ -24,7 +23,6 @@ const LIENS = [
   { vers: '/dossiers', libelle: 'Dossiers projets' },
   { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
-  { vers: '/planning', libelle: 'Interventions' },
   { vers: '/reglages', libelle: 'Réglages' },
   { vers: '/journal', libelle: 'Journal' },
   { vers: '/techniciens', libelle: 'Techniciens' },
@@ -68,7 +66,6 @@ export default function App() {
           <Route path="/dossiers/:id" element={<DossierProjet />} />
           <Route path="/services" element={<Services />} />
           <Route path="/planification" element={<Planification />} />
-          <Route path="/planning" element={<Planning />} />
           <Route path="/reglages" element={<Reglages />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/techniciens" element={<Techniciens />} />

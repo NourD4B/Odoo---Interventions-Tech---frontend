@@ -1117,7 +1117,7 @@ tr:last-child td { border-bottom: 0; }
 .dp-vehicule small { font-size: 12px; }
 .dp-vehicule:hover, .dp-vehicule:focus-visible { background: var(--neutre-doux); }
 .dp-sans-plaque { padding: 2px 6px; border: 1px dashed var(--bordure-forte); border-radius: 4px; font-size: 12px; font-weight: 600; }
-.dp-mesures { margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 10px 0;
+.dp-mesures { margin: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) max-content; gap: 8px; padding: 10px 0;
   border-block: 1px solid #eef0f3; }
 .dp-mesures dt { font-size: 12px; font-weight: 600; color: var(--encre-3); }
 .dp-mesures dd { margin: 2px 0 0; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
@@ -1287,7 +1287,7 @@ tr:last-child td { border-bottom: 0; }
 .rs-alerte { margin: 6px 0 0; padding: 6px 10px; border-radius: 6px; background: var(--alerte-doux); color: var(--alerte); font-size: 12.5px; }
 
 .dp-rse { display: flex; align-items: center; gap: 8px; }
-.dp-rse span { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.dp-rse-valeur { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; line-height: 1.2; white-space: nowrap; }
 .dp-rse .rs-icone { color: var(--encre-3); }
 .dp-rse .dp-lien { font-size: 13px; font-weight: 600; }
 .dp-deplacement { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #eef0f3; }
