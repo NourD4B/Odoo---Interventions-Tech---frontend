@@ -7,7 +7,7 @@ import { Avertissements, Badge, EtatChargement, ListeEcarts, useDonnees } from '
 import Flotte from './Flotte';
 
 const ONGLETS = [
-  { cle: 'flotte', libelle: 'Flotte', aide: 'Photos, modèles, fiches constructeur et corrections à faire dans Odoo' },
+  { cle: 'flotte', libelle: 'Flotte', aide: 'Véhicules de service : modèle, missions, conducteurs et pièces jointes (traçabilité des PV)' },
   { cle: 'rapprochement', libelle: 'Odoo ↔ SPOC', aide: 'Fleet (Odoo) rapproché du parc SPOC (HFSQL), historique des conducteurs' },
   { cle: 'pv', libelle: 'PV', aide: 'Qui conduisait ? (PV à désigner sous 45 jours)' },
 ] as const;

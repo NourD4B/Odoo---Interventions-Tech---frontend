@@ -29,7 +29,51 @@ export interface VehiculeFlotte {
   annee_modele: string | null; date_immatriculation: string | null; puissance_ch: number | null;
   puissance_kw: number | null; co2_g_km: number | null; compteur: number | null; compteur_unite: string | null;
   autonomie_km: number | null; attelage: boolean; photo: PhotoVehicule | null; fiche: FicheModele | null;
-  a_verifier: string[]; registre: LigneRegistre | null; prochaines: AffectationVehicule[]; jours_reserves_30j: number;
+  a_verifier: string[]; registre: LigneRegistre | null; retenu: Retenu; prochaines: AffectationVehicule[];
+  jours_reserves_30j: number;
+}
+
+/** Valeur exacte de chaque champ : Odoo, corrigé par le registre flotte quand Odoo se trompe (`corriges`). */
+export interface Retenu {
+  marque: string | null; modele: string | null; energie: string | null; categorie: string | null;
+  couleur: string | null; lieu: string | null; annee: number | null; service: boolean; restitue: boolean;
+  corriges: ('modele' | 'energie' | 'categorie' | 'couleur' | 'lieu' | 'annee' | 'attribution')[];
+}
+
+// ---------- traçabilité (PV) ----------
+
+/** Pièce jointe Odoo (avis de contravention, désignation, carte grise…), ouverte à la demande. */
+export interface PieceJointe { id: number; nom: string; type: string | null; taille: number; ajoutee_le: string | null }
+
+/** Affectation Odoo Fleet : `employe` = conducteur réel, y compris pour un véhicule de service. */
+export interface AffectationFleet {
+  id: number; conducteur: string | null; pool: boolean; employe_id: number | null; employe: string | null;
+  debut: string | null; fin: string | null; pieces: PieceJointe[];
+}
+
+export interface ConducteurVehicule {
+  nom: string; employe_ids: number[]; departement: string | null; societe: string | null;
+  matricule: string | null; agence: string | null; nb_pieces: number;
+  affectations: { id: number; debut: string | null; fin: string | null; nb_pieces: number }[];
+}
+
+export interface MembreEquipe { matricule: string; nom: string; agence: string | null; jours: string[]; etat: string; conducteur: boolean }
+
+export interface MissionVehicule {
+  id: number; service_id: number; service: string; client: string | null; site: string | null; statut: string;
+  debut: string; fin: string; jours_ouvres: number; etat: string; propose_par: string; raison: string | null;
+  motif: string | null; conducteur: string | null; conducteur_matricule: string | null; equipe: MembreEquipe[];
+}
+
+export interface DetailVehicule {
+  avertissements: string[]; vehicule: VehiculeFlotte; missions: MissionVehicule[]; historique: AffectationFleet[];
+  conducteurs: ConducteurVehicule[]; documents: PieceJointe[]; historique_disponible: boolean;
+}
+
+export interface ConducteurDuJour {
+  date: string; conducteur: string | null; message: string; affectations: AffectationFleet[];
+  missions: { service_id: number; service: string; client: string | null; site: string | null; debut: string;
+    fin: string; etat: string; conducteur: string | null; equipe: string[] }[];
 }
 
 /** Ligne du registre flotte de D4B (référence du modèle réel ; aucun nom de conducteur). */
@@ -39,7 +83,10 @@ export interface LigneRegistre {
   attribution: 'service' | 'nominatif' | string; commentaire: string | null;
 }
 
-export interface Flotte { avertissements: string[]; agences: { code: string; nom: string }[]; vehicules: VehiculeFlotte[] }
+export interface Flotte {
+  avertissements: string[]; agences: { code: string; nom: string }[]; vehicules: VehiculeFlotte[];
+  masques: number;                    // véhicules attribués à une personne ou restitués (hors périmètre)
+}
 
 export const ENERGIES: Record<string, string> = {
   gasoline: 'Essence', diesel: 'Diesel', electric: 'Électrique', full_hybrid: 'Hybride', hybrid: 'Hybride',
@@ -68,8 +115,25 @@ async function envoyer<T>(methode: string, chemin: string, corps?: Blob, type?: 
   return (reponse.status === 204 ? undefined : await reponse.json()) as T;
 }
 
+/** Pièce jointe lue dans Odoo ; consultation journalisée, donc nom de la personne obligatoire (X-Auteur). */
+async function lirePiece(id: number): Promise<Blob> {
+  const nom = auteur();
+  if (!nom) throw new AuteurManquant('Indiquez votre nom : chaque consultation de pièce est journalisée');
+  const reponse = await fetch(`/api/flotte/pieces/${id}`, { headers: { 'X-Auteur': encodeURIComponent(nom) } });
+  if (!reponse.ok) {
+    let detail: unknown = null;
+    try { detail = (await reponse.json()).detail; } catch { /* corps non JSON */ }
+    throw new ErreurPlanif(typeof detail === 'string' ? detail : `erreur ${reponse.status}`, reponse.status, detail);
+  }
+  return reponse.blob();
+}
+
 export const flotte = {
   vehicules: () => envoyer<Flotte>('GET', '/vehicules'),
+  vehicule: (id: number) => envoyer<DetailVehicule>('GET', `/vehicules/${id}`),
+  conducteurLe: (id: number, jour: string) =>
+    envoyer<ConducteurDuJour>('GET', `/vehicules/${id}/conducteur?date=${encodeURIComponent(jour)}`),
+  piece: lirePiece,
   deposerPhoto: (id: number, fichier: File) => envoyer<PhotoVehicule>('PUT', `/vehicules/${id}/photo`, fichier,
     fichier.type || 'image/jpeg'),
   retirerPhoto: (id: number) => envoyer<void>('DELETE', `/vehicules/${id}/photo`),

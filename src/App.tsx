@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
+import FicheVehicule from './pages/FicheVehicule';
 import FicheService from './pages/FicheService';
 import Journal from './pages/Journal';
 import Planification from './pages/Planification';
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/journal" element={<Journal />} />
           <Route path="/techniciens" element={<Techniciens />} />
           <Route path="/vehicules" element={<Vehicules />} />
+          <Route path="/vehicules/:id" element={<FicheVehicule />} />
           <Route path="/reconciliation" element={<Reconciliation />} />
         </Routes>
       </main>
