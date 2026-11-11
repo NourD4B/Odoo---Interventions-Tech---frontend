@@ -2,7 +2,7 @@
 // missions planifiées (service, site, équipe de techniciens, conducteur désigné) et traçabilité en cas de PV :
 // qui conduisait à une date, historique des conducteurs d'Odoo Fleet, pièces jointes (avis de contravention,
 // désignations…) lues dans Odoo à chaque ouverture, chaque consultation étant notée dans le journal.
-import { useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, useDonnees } from '../composants';
@@ -243,89 +243,160 @@ function RecherchePV({ v, pieces, historique, onDate }: { v: VehiculeFlotte; pie
   );
 }
 
-// ---------- frise et fiches des conducteurs (Odoo Fleet) ----------
+// ---------- conducteurs (Odoo Fleet) : une ligne compacte par personne, dépliée à la demande ----------
 
-function Frise({ historique, groupes, repere, onChoisir }: {
-  historique: AffectationFleet[]; groupes: { cle: string; nom: string; ids: number[] }[]; repere: string | null;
-  onChoisir: (id: number) => void;
-}) {
-  const datees = historique.filter((h) => h.debut);
-  if (!datees.length) return null;
-  const debut = Math.min(...datees.map((h) => date(h.debut!).getTime()));
+const VISIBLES = 8;
+type Groupe = { cle: string; nom: string; ids: number[]; c: ConducteurVehicule | null; nbPieces: number };
+
+/** Qui est-ce : matricule, fonction, agence d'un technicien, parti… */
+function qui(g: Groupe): string {
+  if (!g.c) return 'Affectations « Véhicule de service » sans employé dans Odoo';
+  const c = g.c;
+  return [c.matricule ?? 'matricule inconnu (absent de SPOC)', c.fonction ?? (c.technicien ? 'Technicien' : null),
+    c.agence, c.parti ? 'a quitté D4B' : null].filter(Boolean).join(' · ');
+}
+
+const couvre = (h: AffectationFleet, jourPV: string) => (!h.debut || h.debut <= jourPV) && (!h.fin || h.fin >= jourPV);
+
+function Conducteurs({ d, pieces, repere }: { d: DetailVehicule; pieces: Pieces; repere: string | null }) {
+  const [ouvert, setOuvert] = useState<string | null>(null);
+  const [texte, setTexte] = useState('');
+  const [avecPieces, setAvecPieces] = useState(false);
+  const [tous, setTous] = useState(false);
+  const parId = useMemo(() => new Map(d.historique.map((h) => [h.id, h])), [d]);
+  const groupes = useMemo<Groupe[]>(() => {
+    const compte = (ids: number[]) => ids.reduce((n, id) => n + (parId.get(id)?.pieces.length ?? 0), 0);
+    const anonymes = d.historique.filter((h) => !h.employe && h.pool).map((h) => h.id);
+    return [
+      ...d.conducteurs.map((c) => {
+        const ids = c.affectations.map((a) => a.id);
+        return { cle: c.nom, nom: c.nom, ids, c, nbPieces: compte(ids) };
+      }),
+      ...(anonymes.length ? [{ cle: '?', nom: 'Conducteur non renseigné', ids: anonymes, c: null, nbPieces: compte(anonymes) }] : []),
+    ];
+  }, [d, parId]);
+  // date d'un PV recherchée : on déplie la personne de l'affectation qui fait foi (la plus récente qui couvre la date,
+  // comme le serveur), même si une affectation plus ancienne restée ouverte la chevauche
+  const auPV = useMemo(() => {
+    if (!repere) return null;
+    const foi = d.historique.filter((h) => couvre(h, repere))
+      .sort((a, b) => (b.debut ?? '').localeCompare(a.debut ?? '') || b.id - a.id)[0];
+    return foi ? groupes.find((g) => g.ids.includes(foi.id))?.cle ?? null : null;
+  }, [repere, groupes, d]);
+  useEffect(() => { if (auPV) setOuvert(auPV); }, [auPV]);
+
+  if (!groupes.length) return null;
+  const datees = d.historique.filter((h) => h.debut);
+  const debut = datees.length ? Math.min(...datees.map((h) => date(h.debut!).getTime())) : Date.now() - 365 * JOUR_MS;
   const fin = Math.max(Date.now(), ...datees.map((h) => (h.fin ? date(h.fin).getTime() : Date.now())));
-  const pos = (t: number) => ((t - debut) / Math.max(fin - debut, JOUR_MS)) * 100;
+  const pos = (t: number) => Math.min(100, Math.max(0, ((t - debut) / Math.max(fin - debut, JOUR_MS)) * 100));
   const mois: Date[] = [];
-  for (let d = new Date(new Date(debut).getFullYear(), new Date(debut).getMonth() + 1, 1); d.getTime() <= fin;
-    d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) mois.push(d);
-  const pas = Math.max(1, Math.ceil(mois.length / 10));
-  const parId = new Map(historique.map((h) => [h.id, h]));
+  for (let m = new Date(new Date(debut).getFullYear(), new Date(debut).getMonth() + 1, 1); m.getTime() <= fin;
+    m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) mois.push(m);
+  const pas = Math.max(1, Math.ceil(mois.length / 9));
+  const graduations = mois.filter((_, i) => i % pas === 0);
+  const xPV = repere ? pos(date(repere).getTime()) : null;
+
+  const q = texte.trim().toLowerCase();
+  const filtres = groupes.filter((g) => (!avecPieces || g.nbPieces > 0)
+    && (!q || [g.nom, g.c?.matricule, g.c?.fonction].filter(Boolean).join(' ').toLowerCase().includes(q)));
+  const affiches = tous || q || avecPieces ? filtres
+    : filtres.filter((g, i) => i < VISIBLES || g.cle === ouvert || g.cle === auPV);
+
   return (
-    <div className="fv-frise" role="group" aria-label="Frise des conducteurs">
-      <div className="fv-frise-axe" aria-hidden="true">
-        {mois.map((m, i) => i % pas === 0 && (
-          <span key={m.getTime()} style={{ left: `${pos(m.getTime())}%` }}>
-            {m.toLocaleDateString('fr-FR', { month: 'short', year: m.getMonth() === 0 || i === 0 ? '2-digit' : undefined })}</span>))}
+    <div className="fv-cond">
+      <div className="fv-cond-outils">
+        <label className="champ champ-recherche">Rechercher
+          <input type="search" value={texte} placeholder="Nom, matricule, fonction" onChange={(e) => setTexte(e.target.value)} /></label>
+        <label className="fv-cond-case"><input type="checkbox" checked={avecPieces} onChange={(e) => setAvecPieces(e.target.checked)} />
+          Avec pièces jointes seulement</label>
+        <span className="fv-cond-total">{filtres.length} / {groupes.length} conducteur{groupes.length > 1 ? 's' : ''}</span>
       </div>
-      {groupes.map((g) => (
-        <div key={g.cle} className="fv-frise-ligne">
-          <span className="fv-frise-nom" title={g.nom}>{g.nom}</span>
-          <div className="fv-frise-piste">
-            {mois.map((m, i) => i % pas === 0 && <i key={m.getTime()} className="fv-frise-mois" style={{ left: `${pos(m.getTime())}%` }} />)}
-            {g.ids.map((id) => {
-              const h = parId.get(id);
-              if (!h?.debut) return null;
-              const a = pos(date(h.debut).getTime());
-              const b = pos(h.fin ? date(h.fin).getTime() + JOUR_MS : Date.now());
-              return (
-                <button key={id} type="button" className={`fv-frise-barre${h.pieces.length ? ' avec-pieces' : ''}${h.fin ? '' : ' en-cours'}`}
-                  style={{ left: `${a}%`, width: `${Math.max(b - a, 0.8)}%` }} onClick={() => onChoisir(id)}
-                  title={`${g.nom} · ${periode(h.debut, h.fin)}${h.pieces.length ? ` · ${h.pieces.length} pièce(s) jointe(s)` : ''}`}
-                  aria-label={`${g.nom}, ${periode(h.debut, h.fin)}${h.pieces.length ? `, ${h.pieces.length} pièce(s)` : ''}`}>
-                  {h.pieces.length > 0 && <span>{h.pieces.length}</span>}
-                </button>
-              );
-            })}
-          </div>
+
+      <div className="fv-cond-grille fv-cond-axe" aria-hidden="true">
+        <span />
+        <div className="fv-cond-graduations">
+          {graduations.map((m, i) => <span key={m.getTime()} style={{ left: `${pos(m.getTime())}%` }}>
+            {m.toLocaleDateString('fr-FR', { month: 'short', year: m.getMonth() === 0 || i === 0 ? '2-digit' : undefined })}</span>)}
+          {xPV !== null && <b className={`fv-cond-pv${xPV > 80 ? ' gauche' : ''}`} style={{ left: `${xPV}%` }}>PV {jour(repere!)}</b>}
         </div>
-      ))}
-      {repere && <i className={`fv-frise-repere${pos(date(repere).getTime()) > 75 ? ' gauche' : ''}`}
-        style={{ left: `calc(var(--fv-nom) + (100% - var(--fv-nom)) * ${pos(date(repere).getTime()) / 100})` }}
-        title={`PV du ${jour(repere)}`}><b>PV {jour(repere)}</b></i>}
+        <span />
+      </div>
+
+      <ul className="fv-cond-liste">
+        {affiches.map((g) => {
+          const deplie = ouvert === g.cle;
+          const lignes = g.ids.map((id) => parId.get(id)).filter((h): h is AffectationFleet => !!h);
+          const noms = [...new Set(lignes.map((h) => h.employe).filter(Boolean))] as string[];
+          return (
+            <li key={g.cle} className={[deplie && 'ouvert', g.cle === auPV && 'au-pv', !g.c && 'anonyme'].filter(Boolean).join(' ') || undefined}>
+              <button type="button" className="fv-cond-grille fv-cond-ligne" aria-expanded={deplie}
+                onClick={() => setOuvert(deplie ? null : g.cle)}>
+                <span className="fv-cond-id">
+                  <span className="fv-initiales" aria-hidden="true">{g.c ? initiales(g.nom) : '?'}</span>
+                  <span className="fv-cond-nom"><strong>{g.nom}</strong><small title={qui(g)}>{qui(g)}</small></span>
+                </span>
+                <span className="fv-cond-piste" aria-hidden="true">
+                  {graduations.map((m) => <i key={m.getTime()} className="fv-frise-mois" style={{ left: `${pos(m.getTime())}%` }} />)}
+                  {lignes.map((h) => {
+                    if (!h.debut) return null;
+                    const a = pos(date(h.debut).getTime());
+                    const b = pos(h.fin ? date(h.fin).getTime() + JOUR_MS : Date.now());
+                    return <i key={h.id} className={`fv-frise-barre${h.pieces.length ? ' avec-pieces' : ''}${h.fin ? '' : ' en-cours'}`}
+                      style={{ left: `${a}%`, width: `${Math.max(b - a, 0.8)}%` }} />;
+                  })}
+                  {xPV !== null && <i className="fv-cond-repere" style={{ left: `${xPV}%` }} />}
+                </span>
+                <span className="fv-cond-compte">
+                  <span>{lignes.length} période{lignes.length > 1 ? 's' : ''}</span>
+                  <span className={g.nbPieces ? 'pieces' : undefined}>{g.nbPieces} pièce{g.nbPieces > 1 ? 's' : ''}</span>
+                </span>
+              </button>
+              {deplie && (
+                <div className="fv-cond-detail">
+                  <p className="fv-cond-infos">
+                    {g.c ? <>
+                      <span>{[g.c.departement, g.c.societe].filter(Boolean).join(' · ') || 'Département non renseigné dans Odoo'}</span>
+                      {g.c.technicien && <span className="fv-tag">Technicien terrain{g.c.agence ? ` · ${g.c.agence}` : ''}</span>}
+                      {g.c.parti && <span className="fv-tag gris">Inactif dans SPOC</span>}
+                      {g.c.fiche_archivee && <span className="fv-tag gris"
+                        title="Odoo n'a plus que des fiches employé archivées pour cette personne">Fiche employé archivée</span>}
+                      {noms.length > 1 && <span className="muet">{noms.length} fiches employé dans Odoo : {noms.join(', ')}</span>}
+                    </> : <span>À retrouver : l'affectation Fleet ne nomme pas d'employé.</span>}
+                  </p>
+                  <table className="fv-cond-periodes">
+                    <tbody>{lignes.map((h) => (
+                      <tr key={h.id} className={repere && couvre(h, repere) ? 'au-pv' : undefined}>
+                        <th scope="row">{periode(h.debut, h.fin)}
+                          {duree(h.debut, h.fin) && <small>{duree(h.debut, h.fin)} j</small>}</th>
+                        <td>{h.pieces.length
+                          ? <span className="fv-puces-pieces">{h.pieces.map((p) => <PastillePiece key={p.id} p={p} pieces={pieces} />)}</span>
+                          : <span className="muet">aucune pièce</span>}</td>
+                      </tr>))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {!affiches.length && <p className="muet">Aucun conducteur ne correspond.</p>}
+      {affiches.length < filtres.length && (
+        <button type="button" className="btn fv-cond-plus" onClick={() => setTous(true)}>
+          Afficher les {filtres.length - affiches.length} autres conducteurs</button>)}
     </div>
   );
 }
 
-function FicheConducteur({ c, historique, pieces, choisi }: { c: ConducteurVehicule | { nom: string; anonyme: true; ids: number[] };
-  historique: Map<number, AffectationFleet>; pieces: Pieces; choisi: number | null }) {
-  const ids = 'anonyme' in c ? c.ids : c.affectations.map((a) => a.id);
-  const lignes = ids.map((id) => historique.get(id)).filter((h): h is AffectationFleet => !!h);
-  const noms = 'anonyme' in c ? [] : [...new Set(lignes.map((h) => h.employe).filter(Boolean))] as string[];
-  const nbPieces = lignes.reduce((n, h) => n + h.pieces.length, 0);
+/** Pièce jointe en pastille compacte (nom complet, taille et date en info-bulle) : un clic l'ouvre. */
+function PastillePiece({ p, pieces }: { p: PieceJointe; pieces: Pieces }) {
   return (
-    <article className={`fv-personne${'anonyme' in c ? ' anonyme' : ''}`}>
-      <header>
-        <span className="fv-initiales" aria-hidden="true">{'anonyme' in c ? '?' : initiales(c.nom)}</span>
-        <div className="fv-personne-nom">
-          <h3>{c.nom}</h3>
-          {'anonyme' in c ? <p>Affectations « Véhicule de service » sans employé renseigné dans Odoo</p>
-            : <p>{[c.departement, c.societe].filter(Boolean).join(' · ') || 'Département non renseigné'}</p>}
-        </div>
-        {!('anonyme' in c) && c.matricule && <span className="fv-tag" title="Technicien terrain (SPOC)">
-          Technicien · {c.matricule}{c.agence ? ` · ${c.agence}` : ''}</span>}
-      </header>
-      <p className="fv-personne-resume">{lignes.length} affectation{lignes.length > 1 ? 's' : ''} · {nbPieces} pièce
-        {nbPieces > 1 ? 's' : ''} jointe{nbPieces > 1 ? 's' : ''}
-        {noms.length > 1 && <> · {noms.length} fiches employé dans Odoo ({noms.join(', ')})</>}</p>
-      <ol className="fv-periodes">
-        {lignes.map((h) => (
-          <li key={h.id} id={`affectation-${h.id}`} className={choisi === h.id ? 'choisi' : undefined}>
-            <div className="fv-periode"><strong>{periode(h.debut, h.fin)}</strong>
-              {duree(h.debut, h.fin) && <em>{duree(h.debut, h.fin)} jour{(duree(h.debut, h.fin) ?? 0) > 1 ? 's' : ''}</em>}</div>
-            <ListePieces liste={h.pieces} pieces={pieces} />
-          </li>
-        ))}
-      </ol>
-    </article>
+    <button type="button" className="fv-pastille-piece" onClick={() => void pieces.ouvrir(p)} disabled={pieces.enCours === p.id}
+      title={`${p.nom} · ${taille(p.taille)}${p.ajoutee_le ? ` · ajoutée le ${jour(p.ajoutee_le)}` : ''}`}>
+      <span className={`fv-piece-type${genre(p) === 'PDF' ? ' pdf' : ''}`} aria-hidden="true">{genre(p)}</span>
+      <span className="fv-pastille-nom">{pieces.enCours === p.id ? 'Ouverture…' : p.nom}</span>
+    </button>
   );
 }
 
@@ -382,20 +453,8 @@ export default function FicheVehicule() {
   const vid = Number(id);
   const donnees = useDonnees<DetailVehicule>(() => flotte.vehicule(vid), [vid]);
   const pieces = usePieces();
-  const [choisi, setChoisi] = useState<number | null>(null);
   const [repere, setRepere] = useState<string | null>(null);
   const d = donnees.donnees;
-
-  const historique = useMemo(() => new Map((d?.historique ?? []).map((h) => [h.id, h])), [d]);
-  const anonymes = useMemo(() => (d?.historique ?? []).filter((h) => !h.employe && h.pool).map((h) => h.id), [d]);
-  const groupes = useMemo(() => [
-    ...(d?.conducteurs ?? []).map((c) => ({ cle: c.nom, nom: c.nom, ids: c.affectations.map((a) => a.id) })),
-    ...(anonymes.length ? [{ cle: '?', nom: 'Non renseigné', ids: anonymes }] : []),
-  ], [d, anonymes]);
-  const choisir = (idAffectation: number) => {
-    setChoisi(idAffectation);
-    document.getElementById(`affectation-${idAffectation}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
 
   if (!d) {
     return (
@@ -423,12 +482,7 @@ export default function FicheVehicule() {
               <small>{d.historique.length} affectation{d.historique.length > 1 ? 's' : ''} · {nbPieces} pièce{nbPieces > 1 ? 's' : ''}</small></h2>
             {!d.historique_disponible && <p className="muet">Odoo injoignable : historique et pièces jointes indisponibles.</p>}
             {d.historique_disponible && !d.historique.length && <p className="muet">Aucune affectation enregistrée dans Odoo Fleet.</p>}
-            <Frise historique={d.historique} groupes={groupes} repere={repere} onChoisir={choisir} />
-            <div className="fv-personnes">
-              {d.conducteurs.map((c) => <FicheConducteur key={c.nom} c={c} historique={historique} pieces={pieces} choisi={choisi} />)}
-              {anonymes.length > 0 && <FicheConducteur c={{ nom: 'Conducteur non renseigné', anonyme: true, ids: anonymes }}
-                historique={historique} pieces={pieces} choisi={choisi} />}
-            </div>
+            <Conducteurs d={d} pieces={pieces} repere={repere} />
           </section>
 
           <section className="fv-section" aria-label="Missions planifiées">

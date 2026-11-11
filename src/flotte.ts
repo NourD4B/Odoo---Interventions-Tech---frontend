@@ -54,6 +54,10 @@ export interface AffectationFleet {
 export interface ConducteurVehicule {
   nom: string; employe_ids: number[]; departement: string | null; societe: string | null;
   matricule: string | null; agence: string | null; nb_pieces: number;
+  fonction: string | null;            // fonction SPOC
+  technicien: boolean;                // technicien terrain (profil de planification : matricule et agence)
+  parti: boolean;                     // « Inactif » dans SPOC
+  fiche_archivee: boolean;            // seulement des fiches employé archivées dans Odoo
   affectations: { id: number; debut: string | null; fin: string | null; nb_pieces: number }[];
 }
 

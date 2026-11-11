@@ -883,47 +883,67 @@ tr:last-child td { border-bottom: 0; }
 .fv-piece-meta { grid-column: 2; font-size: 12px; color: var(--encre-3); }
 .fv-sans-piece { margin: 0; font-size: 12px; color: var(--encre-3); }
 
-/* frise des conducteurs */
-.fv-frise { --fv-nom: 170px; position: relative; display: flex; flex-direction: column; gap: 6px; padding: 2px 0; }
-.fv-frise-axe { position: relative; margin-left: var(--fv-nom); height: 16px; }
-.fv-frise-axe span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--encre-3); white-space: nowrap; }
-.fv-frise-ligne { display: grid; grid-template-columns: var(--fv-nom) minmax(0, 1fr); align-items: center; }
-.fv-frise-nom { font-size: 12px; font-weight: 600; padding-right: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fv-frise-piste { position: relative; height: 24px; background: var(--neutre-doux); border-radius: 6px; }
+/* conducteurs : une ligne compacte par personne (identité | frise | compteurs), dépliée à la demande */
+.fv-cond { display: flex; flex-direction: column; gap: 8px; }
+.fv-cond-outils { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.fv-cond-outils .champ-recherche { flex: 0 1 280px; }
+.fv-cond-outils .champ-recherche input { min-height: 36px; }
+.fv-cond-case { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; min-height: 36px; cursor: pointer; }
+.fv-cond-total { margin-left: auto; font-size: 12px; color: var(--encre-3); min-height: 36px; display: inline-flex; align-items: center; }
+.fv-cond-grille { display: grid; grid-template-columns: minmax(200px, 270px) minmax(0, 1fr) 112px; align-items: center; gap: 12px; }
+.fv-cond-axe { height: 18px; padding: 0 10px; }
+.fv-cond-graduations { position: relative; height: 18px; }
+.fv-cond-graduations span { position: absolute; transform: translateX(-50%); font-size: 11px; color: var(--encre-3); white-space: nowrap; }
+.fv-cond-pv { position: absolute; top: 0; transform: translateX(-50%); font-size: 10px; font-weight: 700; color: #fff;
+  background: var(--erreur); border-radius: 4px; padding: 1px 5px; white-space: nowrap; z-index: 1; }
+.fv-cond-pv.gauche { transform: translateX(-100%); }
+.fv-cond-liste { list-style: none; margin: 0; padding: 0; border: 1px solid var(--bordure); border-radius: 10px; overflow: hidden; }
+.fv-cond-liste > li + li { border-top: 1px solid #eceef2; }
+.fv-cond-liste > li.ouvert { background: #fbfcfe; }
+.fv-cond-liste > li.au-pv > .fv-cond-ligne { box-shadow: inset 3px 0 0 var(--erreur); }
+.fv-cond-ligne { width: 100%; padding: 7px 10px; border: 0; background: transparent; font: inherit; color: inherit; text-align: left;
+  cursor: pointer; }
+.fv-cond-ligne:hover { background: #f6f8fc; }
+.fv-cond-ligne:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fv-cond-id { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.fv-initiales { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-doux); color: var(--accent);
+  display: grid; place-items: center; font-weight: 700; font-size: 11px; }
+.fv-cond-liste > li.anonyme .fv-initiales { background: var(--neutre-doux); color: var(--encre-3); }
+.fv-cond-nom { display: flex; flex-direction: column; min-width: 0; }
+.fv-cond-nom strong, .fv-cond-nom small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fv-cond-nom strong { font-size: 13px; }
+.fv-cond-nom small { font-size: 11px; color: var(--encre-3); }
+.fv-cond-piste { position: relative; height: 20px; background: var(--neutre-doux); border-radius: 5px; overflow: hidden; }
 .fv-frise-mois { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--surface); }
-.fv-frise-barre { position: absolute; top: 3px; bottom: 3px; border: 0; border-radius: 4px; background: #93acef; cursor: pointer;
-  padding: 0; display: flex; align-items: center; justify-content: flex-end; min-width: 6px; }
+.fv-frise-barre { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; background: #93acef; min-width: 5px; }
 .fv-frise-barre.avec-pieces { background: var(--accent); }
 .fv-frise-barre.en-cours { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.fv-frise-barre span { font-size: 10px; font-weight: 800; color: #fff; padding: 0 6px; }
-.fv-frise-barre:hover, .fv-frise-barre:focus-visible { outline: 2px solid var(--encre); outline-offset: 1px; }
-.fv-frise-repere { position: absolute; top: 20px; bottom: 18px; width: 2px; margin-left: -1px; background: var(--erreur); pointer-events: none; }
-.fv-frise:has(.fv-frise-repere) { padding-bottom: 20px; }
-.fv-frise-repere b { position: absolute; bottom: -18px; left: 5px; font-size: 10px; color: var(--erreur); background: var(--surface);
-  padding: 0 4px; border-radius: 4px; white-space: nowrap; }
-.fv-frise-repere.gauche b { left: auto; right: 5px; }
-
-/* une fiche par conducteur */
-.fv-personnes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.fv-personne { border: 1px solid var(--bordure); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.fv-personne.anonyme { border-style: dashed; }
-.fv-personne header { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-.fv-initiales { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--accent-doux); color: var(--accent);
-  display: grid; place-items: center; font-weight: 700; font-size: 13px; }
-.fv-personne.anonyme .fv-initiales { background: var(--neutre-doux); color: var(--encre-3); }
-.fv-personne-nom { flex: 1 1 140px; min-width: 0; }
-.fv-personne-nom h3 { margin: 0; font-size: 14px; }
-.fv-personne-nom p { margin: 2px 0 0; font-size: 12px; color: var(--encre-3); }
+.fv-cond-repere { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--erreur); }
+.fv-cond-compte { display: flex; flex-direction: column; align-items: flex-end; font-size: 11px; color: var(--encre-3);
+  font-variant-numeric: tabular-nums; }
+.fv-cond-compte .pieces { color: var(--accent); font-weight: 700; }
+.fv-cond-detail { padding: 2px 12px 12px 49px; display: flex; flex-direction: column; gap: 8px; }
+.fv-cond-infos { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--encre-2); }
 .fv-tag { flex: none; font-size: 11px; font-weight: 600; color: var(--dispo); background: var(--dispo-doux); border-radius: 999px;
   padding: 2px 8px; white-space: nowrap; }
+.fv-tag.gris { color: var(--encre-2); background: var(--neutre-doux); }
 .fv-tag.conducteur { color: var(--accent); background: var(--accent-doux); }
-.fv-personne-resume { margin: 0; font-size: 12px; color: var(--encre-2); }
-.fv-periodes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.fv-periodes > li { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 2px 12px; border-left: 2px solid var(--bordure);
-  transition: border-color .2s, background .2s; }
-.fv-periodes > li.choisi { border-left-color: var(--accent); background: linear-gradient(90deg, var(--accent-doux), transparent 70%); }
-.fv-periode { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
-.fv-periode em { font-style: normal; font-size: 12px; color: var(--encre-3); }
+.fv-cond-periodes { width: 100%; border-collapse: collapse; font-size: 12px; }
+.fv-cond-periodes th { width: 190px; text-align: left; font-weight: 600; vertical-align: top; padding: 6px 10px 6px 0; white-space: nowrap; }
+.fv-cond-periodes th small { margin-left: 6px; font-weight: 500; color: var(--encre-3); }
+.fv-cond-periodes td { padding: 4px 0; vertical-align: top; }
+.fv-cond-periodes th, .fv-cond-periodes td { border-bottom: 0; background: transparent; text-transform: none; letter-spacing: 0; }
+.fv-cond-periodes tr + tr th, .fv-cond-periodes tr + tr td { border-top: 1px dashed #e6e8ec; }
+.fv-cond-periodes tr.au-pv th { color: var(--erreur); }
+.fv-puces-pieces { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.fv-pastille-piece { display: inline-flex; align-items: center; gap: 6px; max-width: 290px; padding: 3px 8px 3px 4px; font: inherit;
+  font-size: 12px; color: inherit; background: var(--surface); border: 1px solid var(--bordure); border-radius: 6px; cursor: pointer; }
+.fv-pastille-piece:hover { border-color: #b9cbf7; background: var(--accent-doux); }
+.fv-pastille-piece:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fv-pastille-piece:disabled { cursor: progress; opacity: .7; }
+.fv-pastille-piece .fv-piece-type { min-width: 0; padding: 1px 4px; font-size: 9px; }
+.fv-pastille-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.fv-cond-plus { align-self: center; min-height: 34px; font-size: 13px; }
 
 /* missions planifiées : détail, équipe, conducteur */
 .fv-missions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -960,7 +980,6 @@ tr:last-child td { border-bottom: 0; }
 
 @media (max-width: 1180px) {
   .fv-colonnes, .fv-entete { grid-template-columns: minmax(0, 1fr); }
-  .fv-personnes { grid-template-columns: minmax(0, 1fr); }
 }
 .rapprochement-resume { margin: 0; }
-@media (prefers-reduced-motion: reduce) { .fl-carte, .fv-periodes li, .fv-photo { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .fl-carte, .fv-photo { transition: none; animation: none; } }
