@@ -1,7 +1,7 @@
 // Pièces communes à la galerie de la flotte et à la fiche d'un véhicule. Les valeurs affichées sont les valeurs
 // retenues : celles d'Odoo, corrigées par le registre flotte de D4B quand Odoo se trompe (ex. « Fiat/Fiat »).
 import { useEffect, useState } from 'react';
-import { ENERGIES, flotte, type FicheModele, type Retenu, type VehiculeFlotte } from '../flotte';
+import { ENERGIES, flotte, type FicheModele, type VehiculeFlotte } from '../flotte';
 import Silhouette, { carrosserieDe } from './Silhouette';
 
 export type Famille = 'utilitaire' | 'voiture' | 'deux_roues';
@@ -20,16 +20,6 @@ export const energieDe = (v: VehiculeFlotte) => libelleEnergie(v.retenu.energie)
 export const electrifie = (v: VehiculeFlotte) =>
   ['electric', 'full_hybrid', 'hybrid', 'plug_in_hybrid_gasoline', 'plug_in_hybrid_diesel'].includes(v.retenu.energie ?? '');
 export const planifiable = (v: VehiculeFlotte) => v.attribution === 'pool' && v.type_planification !== 'exclu';
-
-/** Valeur d'Odoo remplacée par la valeur retenue (affichée en info-bulle : à corriger dans Odoo). */
-export function valeurOdoo(v: VehiculeFlotte, champ: Retenu['corriges'][number]): string {
-  const brut = {
-    modele: v.model_name?.replace('/', ' '), energie: libelleEnergie(v.energie), categorie: v.categorie,
-    couleur: v.couleur, lieu: v.location, annee: v.annee_modele,
-    attribution: v.attribution === 'pool' ? 'véhicule de service' : v.conducteur ?? 'attribué à une personne',
-  }[champ];
-  return brut || 'non renseigné';
-}
 
 export const nombre = (n: number, decimales = 1) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: decimales }).format(n);
 export const jour = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`)

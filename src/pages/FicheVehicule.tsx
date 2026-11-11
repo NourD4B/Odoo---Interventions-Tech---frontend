@@ -8,11 +8,11 @@ import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
 import {
-  electrifie, energieDe, FicheConstructeur, jour, lundiDe, nombre, Plaque, planifiable, titreDe, valeurOdoo, Visuel,
+  electrifie, energieDe, FicheConstructeur, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
 } from '../composants/Vehicule';
 import {
   BOITES, flotte, type AffectationFleet, type ConducteurDuJour, type ConducteurVehicule, type DetailVehicule,
-  type MissionVehicule, type PieceJointe, type Retenu, type VehiculeFlotte,
+  type MissionVehicule, type PieceJointe, type VehiculeFlotte,
 } from '../flotte';
 import { auteur, LIBELLES_STATUT_PLANIF, type StatutPlanif } from '../planification';
 
@@ -92,13 +92,11 @@ function ListePieces({ liste, pieces, vide = 'Aucune pièce jointe.' }: { liste:
 
 // ---------- en-tête : photo et valeurs exactes ----------
 
-function Fait({ libelle, valeur, v, champ }: { libelle: string; valeur: ReactNode; v?: VehiculeFlotte; champ?: Retenu['corriges'][number] }) {
-  const corrige = v && champ && v.retenu.corriges.includes(champ) ? valeurOdoo(v, champ) : null;
+function Fait({ libelle, valeur }: { libelle: string; valeur: ReactNode }) {
   return (
-    <div className={corrige ? 'corrige' : undefined}>
+    <div>
       <dt>{libelle}</dt>
-      <dd>{valeur === null || valeur === undefined || valeur === '' ? <span className="muet">non renseigné</span> : valeur}
-        {corrige && <span className="fv-corrige" title={`Odoo indique « ${corrige} » : à corriger dans Odoo`}>corrigé</span>}</dd>
+      <dd>{valeur === null || valeur === undefined || valeur === '' ? <span className="muet">non renseigné</span> : valeur}</dd>
     </div>
   );
 }
@@ -162,14 +160,14 @@ function Entete({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
           <p className="fv-sous">{[fiche?.generation, r.annee, r.lieu].filter(Boolean).join(' · ')}</p>
         </div>
         <dl className="fv-faits">
-          <Fait libelle="Modèle" valeur={titreDe(v)} v={v} champ="modele" />
-          <Fait libelle="Catégorie" valeur={r.categorie} v={v} champ="categorie" />
-          <Fait libelle="Énergie" valeur={energieDe(v)} v={v} champ="energie" />
-          <Fait libelle="Couleur" valeur={r.couleur} v={v} champ="couleur" />
-          <Fait libelle="Année" valeur={r.annee} v={v} champ="annee" />
-          <Fait libelle="Lieu" valeur={r.lieu} v={v} champ="lieu" />
+          <Fait libelle="Modèle" valeur={titreDe(v)} />
+          <Fait libelle="Catégorie" valeur={r.categorie} />
+          <Fait libelle="Énergie" valeur={energieDe(v)} />
+          <Fait libelle="Couleur" valeur={r.couleur} />
+          <Fait libelle="Année" valeur={r.annee} />
+          <Fait libelle="Lieu" valeur={r.lieu} />
           <Fait libelle="Immatriculé le" valeur={v.date_immatriculation && jour(v.date_immatriculation)} />
-          <Fait libelle="État (Odoo)" valeur={v.etat} />
+          <Fait libelle="État" valeur={v.etat} />
           <Fait libelle="Places" valeur={v.places || null} />
           <Fait libelle="Boîte" valeur={v.boite ? BOITES[v.boite] ?? v.boite : null} />
           <Fait libelle="Puissance" valeur={[v.puissance_ch && `${v.puissance_ch} ch`, v.puissance_kw && `${v.puissance_kw} kW`]
@@ -221,20 +219,26 @@ function RecherchePV({ v, pieces, historique, onDate }: { v: VehiculeFlotte; pie
           <div className="fv-pv-qui">
             <span>Le {jour(resultat.date)}</span>
             <strong>{resultat.conducteur ?? 'Conducteur non identifié'}</strong>
-            <em>{resultat.message}</em>
+            {resultat.affectations.length > 1 && <em>{resultat.affectations.length} affectations couvrent cette date : à vérifier</em>}
           </div>
-          {resultat.affectations.map((a) => (
-            <div key={a.id} className="fv-pv-preuve">
-              <h3>Affectation Odoo Fleet <span>{periode(a.debut, a.fin)}</span></h3>
-              <p>{a.employe ?? (a.pool ? 'Véhicule de service, conducteur non renseigné' : a.conducteur)}</p>
-              <ListePieces liste={parId.get(a.id)?.pieces ?? a.pieces} pieces={pieces} />
-            </div>
-          ))}
+          {resultat.affectations.map((a) => {
+            const nom = a.employe ?? (a.pool ? null : a.conducteur);
+            return (
+              <div key={a.id} className="fv-pv-preuve">
+                <h3>Affectation Odoo Fleet <span>{periode(a.debut, a.fin)}</span></h3>
+                {nom && nom !== resultat.conducteur && <p>{nom}</p>}
+                <ListePieces liste={parId.get(a.id)?.pieces ?? a.pieces} pieces={pieces} />
+              </div>
+            );
+          })}
           {resultat.missions.map((m) => (
             <div key={`${m.service_id}-${m.debut}`} className="fv-pv-preuve">
               <h3>Mission planifiée <span>{plage(m.debut, m.fin)}</span></h3>
               <p><strong>{m.client ?? m.service}</strong> · {m.service}{m.site ? ` · ${m.site}` : ''}</p>
-              <p className="muet">Conducteur désigné : {m.conducteur ?? 'aucun'} · équipe ce jour : {m.equipe.join(', ') || 'aucun créneau'}</p>
+              {(m.equipe.length > 0 || m.conducteur) && <p className="muet">Équipe ce jour : {[
+                ...(m.conducteur && !m.equipe.includes(m.conducteur) ? [`${m.conducteur} (conducteur)`] : []),
+                ...m.equipe.map((n) => (n === m.conducteur ? `${n} (conducteur)` : n)),
+              ].join(', ')}</p>}
             </div>
           ))}
         </div>
@@ -248,12 +252,11 @@ function RecherchePV({ v, pieces, historique, onDate }: { v: VehiculeFlotte; pie
 const VISIBLES = 8;
 type Groupe = { cle: string; nom: string; ids: number[]; c: ConducteurVehicule | null; nbPieces: number };
 
-/** Qui est-ce : matricule, fonction, agence d'un technicien, parti… */
+/** Qui est-ce : matricule, fonction et, pour un technicien terrain, agence (seulement ce qui est connu). */
 function qui(g: Groupe): string {
-  if (!g.c) return 'Affectations « Véhicule de service » sans employé dans Odoo';
+  if (!g.c) return '';
   const c = g.c;
-  return [c.matricule ?? 'matricule inconnu (absent de SPOC)', c.fonction ?? (c.technicien ? 'Technicien' : null),
-    c.agence, c.parti ? 'a quitté D4B' : null].filter(Boolean).join(' · ');
+  return [c.matricule, c.fonction ?? (c.technicien ? 'Technicien' : null), c.agence].filter(Boolean).join(' · ');
 }
 
 const couvre = (h: AffectationFleet, jourPV: string) => (!h.debut || h.debut <= jourPV) && (!h.fin || h.fin >= jourPV);
@@ -327,14 +330,13 @@ function Conducteurs({ d, pieces, repere }: { d: DetailVehicule; pieces: Pieces;
         {affiches.map((g) => {
           const deplie = ouvert === g.cle;
           const lignes = g.ids.map((id) => parId.get(id)).filter((h): h is AffectationFleet => !!h);
-          const noms = [...new Set(lignes.map((h) => h.employe).filter(Boolean))] as string[];
           return (
             <li key={g.cle} className={[deplie && 'ouvert', g.cle === auPV && 'au-pv', !g.c && 'anonyme'].filter(Boolean).join(' ') || undefined}>
               <button type="button" className="fv-cond-grille fv-cond-ligne" aria-expanded={deplie}
                 onClick={() => setOuvert(deplie ? null : g.cle)}>
                 <span className="fv-cond-id">
                   <span className="fv-initiales" aria-hidden="true">{g.c ? initiales(g.nom) : '?'}</span>
-                  <span className="fv-cond-nom"><strong>{g.nom}</strong><small title={qui(g)}>{qui(g)}</small></span>
+                  <span className="fv-cond-nom"><strong>{g.nom}</strong>{qui(g) && <small title={qui(g)}>{qui(g)}</small>}</span>
                 </span>
                 <span className="fv-cond-piste" aria-hidden="true">
                   {graduations.map((m) => <i key={m.getTime()} className="fv-frise-mois" style={{ left: `${pos(m.getTime())}%` }} />)}
@@ -354,16 +356,12 @@ function Conducteurs({ d, pieces, repere }: { d: DetailVehicule; pieces: Pieces;
               </button>
               {deplie && (
                 <div className="fv-cond-detail">
-                  <p className="fv-cond-infos">
-                    {g.c ? <>
-                      <span>{[g.c.departement, g.c.societe].filter(Boolean).join(' · ') || 'Département non renseigné dans Odoo'}</span>
+                  {g.c && (g.c.departement || g.c.societe || g.c.technicien) && (
+                    <p className="fv-cond-infos">
+                      {(g.c.departement || g.c.societe) && <span>{[g.c.departement, g.c.societe].filter(Boolean).join(' · ')}</span>}
                       {g.c.technicien && <span className="fv-tag">Technicien terrain{g.c.agence ? ` · ${g.c.agence}` : ''}</span>}
-                      {g.c.parti && <span className="fv-tag gris">Inactif dans SPOC</span>}
-                      {g.c.fiche_archivee && <span className="fv-tag gris"
-                        title="Odoo n'a plus que des fiches employé archivées pour cette personne">Fiche employé archivée</span>}
-                      {noms.length > 1 && <span className="muet">{noms.length} fiches employé dans Odoo : {noms.join(', ')}</span>}
-                    </> : <span>À retrouver : l'affectation Fleet ne nomme pas d'employé.</span>}
-                  </p>
+                    </p>
+                  )}
                   <table className="fv-cond-periodes">
                     <tbody>{lignes.map((h) => (
                       <tr key={h.id} className={repere && couvre(h, repere) ? 'au-pv' : undefined}>

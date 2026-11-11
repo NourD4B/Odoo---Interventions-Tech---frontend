@@ -831,8 +831,6 @@ tr:last-child td { border-bottom: 0; }
 .fv-faits dt { font-size: 11px; color: var(--encre-3); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
 .fv-faits dd { margin: 3px 0 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; display: flex;
   flex-wrap: wrap; align-items: center; gap: 6px; }
-.fv-corrige { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--alerte);
-  background: var(--alerte-doux); border-radius: 4px; padding: 1px 5px; cursor: help; }
 .fv-corrections { border-radius: 10px; background: var(--alerte-doux); color: var(--alerte); padding: 10px 14px; font-size: 13px; }
 .fv-corrections summary { cursor: pointer; font-weight: 600; }
 .fv-corrections ul { margin: 8px 0 2px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
