@@ -9,9 +9,11 @@ import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
 import { ListePieces, usePieces, type Pieces } from '../composants/Pieces';
+import { BandeauRse, ChoixMode, DetailRse, IconeMode, PastilleNote } from '../composants/Rse';
 import { BadgeEtat } from '../composants/Statistiques';
 import { Plaque } from '../composants/Vehicule';
 import { dossiers, type Dossier, type Itineraire, type ServiceDossier, type TacheDossier } from '../dossiers';
+import { co2 } from '../rse';
 import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, type EtatService } from '../statistiques';
 
 const ETATS: EtatService[] = ['en_retard', 'planifie', 'a_planifier', 'fait', 'facture'];   // ordre d'urgence
@@ -282,9 +284,9 @@ function DateMission({ s }: { s: ServiceDossier }) {
   );
 }
 
-function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol }: {
+function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol, onModifie }: {
   s: ServiceDossier; d: Dossier; ouvert: boolean; actif: boolean; futur: boolean; onBasculer: () => void;
-  onSurvol: (id: number | null) => void;
+  onSurvol: (id: number | null) => void; onModifie: () => void;
 }) {
   const v = s.planification.vehicule;
   const mission = d.vehicules.flatMap((x) => x.missions).find((m) => m.service_id === s.id);
@@ -317,6 +319,9 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol }: {
           <div><dt>Matériel livré</dt><dd>{s.materiel.pct_livre === null ? '—' : `${nombre(s.materiel.pct_livre)} %`}</dd></div>
           <div><dt>CA HT</dt><dd>{euros(s.argent.ca_ht)}</dd></div>
           <div><dt>Marge estimée</dt><dd className={marge < 0 ? 'negatif' : ''}>{euros(marge)}</dd></div>
+          <div><dt>Score RSE</dt><dd className="dp-rse"><PastilleNote note={s.rse.note} />
+            {s.rse.mode ? <span><IconeMode mode={s.rse.mode} />{co2(s.rse.kg_co2e)}</span>
+              : <button type="button" className="dp-lien" onClick={ouvert ? undefined : onBasculer}>mode à choisir</button>}</dd></div>
         </dl>
         <div className="dp-pied">
           {s.itineraires.map((it) => (
@@ -326,13 +331,13 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol }: {
           <button type="button" className="dp-deplier" aria-expanded={ouvert} onClick={onBasculer}>
             {ouvert ? 'Masquer le détail' : 'Voir le détail'}</button>
         </div>
-        {ouvert && <DetailMission s={s} />}
+        {ouvert && <DetailMission s={s} onModifie={onModifie} />}
       </article>
     </li>
   );
 }
 
-function DetailMission({ s }: { s: ServiceDossier }) {
+function DetailMission({ s, onModifie }: { s: ServiceDossier; onModifie: () => void }) {
   const c = s.couts_estimes, f = s.realise.feuille;
   return (
     <div className="dp-detail">
@@ -367,13 +372,19 @@ function DetailMission({ s }: { s: ServiceDossier }) {
         </ul> : <p className="muet">Pas de matériel.</p>}
         {s.materiel.livraisons.map((l) => <p key={l.nom} className="muet">{l.nom} : {LIBELLES_LIVRAISON[l.etat ?? ''] ?? l.etat ?? '—'}</p>)}
       </section>
+      <section className="dp-deplacement">
+        <h4>Déplacement et score RSE{s.rse.mode_libelle && <span>{s.rse.mode_libelle}, {co2(s.rse.kg_co2e)}</span>}</h4>
+        <ChoixMode serviceId={s.id} r={s.rse} onChange={onModifie} />
+        <DetailRse r={s.rse} />
+      </section>
       <Link to={`/statistiques/services/${s.id}`} className="dp-fiche">Fiche complète du service</Link>
     </div>
   );
 }
 
-function Missions({ d, actif, ouverts, basculer, onSurvol }: {
+function Missions({ d, actif, ouverts, basculer, onSurvol, onModifie }: {
   d: Dossier; actif: number | null; ouverts: Set<number>; basculer: (id: number) => void; onSurvol: (id: number | null) => void;
+  onModifie: () => void;
 }) {
   const auj = aujourdhui();
   const dates = d.services.filter((s) => debutDe(s));
@@ -382,7 +393,7 @@ function Missions({ d, actif, ouverts, basculer, onSurvol }: {
   const repere = <li key="aujourdhui" className="dp-aujourdhui"><span>Aujourd'hui, {jourCourt(auj)}</span></li>;
   const ligne = (s: ServiceDossier, futur: boolean) => (
     <Mission key={s.id} s={s} d={d} ouvert={ouverts.has(s.id)} actif={actif === s.id} futur={futur}
-      onBasculer={() => basculer(s.id)} onSurvol={onSurvol} />
+      onBasculer={() => basculer(s.id)} onSurvol={onSurvol} onModifie={onModifie} />
   );
   return (
     <section className="carte dp-missions">
@@ -549,8 +560,9 @@ export default function DossierProjet() {
         </div>
       </section>
       <Equation d={d} />
+      <BandeauRse b={d.resume.rse} />
       <div className="dp-corps">
-        <Missions d={d} actif={actif} ouverts={ouverts} basculer={basculer} onSurvol={setActif} />
+        <Missions d={d} actif={actif} ouverts={ouverts} basculer={basculer} onSurvol={setActif} onModifie={charge.recharger} />
         <aside className="dp-cote">
           <Departs d={d} />
           <Vehicules d={d} />

@@ -110,7 +110,7 @@ export function FicheConstructeur({ f }: { f: FicheModele }) {
           return (
             <dl key={g.titre} className="fl-groupe">
               <dt className="fl-groupe-titre">{g.titre}</dt>
-              {lignes.map(([libelle, val]) => <div key={libelle}><dt>{libelle}</dt><dd>{val}</dd></div>)}
+              {lignes.map(([libelle, val], i) => <div key={`${libelle}-${i}`}><dt>{libelle}</dt><dd>{val}</dd></div>)}
             </dl>
           );
         })}

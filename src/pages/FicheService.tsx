@@ -1,7 +1,9 @@
 // Fiche d'un service : tout, planifié et réalisé (techniciens, véhicule, temps passé, matériel, argent, coûts).
 import { Link, useParams } from 'react-router-dom';
 import { EtatChargement, useDonnees } from '../composants';
+import { ChoixMode, DetailRse, PastilleNote } from '../composants/Rse';
 import { Barre, BadgeEtat, BadgeSimule, Jauge, Tuile } from '../composants/Statistiques';
+import { co2 } from '../rse';
 import { dateHeure, euros, heures, jourCourt, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, LIBELLES_PAIEMENT, nombre,
          stats } from '../statistiques';
 
@@ -160,6 +162,21 @@ export default function FicheService() {
             <div><dt>Coût total estimé (hors matériel)</dt><dd>{euros(c.total, true)}</dd></div>
             <div><dt>Marge estimée</dt><dd className={c.marge_estimee < 0 ? 'negatif' : ''}>{euros(c.marge_estimee, true)}</dd></div>
           </dl>
+        </section>
+
+        <section className="carte large" aria-labelledby="t-rse">
+          <h2 id="t-rse">Score RSE des déplacements</h2>
+          <div className="rs-service">
+            <PastilleNote note={d.rse.note} grande />
+            <dl className="chiffres">
+              <div><dt>Mode</dt><dd>{d.rse.mode_libelle ?? 'à choisir'}</dd></div>
+              <div><dt>Émissions estimées</dt><dd>{co2(d.rse.kg_co2e)}</dd></div>
+              <div><dt>Par rapport à chacun seul en voiture thermique</dt><dd>{d.rse.evite_pct === null ? '—'
+                : d.rse.evite_pct >= 0 ? `${nombre(d.rse.evite_pct)} % évités` : `${nombre(-d.rse.evite_pct)} % de plus`}</dd></div>
+            </dl>
+          </div>
+          <ChoixMode serviceId={d.id} r={d.rse} onChange={f.recharger} />
+          <DetailRse r={d.rse} />
         </section>
       </div>
     </>

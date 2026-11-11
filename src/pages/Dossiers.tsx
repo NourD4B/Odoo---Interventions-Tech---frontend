@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { EtatChargement, useDonnees } from '../composants';
+import { PastilleNote } from '../composants/Rse';
+import { co2 } from '../rse';
 import { euros, LIBELLES_ETAT, stats, type EtatService, type ResumeProjet } from '../statistiques';
 
 const ORDRE: EtatService[] = ['facture', 'fait', 'planifie', 'en_retard', 'a_planifier'];
@@ -60,6 +62,7 @@ export default function Dossiers() {
             <span>Projet</span>
             <span className="dl-legende">Services {ORDRE.map((e) => <span key={e}><i className={`e-${e}`} />{LIBELLES_ETAT[e].toLowerCase()}</span>)}</span>
             <span>Prochaine intervention</span><span className="nombre">CA HT</span><span className="nombre">Marge estimée</span>
+            <span>Score RSE</span>
           </div>
           <ul className="dl-liste">
             {projets.map((p) => (
@@ -74,6 +77,8 @@ export default function Dossiers() {
                     : <span className="muet">aucune</span>}</span>
                   <span className="nombre">{euros(p.ca_ht)}</span>
                   <span className={`nombre${p.marge_estimee < 0 ? ' negatif' : ''}`}>{euros(p.marge_estimee)}</span>
+                  <span className="dl-rse"><PastilleNote note={p.rse.note} />
+                    <small>{p.rse.kg_co2e === null ? 'à renseigner' : co2(p.rse.kg_co2e)}</small></span>
                 </Link>
               </li>))}
           </ul>

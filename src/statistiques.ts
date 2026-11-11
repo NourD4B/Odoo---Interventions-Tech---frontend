@@ -1,5 +1,6 @@
 // Client de l'API /api/statistiques (lecture seule) et /api/synchro (copie locale d'Odoo).
 // Noms de champs identiques à l'API ; montants en euros HT sauf mention ; dates « AAAA-MM-JJ ».
+import type { BilanRse, ModeTransport, NoteRse, RseMission } from './rse';
 
 export type EtatService = 'a_planifier' | 'planifie' | 'en_retard' | 'fait' | 'facture';
 
@@ -10,6 +11,7 @@ export interface LigneService {
   heures_prevues: number | null; heures_passees: number | null; km_estimes: number | null; ca_ht: number | null;
   marge_materiel: number | null; reste_a_facturer_ht: number | null; pct_livre: number | null;
   facturation: string | null; feuille_signee: boolean; sans_position: boolean;
+  transport: ModeTransport | null; kg_co2e: number | null; note_rse: NoteRse | null;
 }
 
 export interface Argent {
@@ -27,6 +29,7 @@ export interface Tableau {
   par_vehicule: { vehicle_id: number; plaque: string | null; jours: number; services: number; km_estimes: number;
                   cout_estime: number }[];
   argent: Argent & { reste_a_facturer_faits_ht: number };
+  rse: BilanRse;
   par_projet: (Argent & { nom: string; services: number; faits: number })[];
   par_client: (Argent & { nom: string; services: number; faits: number })[];
   par_type_service: (Argent & { nom: string; services: number; faits: number })[];
@@ -43,6 +46,7 @@ export interface ResumeProjet extends Argent {
   par_etat: Record<EtatService, number>; avancement_pct: number | null; heures_prevues: number; heures_passees: number;
   km_estimes: number; commandes: Commande[]; commandes_ht: number; prochaine_intervention: string | null;
   en_retard: { id: number; nom: string }[];
+  rse: BilanRse;
 }
 export interface DetailProjet extends ResumeProjet { liste: LigneService[] }
 
@@ -84,6 +88,7 @@ export interface FicheService {
   couts_estimes: { heures_travail: number; base_heures: 'passees' | 'prevues'; cout_horaire_moyen: number;
                    travail: number; route: number; vehicule: number; cout_km: number | null; total: number;
                    marge_estimee: number; estime: boolean; hors: string };
+  rse: RseMission;
 }
 
 export interface EtatSynchro {

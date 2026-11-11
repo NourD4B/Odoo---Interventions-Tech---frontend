@@ -8,6 +8,7 @@ import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
 import { ListePieces, PastillePiece, usePieces, type Pieces } from '../composants/Pieces';
+import { ConsommationVehicule } from '../composants/Rse';
 import {
   electrifie, energieDe, FicheConstructeur, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
 } from '../composants/Vehicule';
@@ -16,6 +17,7 @@ import {
   type MissionVehicule, type VehiculeFlotte,
 } from '../flotte';
 import { LIBELLES_STATUT_PLANIF, type StatutPlanif } from '../planification';
+import { rse, type ProfilVehicule } from '../rse';
 
 const JOUR_MS = 86_400_000;
 const date = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`);
@@ -379,6 +381,15 @@ function Mission({ m }: { m: MissionVehicule }) {
 
 // ---------- page ----------
 
+/** Consommation retenue pour le score RSE (saisie, sinon constructeur, sinon moyenne) et sa saisie. */
+function EmissionsVehicule({ id }: { id: number }) {
+  const p = useDonnees(() => rse.vehicule(id), [id]);
+  const [profil, setProfil] = useState<ProfilVehicule | null>(null);
+  const actuel = profil ?? p.donnees;
+  if (!actuel) return <EtatChargement chargement={p.chargement} erreur={p.erreur} />;
+  return <ConsommationVehicule id={id} profil={actuel} onChange={setProfil} />;
+}
+
 export default function FicheVehicule() {
   const { id } = useParams();
   const vid = Number(id);
@@ -429,6 +440,10 @@ export default function FicheVehicule() {
           <section className="fv-section" aria-label="Documents du véhicule">
             <h2>Documents du véhicule <span className="fl-source">Odoo</span></h2>
             <ListePieces liste={d.documents} pieces={pieces} vide="Aucun document joint au véhicule dans Odoo." />
+          </section>
+          <section className="fv-section" aria-label="Émissions du véhicule">
+            <h2>Émissions <span className="fl-source">Score RSE</span></h2>
+            <EmissionsVehicule id={vid} />
           </section>
           <section className="fv-section" aria-label="Fiche constructeur">
             <h2>Fiche constructeur</h2>
