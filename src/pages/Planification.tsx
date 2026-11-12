@@ -822,8 +822,7 @@ export default function Planification() {
         <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-publier">
           <div className="dialogue">
             <h2 id="titre-publier">Publier la semaine ?</h2>
-            <p>{aPublier.length} service(s) passeront à l'étape « Planned ». Ils ne seront plus recalculés ni retirables.
-              Odoo n'est pas modifié.</p>
+            <p>{aPublier.length} service{aPublier.length > 1 ? 's seront confirmés' : ' sera confirmé'}.</p>
             <div className="actions">
               <button type="button" className="btn" onClick={() => setConfirmerPublication(false)}>Annuler</button>
               <button type="button" className="btn btn-primaire" onClick={() => void publier()}>Publier</button>
