@@ -211,7 +211,8 @@ function Equipe({ d }: { d: Dossier }) {
         <span className="dp-ident-label">Véhicule{d.vehicules.length > 1 ? 's' : ''}</span>
         <div className="dp-ident-plaques">{d.vehicules.map((v) => (
           <Link key={v.vehicle_id} to={`/vehicules/${v.vehicle_id}`} title="Fiche du véhicule">
-            {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}</Link>))}
+            {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}
+            {v.modele && <span className="dp-modele">{v.modele}</span>}</Link>))}
         </div></div>}
     </div>
   );
@@ -290,7 +291,8 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol, onModifie }
 }) {
   const v = s.planification.vehicule;
   const mission = d.vehicules.flatMap((x) => x.missions).find((m) => m.service_id === s.id);
-  const plaque = v ? v.plaque ?? d.vehicules.find((x) => x.vehicle_id === v.id)?.plaque ?? null : null;
+  const veh = v ? d.vehicules.find((x) => x.vehicle_id === v.id) : undefined;
+  const plaque = v ? v.plaque ?? veh?.plaque ?? null : null;
   const agence = (code: string | null) => d.agences.find((a) => a.code === code)?.nom ?? code;
   const marge = s.couts_estimes.marge_estimee;
   return (
@@ -312,6 +314,7 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol, onModifie }
             : <span className="dp-a-faire">Équipe à planifier</span>}
           {v && <Link to={`/vehicules/${v.id}`} className="dp-vehicule" title="Fiche du véhicule">
             {plaque ? <Plaque plaque={plaque} /> : <span className="dp-sans-plaque">véhicule {v.id}</span>}
+            {veh?.modele && <span className="dp-modele">{veh.modele}</span>}
             {mission?.conducteur && <small>conducteur : {mission.conducteur}</small>}</Link>}
         </div>
         <dl className="dp-mesures">
@@ -454,7 +457,9 @@ function Vehicules({ d }: { d: Dossier }) {
       {d.vehicules.map((v) => (
         <div key={v.vehicle_id} className="dp-veh">
           <div className="dp-veh-tete">
-            {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}
+            <span className="dp-veh-id">
+              {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}
+              <span className="dp-modele">{v.modele ?? 'Modèle non renseigné'}</span></span>
             <Link to={`/vehicules/${v.vehicle_id}`} className="dp-veh-lien">Conducteurs et PV</Link>
           </div>
           <ul className="dp-veh-missions">{v.missions.map((m) => (

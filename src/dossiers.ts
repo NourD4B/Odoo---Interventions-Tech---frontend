@@ -24,7 +24,11 @@ export interface TacheDossier {
 export interface MissionDossier {
   service_id: number; service: string; debut: string; fin: string; etat: string; conducteur: string | null;
 }
-export interface VehiculeDossier { vehicle_id: number; plaque: string | null; missions: MissionDossier[] }
+export interface VehiculeDossier {
+  vehicle_id: number; plaque: string | null;
+  modele: string | null;                    // « Marque Modèle », comme la page Flotte (Odoo corrigé par le registre)
+  missions: MissionDossier[];
+}
 
 export interface DocumentsCommande { commande_id: number; commande: string; pieces: PieceJointe[] }
 
