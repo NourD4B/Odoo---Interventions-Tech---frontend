@@ -45,6 +45,7 @@ export interface VehiculeRessource {
 }
 export interface Ressources {
   avertissements: string[]; agences: { code: string; nom: string; lat: number | null; lng: number | null }[];
+  feries: { date: string; nom: string }[];               // jours fériés de la période (affichés sur la grille)
   techniciens: TechnicienPlanif[]; vehicules: VehiculeRessource[];
 }
 

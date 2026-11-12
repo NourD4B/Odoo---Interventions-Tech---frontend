@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, LIBELLES_CLASSIFICATION, LIBELLES_RAPPROCHEMENT, type Classification } from '../api';
 import { Avertissements, Badge, EtatChargement, ListeEcarts, useDonnees } from '../composants';
 
-/** Employés Odoo rapprochés de GestCo (contrôle des fiches), onglet « Fiches » de la page Techniciens. */
+/** Employés Odoo rapprochés de GestCo (contrôle des fiches), onglet « Fiches techniciens » de Contrôle des données. */
 export default function FichesTechniciens() {
   const [filtre, setFiltre] = useState<Classification | ''>('terrain_confirme');
   const { donnees, erreur, chargement } = useDonnees(() => api.techniciens(), []);

@@ -13,7 +13,6 @@ import Reconciliation from './pages/Reconciliation';
 import Statistiques from './pages/Statistiques';
 import Reglages from './pages/Reglages';
 import Services from './pages/Services';
-import Techniciens from './pages/Techniciens';
 import Vehicules from './pages/Vehicules';
 
 const LIENS = [
@@ -25,7 +24,6 @@ const LIENS = [
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/reglages', libelle: 'Réglages' },
   { vers: '/journal', libelle: 'Journal' },
-  { vers: '/techniciens', libelle: 'Techniciens' },
   { vers: '/vehicules', libelle: 'Véhicules et PV' },
   { vers: '/reconciliation', libelle: 'Contrôle des données' },
 ];
@@ -68,7 +66,9 @@ export default function App() {
           <Route path="/planification" element={<Planification />} />
           <Route path="/reglages" element={<Reglages />} />
           <Route path="/journal" element={<Journal />} />
-          <Route path="/techniciens" element={<Techniciens />} />
+          {/* ancienne page Techniciens : disponibilités et charge sont dans Planification (vue Mois),
+              fiches Odoo ↔ GestCo dans Contrôle des données */}
+          <Route path="/techniciens" element={<Navigate to="/planification?vue=mois" replace />} />
           <Route path="/vehicules" element={<Vehicules />} />
           <Route path="/vehicules/:id" element={<FicheVehicule />} />
           <Route path="/reconciliation" element={<Reconciliation />} />

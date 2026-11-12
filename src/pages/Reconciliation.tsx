@@ -1,8 +1,41 @@
+import type { ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, LIBELLES_RAPPROCHEMENT } from '../api';
 import { Avertissements, Badge, EtatChargement, ListeEcarts, useDonnees } from '../composants';
+import FichesTechniciens from './FichesTechniciens';
 
-/** Contrôle des données : tout ce qui ne concorde pas entre Odoo et HFSQL, à corriger à la source. */
+const ONGLETS = [
+  { cle: 'ecarts', libelle: 'Écarts Odoo ↔ HFSQL' },
+  { cle: 'fiches', libelle: 'Fiches techniciens Odoo ↔ GestCo' },
+] as const;
+
+/** Contrôle des données : écarts Odoo ↔ HFSQL à corriger à la source, et fiches techniciens (?vue=fiches). */
 export default function Reconciliation() {
+  const [params, setParams] = useSearchParams();
+  const onglet = params.get('vue') === 'fiches' ? 'fiches' : 'ecarts';
+  const onglets = (
+    <div className="segmente" role="tablist" aria-label="Vue">
+      {ONGLETS.map((o) => (
+        <button key={o.cle} type="button" role="tab" aria-selected={onglet === o.cle} className={onglet === o.cle ? 'actif' : ''}
+          onClick={() => setParams(o.cle === 'ecarts' ? {} : { vue: o.cle }, { replace: true })}>{o.libelle}</button>
+      ))}
+    </div>
+  );
+  if (onglet === 'fiches') {
+    return (
+      <>
+        <div className="entete">
+          <div><h1>Contrôle des données</h1></div>
+          {onglets}
+        </div>
+        <FichesTechniciens />
+      </>
+    );
+  }
+  return <Ecarts onglets={onglets} />;
+}
+
+function Ecarts({ onglets }: { onglets: ReactNode }) {
   const synthese = useDonnees(() => api.reconciliation(), []);
   const techs = useDonnees(() => api.techniciens(), []);
   const vehs = useDonnees(() => api.vehicules(), []);
@@ -17,6 +50,7 @@ export default function Reconciliation() {
           <h1>Contrôle des données</h1>
           <div className="sous-titre">Écarts entre Odoo et HFSQL à corriger dans la source concernée</div>
         </div>
+        {onglets}
       </div>
 
       <EtatChargement chargement={synthese.chargement} erreur={synthese.erreur} />

@@ -1,13 +1,17 @@
-// Planification de la semaine : techniciens × jours, services en barres sur leurs jours ; glisser un service
-// sur un technicien et un jour pour l'affecter, le glisser dans « À planifier » pour retirer l'affectation,
-// cliquer pour ouvrir sa fiche (équipe, dates, véhicule, verrou). Le solveur propose, le dispatcher décide.
+// Planification : seule page des techniciens (disponibilités, charge, congés, fériés), deux vues.
+// Semaine : techniciens × jours, services en barres ; glisser un service sur un technicien et un jour pour
+// l'affecter (ses jours libres s'allument), le glisser dans « À planifier » pour retirer l'affectation, survoler
+// pour le détail, cliquer pour ouvrir sa fiche (équipe, dates, véhicule, verrou). Le solveur propose, le
+// dispatcher décide. Mois : 4 semaines en cases (PlanMois). Adresse : ?vue=mois&semaine=AAAA-MM-JJ.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent,
   type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
+import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import MenuVehicule from '../composants/MenuVehicule';
+import PlanMois from './PlanMois';
 import {
   ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type Proposition, type Referentiels,
   type ServicePlanif, type TechnicienPlanif,
@@ -48,11 +52,6 @@ function jourLong(s: string) {
   const d = new Date(`${s.slice(0, 10)}T12:00:00`);
   return `${['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][d.getDay()]} ${d.getDate()} ${MOIS[d.getMonth()]}`;
 }
-function titreSemaine(debut: string, fin: string) {
-  const [a, b] = [new Date(`${debut}T12:00:00`), new Date(`${fin}T12:00:00`)];
-  return a.getMonth() === b.getMonth() ? `${a.getDate()} – ${b.getDate()} ${MOIS[b.getMonth()]} ${b.getFullYear()}`
-    : `${a.getDate()} ${MOIS[a.getMonth()]} – ${b.getDate()} ${MOIS[b.getMonth()]} ${b.getFullYear()}`;
-}
 /** Durée (jours) d'un service non encore affecté : heures par technicien / 8 h. */
 const dureeService = (s: ServicePlanif) => Math.max(1, Math.ceil(s.allocated_hours / Math.max(1, s.nb_techniciens) / 8));
 const nombreH = (h: number) => `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(h)} h`;
@@ -70,16 +69,6 @@ function contrainteDate(s: ServicePlanif): string | null {
   return s.date_deadline ? `Avant le ${jj(s.date_deadline)}` : null;
 }
 
-function IconeVerrou({ ouvert = false }: { ouvert?: boolean }) {
-  return (
-    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" className="pl-icone">
-      <rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor" />
-      <path d={ouvert ? 'M5.5 7V5a2.5 2.5 0 0 1 4.9-.6' : 'M5.5 7V5a2.5 2.5 0 0 1 5 0v2'} fill="none"
-            stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
 // ---------- glisser-déposer ----------
 
 type Glisse = { serviceId: number; depuis: string | null };
@@ -94,7 +83,7 @@ function lireGlisse(e: DragEvent): Glisse | null {
 
 /** Élément glissable et activable au clavier (Entrée / Espace = ouvrir la fiche). */
 function Glissable({ s, depuis, className, style, titre, fixe = false, onOuvrir, onDebut, onFin, children }: {
-  s: ServicePlanif; depuis: string | null; className: string; style?: CSSProperties; titre: string; fixe?: boolean;
+  s: ServicePlanif; depuis: string | null; className: string; style?: CSSProperties; titre?: string; fixe?: boolean;
   onOuvrir: () => void; onDebut: (g: Glisse) => void; onFin: () => void; children: ReactNode;
 }) {
   const mobile = !fixe && etatDe(s) !== 'publie';
@@ -335,17 +324,47 @@ function segmentsDe(matricule: string, liste: ServicePlanif[], jours: string[]):
   return { segments, voies: Math.max(1, finVoies.length) };
 }
 
-export default function Planification() {
-  const [params] = useSearchParams();                    // ?semaine=AAAA-MM-JJ (lien depuis le plan de charge)
-  const [lundi, setLundi] = useState(() => {
-    const s = params.get('semaine');
-    return lundiDe(s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : aujourdhui());
-  });
-  const jours = JOURS.map((_, k) => iso(decaler(lundi, k)));
-  const [debut, fin] = [jours[0], jours[4]];
-  const auj = aujourdhui();
+// ---------- page ----------
 
-  const services = useDonnees(() => planif.services(debut, fin), [debut]);
+type Vue = 'semaine' | 'mois';
+const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const sansAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const maj = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** « 9 – 13 novembre », « 30 nov. – 4 déc. » ; l'année seulement si ce n'est pas l'année en cours. */
+function titrePeriode(debut: string, fin: string, abrege: boolean) {
+  const [a, b] = [new Date(`${debut}T12:00:00`), new Date(`${fin}T12:00:00`)];
+  const mois = abrege ? MOIS_COURT : MOIS;
+  const annee = b.getFullYear() !== new Date().getFullYear() ? ` ${b.getFullYear()}` : '';
+  return a.getMonth() === b.getMonth() ? `${a.getDate()} – ${b.getDate()} ${mois[b.getMonth()]}${annee}`
+    : `${a.getDate()} ${mois[a.getMonth()]} – ${b.getDate()} ${mois[b.getMonth()]}${annee}`;
+}
+/** « Mer. 11 nov. », « Du mer. 11 au jeu. 12 nov. », « Du lun. 30 nov. au mar. 1 déc. ». */
+function datesAffectation(debut: string, fin: string) {
+  const court = (s: string, avecMois: boolean) => {
+    const d = new Date(`${s.slice(0, 10)}T12:00:00`);
+    return `${['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][d.getDay()]} ${d.getDate()}${avecMois ? ` ${MOIS_COURT[d.getMonth()]}` : ''}`;
+  };
+  if (debut === fin) return maj(court(debut, true));
+  return `Du ${court(debut, debut.slice(5, 7) !== fin.slice(5, 7))} au ${court(fin, true)}`;
+}
+
+export default function Planification() {
+  // ?vue=mois (4 semaines) ; ?semaine=AAAA-MM-JJ (lundi affiché). L'adresse garde la vue et la période.
+  const [params, setParams] = useSearchParams();
+  const vue: Vue = params.get('vue') === 'mois' ? 'mois' : 'semaine';
+  const semaineParam = params.get('semaine');
+  const lundi = useMemo(() => lundiDe(semaineParam && /^\d{4}-\d{2}-\d{2}$/.test(semaineParam) ? semaineParam : aujourdhui()),
+    [semaineParam]);
+  const aller = (l: Date, v: Vue = vue) =>
+    setParams(v === 'mois' ? { vue: 'mois', semaine: iso(l) } : { semaine: iso(l) }, { replace: true });
+  const jours = useMemo(() => JOURS.map((_, k) => iso(decaler(lundi, k))), [lundi]);
+  const [debut, fin] = [jours[0], jours[4]];
+  const finMois = iso(decaler(lundi, 25));                 // vendredi de la 4e semaine
+  const auj = aujourdhui();
+  const lundiAuj = iso(lundiDe(auj));
+  const surAujourdhui = vue === 'semaine' ? debut === lundiAuj : lundiAuj >= debut && lundiAuj <= finMois;
+
+  const services = useDonnees(() => planif.services(debut, vue === 'mois' ? finMois : fin), [debut, vue]);
   const ressources = useDonnees(() => planif.ressources(debut, fin), [debut]);
   const refs = useDonnees(() => planif.referentiels(), []);
   const [proposition, setProposition] = useState<Proposition | null>(null);
@@ -357,24 +376,31 @@ export default function Planification() {
   const [glisse, setGlisse] = useState<Glisse | null>(null);
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [survol, setSurvol] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState('');
+  const plus = useRef<HTMLDetailsElement>(null);
   const { ecrire, dialogue } = useEcriture();
 
   const liste = useMemo(() => services.donnees ?? [], [services.donnees]);
   const techniciens = useMemo(() => ressources.donnees?.techniciens ?? [], [ressources.donnees]);
   const agences = useMemo(() => new Map((ressources.donnees?.agences ?? []).map((a) => [a.code, a.nom])), [ressources.donnees]);
+  const feries = useMemo(() => new Map((ressources.donnees?.feries ?? []).map((f) => [f.date, f.nom])), [ressources.donnees]);
   const parId = useMemo(() => new Map(liste.map((s) => [s.id, s])), [liste]);
   const proposes = useMemo(() => new Map((proposition?.affectations ?? []).map((a) => [a.service_id, a])), [proposition]);
   const causes = useMemo(() => new Map((proposition?.non_planifies ?? []).map((n) => [n.service_id, n.cause])), [proposition]);
   const aPlanifier = liste.filter((s) => !s.affectation)
     .sort((x, y) => Number(y.priority === '1') - Number(x.priority === '1') || x.name.localeCompare(y.name, 'fr'));
-  const compte = (e: string) => liste.filter((s) => etatDe(s) === e).length;
   const aPublier = liste.filter((s) => s.affectation && s.statut_planification !== 'publie');
   const duSolveur = liste.filter((s) => s.affectation?.etat === 'propose' && s.affectation.propose_par === 'solveur');
   const groupes = useMemo(() => {
+    const q = sansAccents(recherche.trim());
     const par = new Map<string, TechnicienPlanif[]>();
-    for (const t of [...techniciens].sort((x, y) => x.nom.localeCompare(y.nom))) par.set(t.agence, [...(par.get(t.agence) ?? []), t]);
+    for (const t of [...techniciens].sort((x, y) => x.nom.localeCompare(y.nom))) {
+      if (q && !sansAccents(t.nom).includes(q)) continue;
+      par.set(t.agence, [...(par.get(t.agence) ?? []), t]);
+    }
     return [...par.entries()].sort(([a], [b]) => (agences.get(a) ?? a).localeCompare(agences.get(b) ?? b, 'fr'));
-  }, [techniciens, agences]);
+  }, [techniciens, agences, recherche]);
+  const ordre = groupes.flatMap(([, techs]) => techs.map((t) => t.matricule));
   const glisseAffecte = glisse ? !!parId.get(glisse.serviceId)?.affectation : false;
   // brouillon d'équipe : affiché en barre (pointillés) sur les techniciens déjà choisis, sans être enregistré
   const listeAffichee = useMemo(() => {
@@ -386,6 +412,11 @@ export default function Planification() {
       propose_par: 'dispatcher', raison: null, motif_derogation: null } } as unknown as ServicePlanif;
     return [...liste, faux];
   }, [liste, brouillon, parId, techniciens]);
+  // jours de la semaine où chaque technicien a déjà un service
+  const occupation = useMemo(() => new Map(techniciens.map((t) => [t.matricule, new Set(jours.filter((j) => liste.some((s) =>
+    s.affectation?.matricules.includes(t.matricule) && s.affectation.debut <= j && s.affectation.fin >= j)))])),
+  [techniciens, liste, jours]);
+  const libre = (t: TechnicienPlanif, j: string) => !feries.has(j) && !absentSur(t, j, j) && !occupation.get(t.matricule)?.has(j);
   useEffect(() => { setBrouillon(null); }, [debut]);                                // autre semaine : abandonné
   useEffect(() => {                                                                  // affecté (fiche, autre écran)
     if (brouillon && parId.get(brouillon.serviceId)?.affectation) setBrouillon(null);
@@ -522,6 +553,7 @@ export default function Planification() {
   };
 
   const retirerPropositions = async () => {
+    plus.current?.removeAttribute('open');
     setMessage(null); setOccupe(true);
     try {
       const r = await ecrire(() => planif.retirerPropositions(debut, fin));
@@ -541,46 +573,67 @@ export default function Planification() {
     } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
   };
 
-  const joursOccupes = (matricule: string) => new Set(jours.filter((j) => liste.some((s) =>
-    s.affectation?.matricules.includes(matricule) && s.affectation.debut <= j && s.affectation.fin >= j)));
   const selection = ouvert !== null ? parId.get(ouvert) : undefined;
-  const titreBarre = (s: ServicePlanif) => {
-    const p = proposes.get(s.id), a = s.affectation;
-    return [`${client(s)} — ${s.name}`, a && `${a.equipe.join(', ')} · ${a.plaque ?? 'sans véhicule'}`,
-      p?.raison_techniciens, a?.motif_derogation && `Dérogation : ${a.motif_derogation}`].filter(Boolean).join('\n');
+  /** Jours de la semaine où l'affectation tombe sur un férié ou un congé du technicien (dérogation). */
+  const conflitsDe = (s: ServicePlanif, t: TechnicienPlanif): string[] => {
+    const a = s.affectation;
+    if (!a) return [];
+    return jours.filter((j) => j >= a.debut && j <= a.fin).flatMap((j) => {
+      const ferie = feries.get(j);
+      if (ferie) return [`Affecté le ${jourLong(j)}, jour férié (${ferie})`];
+      return absentSur(t, j, j) ? [`Affecté pendant un congé (${jourLong(j)})`] : [];
+    });
   };
+  const infosCarte = (s: ServicePlanif) => {
+    const limite = (s.fenetre_fin ?? s.date_deadline)?.slice(0, 10) ?? null;
+    const retard = !s.planned_date_begin && limite && limite < auj ? `En retard (avant le ${jj(limite)})` : null;
+    const quand = retard ? null : contrainteDate(s);
+    return {
+      infos: [nombreH(s.allocated_hours), `${s.nb_techniciens} technicien${s.nb_techniciens > 1 ? 's' : ''}`,
+        s.vehicule_requis === 'utilitaire' ? 'utilitaire' : null, quand && quand.charAt(0).toLowerCase() + quand.slice(1)]
+        .filter(Boolean).join(', '),
+      retard };
+  };
+  const libresDuJour = (j: string) => techniciens.filter((t) => libre(t, j)).length;
 
   return (
     <div className={`pl${glisse ? ' pl-glisse' : ''}`}>
       <header className="pl-barre-outils">
-        <div className="pl-titre">
-          <h1>Planification</h1>
-          <p>Semaine du {titreSemaine(debut, fin)}</p>
-        </div>
-        <nav className="pl-semaines" aria-label="Semaine">
-          <button type="button" className="btn" aria-label="Semaine précédente" onClick={() => setLundi(decaler(lundi, -7))}>‹</button>
-          <button type="button" className="btn" onClick={() => setLundi(lundiDe(aujourdhui()))}>Aujourd'hui</button>
-          <button type="button" className="btn" aria-label="Semaine suivante" onClick={() => setLundi(decaler(lundi, 7))}>›</button>
+        <h1>Planification</h1>
+        <nav className="pl-periode" aria-label="Période">
+          <button type="button" className="btn" aria-label={vue === 'mois' ? '4 semaines précédentes' : 'Semaine précédente'}
+            onClick={() => aller(decaler(lundi, vue === 'mois' ? -28 : -7))}>‹</button>
+          <strong>{vue === 'mois' ? titrePeriode(debut, finMois, true) : titrePeriode(debut, fin, false)}</strong>
+          <button type="button" className="btn" aria-label={vue === 'mois' ? '4 semaines suivantes' : 'Semaine suivante'}
+            onClick={() => aller(decaler(lundi, vue === 'mois' ? 28 : 7))}>›</button>
+          {!surAujourdhui && <button type="button" className="lien-bouton" onClick={() => aller(lundiDe(auj))}>Aujourd'hui</button>}
         </nav>
-        <div className="pl-actions">
-          <button type="button" className="btn" disabled={occupe || !duSolveur.length} onClick={() => void retirerPropositions()}
-            title="Retire les propositions du solveur de la semaine ; garde les verrouillés, les publiés et vos choix">
-            Retirer les propositions{duSolveur.length ? ` (${duSolveur.length})` : ''}</button>
-          <button type="button" className="btn" disabled={occupe || !aPublier.length} onClick={() => setConfirmerPublication(true)}>
-            Publier{aPublier.length ? ` (${aPublier.length})` : ''}</button>
-          <button type="button" className="btn btn-primaire" disabled={occupe} onClick={() => void proposer()}>
-            {occupe ? 'Calcul en cours…' : 'Proposer la semaine'}</button>
+        <div className="pl-vue" role="group" aria-label="Vue">
+          <button type="button" aria-pressed={vue === 'semaine'} onClick={() => aller(lundi, 'semaine')}>Semaine</button>
+          <button type="button" aria-pressed={vue === 'mois'} onClick={() => aller(lundi, 'mois')}>Mois</button>
         </div>
+        {vue === 'semaine' ? (
+          <div className="pl-actions">
+            <details className="pl-plus" ref={plus}>
+              <summary className="btn" aria-label="Autres actions" title="Autres actions">⋯</summary>
+              <div className="pl-plus-menu">
+                <button type="button" disabled={occupe || !duSolveur.length} onClick={() => void retirerPropositions()}>
+                  Retirer les propositions du solveur{duSolveur.length ? ` (${duSolveur.length})` : ''}</button>
+                <p>Garde les services verrouillés, publiés et vos choix.</p>
+              </div>
+            </details>
+            <button type="button" className="btn" disabled={occupe || !aPublier.length} onClick={() => setConfirmerPublication(true)}>
+              Publier{aPublier.length ? ` (${aPublier.length})` : ''}</button>
+            <button type="button" className="btn btn-primaire" disabled={occupe} onClick={() => void proposer()}>
+              {occupe ? 'Calcul en cours…' : 'Proposer la semaine'}</button>
+          </div>
+        ) : (
+          <div className="pl-actions">
+            <button type="button" className="btn" onClick={() => aller(lundi, 'semaine')}>
+              {aPlanifier.length ? `${aPlanifier.length} à planifier` : 'Ouvrir la semaine'}</button>
+          </div>
+        )}
       </header>
-
-      <div className="pl-resume" aria-label="Légende et compteurs">
-        <span><i className="pl-pastille etat-a_planifier" />À planifier <b>{aPlanifier.length}</b></span>
-        <span><i className="pl-pastille etat-propose" />Proposé <b>{compte('propose')}</b></span>
-        <span><i className="pl-pastille etat-verrouille" />Verrouillé <b>{compte('verrouille')}</b></span>
-        <span><i className="pl-pastille etat-publie" />Publié <b>{compte('publie')}</b></span>
-        <span><i className="pl-pastille absent" />Absent</span>
-        <span><i className="pl-pastille urgent" />Urgent</span>
-      </div>
 
       {message && <div className={message.type === 'erreur' ? 'erreur' : 'succes'} role={message.type === 'erreur' ? 'alert' : 'status'}>{message.texte}</div>}
       {enfreintes && (
@@ -590,132 +643,155 @@ export default function Planification() {
           <button type="button" className="pl-fermer-avert" aria-label="Fermer l'avertissement" onClick={() => setEnfreintes(null)}>×</button>
         </div>
       )}
-      <EtatChargement chargement={(services.chargement && !services.donnees) || (ressources.chargement && !ressources.donnees)}
-                      erreur={services.erreur ?? ressources.erreur} />
-      <Avertissements liste={[...new Set([...(ressources.donnees?.avertissements ?? []), ...(proposition?.avertissements ?? [])])]} />
 
-      <div className="pl-corps">
-        <section className="pl-tableau" aria-label="Semaine par technicien">
-          <div className="pl-grille">
-            <div className="pl-ligne pl-entete">
-              <div className="pl-coin">{techniciens.length} technicien{techniciens.length > 1 ? 's' : ''}</div>
-              {jours.map((j, k) => (
-                <div key={j} className={`pl-jour${j === auj ? ' aujourdhui' : ''}`} style={{ gridColumn: k + 2 }}>
-                  <span>{JOURS[k]}</span><strong>{Number(j.slice(8))}</strong>
-                </div>
-              ))}
-            </div>
-            {groupes.map(([code, techs]) => (
-              <div key={code} className="pl-agence" role="group" aria-label={agences.get(code) ?? code}>
-                <div className="pl-agence-nom">{agences.get(code) ?? code}<span>{techs.length}</span></div>
-                {techs.map((t) => {
-                  const { segments, voies } = segmentsDe(t.matricule, listeAffichee, jours);
-                  const occupes = joursOccupes(t.matricule);
-                  return (
-                    <div key={t.matricule} className="pl-ligne" style={{ gridTemplateRows: `repeat(${voies}, minmax(58px, auto))` }}>
-                      <div className="pl-tech" style={{ gridRow: '1 / -1' }}>
-                        <span className="pl-avatar">{initiales(t.nom)}</span>
-                        <span className="pl-tech-texte">
-                          <strong>{t.nom}</strong>
-                          <span className="pl-charge" aria-label={`${occupes.size} jour(s) occupé(s) sur 5`}>
-                            {jours.map((j) => <i key={j} className={occupes.has(j) ? 'pris' : absentSur(t, j, j) ? 'absent' : ''} />)}
-                            <em>{occupes.size}/5 j</em>
-                          </span>
-                          {t.agence_a_confirmer && <span className="pl-a-confirmer">site à confirmer</span>}
-                        </span>
+      {vue === 'mois' ? (
+        <PlanMois debut={debut} fin={finMois} onOuvrirSemaine={(l) => aller(lundiDe(l), 'semaine')} />
+      ) : (<>
+        <EtatChargement chargement={(services.chargement && !services.donnees) || (ressources.chargement && !ressources.donnees)}
+                        erreur={services.erreur ?? ressources.erreur} />
+        <Avertissements liste={[...new Set([...(ressources.donnees?.avertissements ?? []), ...(proposition?.avertissements ?? [])])]} />
+
+        <div className="pl-corps">
+          <div className="pl-principal">
+            <section className="pl-tableau" aria-label="Semaine par technicien">
+              <div className="pl-grille">
+                <div className="pl-ligne pl-entete">
+                  <div className="pl-coin">
+                    <input type="search" className="pl-recherche" aria-label="Rechercher un technicien" placeholder="Technicien"
+                      value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+                  </div>
+                  {jours.map((j, k) => {
+                    const ferie = feries.get(j);
+                    const n = libresDuJour(j);
+                    return (
+                      <div key={j} className={`pl-jour${j === auj ? ' aujourdhui' : ''}${ferie ? ' ferie' : ''}`} style={{ gridColumn: k + 2 }}>
+                        <span className="pl-jour-date"><span>{JOURS[k]}</span><strong>{Number(j.slice(8))}</strong></span>
+                        {ferie ? <span className="pl-jour-info">Férié ({ferie})</span>
+                          : ressources.donnees && <span className="pl-jour-info libres">{n} libre{n > 1 ? 's' : ''}</span>}
                       </div>
-                      {jours.map((j, k) => {
-                        const cle = `${t.matricule}|${j}`;
-                        const absent = absentSur(t, j, j);
-                        return (
-                          <div key={j} style={{ gridColumn: k + 2, gridRow: '1 / -1' }}
-                            className={`pl-cellule${j === auj ? ' aujourdhui' : ''}${absent ? ' absent' : ''}${survol === cle ? ' survol' : ''}`}
-                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (survol !== cle) setSurvol(cle); }}
-                            onDragLeave={() => setSurvol((x) => (x === cle ? null : x))}
-                            onDrop={(e) => void deposer(e, t.matricule, j)}>
-                            {absent && <span className="pl-absent-texte">Absent</span>}
+                    );
+                  })}
+                </div>
+                {groupes.map(([code, techs]) => (
+                  <div key={code} className="pl-agence" role="group" aria-label={agences.get(code) ?? code}>
+                    <div className="pl-agence-nom">{agences.get(code) ?? code}</div>
+                    {techs.map((t) => {
+                      const { segments, voies } = segmentsDe(t.matricule, listeAffichee, jours);
+                      const ouvres = jours.filter((j) => !feries.has(j) && !absentSur(t, j, j));
+                      const pris = ouvres.filter((j) => occupation.get(t.matricule)?.has(j)).length;
+                      const ligne = ordre.indexOf(t.matricule);
+                      return (
+                        <div key={t.matricule} className="pl-ligne" style={{ gridTemplateRows: `repeat(${voies}, minmax(58px, auto))` }}>
+                          <div className="pl-tech" style={{ gridRow: '1 / -1' }}>
+                            <strong title={t.nom}>{t.nom}</strong>
+                            <span className="pl-tech-jours" title={`${pris} jour(s) occupé(s) sur ${ouvres.length} disponible(s) cette semaine`}>
+                              {pris}/{ouvres.length} j</span>
+                            {t.agence_a_confirmer && <span className="pl-a-confirmer">site à confirmer</span>}
                           </div>
-                        );
-                      })}
-                      {segments.map(({ s, de, a, voie, coupeAvant, coupeApres }) => {
-                        const p = proposes.get(s.id);
-                        return (
-                          <Glissable key={s.id} s={s} depuis={t.matricule} titre={titreBarre(s)}
-                            fixe={etatDe(s) === 'brouillon'}
-                            className={`pl-service etat-${etatDe(s)}${s.priority === '1' ? ' urgent' : ''}`
-                              + `${coupeAvant ? ' coupe-avant' : ''}${coupeApres ? ' coupe-apres' : ''}`
-                              + `${glisse?.serviceId === s.id ? ' en-glisse' : ''}`}
-                            style={{ gridColumn: `${de + 2} / ${a + 3}`, gridRow: voie + 1 }}
-                            onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
-                            <span className="pl-service-client">{client(s)}</span>
-                            <span className="pl-service-nom">{s.name}</span>
-                            {etatDe(s) === 'brouillon' ? (
-                              <span className="pl-service-meta">Équipe {s.affectation!.matricules.length}/{s.nb_techniciens} · à compléter</span>
-                            ) : <span className="pl-service-meta">
-                              {etatDe(s) === 'verrouille' && <IconeVerrou />}
-                              {s.affectation?.plaque ?? 'sans véhicule'}
-                              {p?.km_aller_retour != null && <> · {Math.round(p.km_aller_retour)} km</>}
-                              {s.affectation && s.affectation.matricules.length > 1 && <> · {s.affectation.matricules.length} tech.</>}
-                              {s.affectation?.motif_derogation && <> · dérogation</>}
-                            </span>}
-                          </Glissable>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                          {jours.map((j, k) => {
+                            const cle = `${t.matricule}|${j}`;
+                            const absent = !feries.has(j) && absentSur(t, j, j);
+                            const debutConge = absent && (k === 0 || feries.has(jours[k - 1]) || !absentSur(t, jours[k - 1], jours[k - 1]));
+                            return (
+                              <div key={j} style={{ gridColumn: k + 2, gridRow: '1 / -1' }}
+                                className={`pl-cellule${j === auj ? ' aujourdhui' : ''}${feries.has(j) ? ' ferie' : ''}${absent ? ' conge' : ''}`
+                                  + `${libre(t, j) ? ' libre' : ''}${survol === cle ? ' survol' : ''}`}
+                                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (survol !== cle) setSurvol(cle); }}
+                                onDragLeave={() => setSurvol((x) => (x === cle ? null : x))}
+                                onDrop={(e) => void deposer(e, t.matricule, j)}>
+                                {debutConge && <span className="pl-conge-texte">Congé</span>}
+                              </div>
+                            );
+                          })}
+                          {segments.map(({ s, de, a, voie, coupeAvant, coupeApres }) => {
+                            const p = proposes.get(s.id);
+                            const aff = s.affectation!;
+                            const conflits = etatDe(s) === 'brouillon' ? [] : conflitsDe(s, t);
+                            const lignes: [string, string][] = [
+                              ['Dates', datesAffectation(aff.debut, aff.fin)],
+                              ['Équipe', aff.equipe.join(', ') || '—'],
+                              ['Véhicule', aff.plaque ?? 'Aucun'],
+                              ['Temps prévu', nombreH(s.allocated_hours)]];
+                            if (p?.km_aller_retour != null) lignes.push(['Trajet', `${Math.round(p.km_aller_retour)} km aller-retour`]);
+                            return (
+                              <Glissable key={s.id} s={s} depuis={t.matricule} fixe={etatDe(s) === 'brouillon'}
+                                className={`pl-service etat-${etatDe(s)} a-ib${s.priority === '1' ? ' urgent' : ''}`
+                                  + `${conflits.length ? ' conflit' : ''}${coupeAvant ? ' coupe-avant' : ''}${coupeApres ? ' coupe-apres' : ''}`
+                                  + `${glisse?.serviceId === s.id ? ' en-glisse' : ''}`}
+                                style={{ gridColumn: `${de + 2} / ${a + 3}`, gridRow: voie + 1 }}
+                                onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
+                                <span className="pl-service-client">{client(s)}</span>
+                                <span className="pl-service-nom">{s.name}</span>
+                                {etatDe(s) === 'brouillon' && (
+                                  <span className="pl-service-meta">Équipe {aff.matricules.length}/{s.nb_techniciens}, à compléter</span>)}
+                                <InfoBulle titre={client(s)} sousTitre={s.name} etat={etatDe(s)} urgent={s.priority === '1'}
+                                  lignes={lignes} place={placeInfoBulle(ligne, ordre.length, de, 5)}
+                                  alertes={[...conflits, ...(aff.motif_derogation ? [`Dérogation : ${aff.motif_derogation}`] : [])]} />
+                              </Glissable>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                {!techniciens.length && ressources.donnees && <div className="vide pl-vide">Aucun technicien terrain sur la période.</div>}
+                {techniciens.length > 0 && !groupes.length && <div className="vide pl-vide">Aucun technicien ne correspond à « {recherche} ».</div>}
               </div>
-            ))}
-            {!techniciens.length && ressources.donnees && <div className="vide pl-vide">Aucun technicien terrain sur la période.</div>}
+            </section>
+            <div className="pl-legende">
+              <span><i className="pl-pastille etat-propose" />Proposé</span>
+              <span><i className="pl-pastille etat-verrouille" />Verrouillé</span>
+              <span><i className="pl-pastille etat-publie" />Publié</span>
+              <span><i className="pl-pastille conge" />Congé</span>
+              <span><i className="pl-pastille ferie" />Férié</span>
+              <span><i className="pl-pastille conflit" />Conflit</span>
+              <span><i className="pl-pastille urgent" />Urgent</span>
+            </div>
           </div>
-        </section>
 
-        <aside className={`pl-liste${glisse && glisseAffecte ? ' cible' : ''}${survol === 'liste' ? ' survol' : ''}`}
-          aria-label="À planifier"
-          onDragOver={(e) => { if (!glisseAffecte) return; e.preventDefault(); if (survol !== 'liste') setSurvol('liste'); }}
-          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setSurvol((x) => (x === 'liste' ? null : x)); }}
-          onDrop={deposerDansListe}>
-          <div className="pl-liste-tete">
-            <h2>À planifier</h2><span className="pl-compte">{aPlanifier.length}</span>
-          </div>
-          {glisse && glisseAffecte
-            ? <div className="pl-depot">Déposer ici pour retirer l'affectation</div>
-            : <p className="pl-aide">Glissez une carte sur un technicien et un jour, ou cliquez dessus pour l'affecter.
-                Service à plusieurs techniciens : glissez-la sur chacun.</p>}
-          <div className="pl-cartes">
-            {aPlanifier.map((s) => {
-              const cause = causes.get(s.id);
-              const quand = contrainteDate(s);
-              const enCours = brouillon?.serviceId === s.id ? brouillon : null;
-              return (
-                <Glissable key={s.id} s={s} depuis={null} titre={`${client(s)} — ${s.name}`}
-                  className={`pl-carte${s.priority === '1' ? ' urgent' : ''}${glisse?.serviceId === s.id ? ' en-glisse' : ''}`
-                    + `${enCours ? ' en-cours' : ''}`}
-                  onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
-                  <span className="pl-carte-client">{client(s)}</span>
-                  <span className="pl-carte-nom">{s.name}</span>
-                  <span className="pl-carte-meta">
-                    <span>{nombreH(s.allocated_hours)}</span>
-                    <span>{s.nb_techniciens} tech.</span>
-                    {s.vehicule_requis === 'utilitaire' && <span>utilitaire</span>}
-                    {quand && <span>{quand}</span>}
-                  </span>
-                  {cause && <span className="pl-carte-cause">{cause}</span>}
-                  {enCours && (
-                    <span className="pl-carte-equipe">
-                      <span>Équipe {enCours.matricules.length}/{s.nb_techniciens} : {enCours.matricules
-                        .map((m) => techniciens.find((x) => x.matricule === m)?.nom ?? m).join(', ')}</span>
-                      <button type="button" className="lien-bouton" onClick={(e) => { e.stopPropagation(); setBrouillon(null); }}>
-                        Annuler</button>
-                    </span>
-                  )}
-                </Glissable>
-              );
-            })}
-            {!aPlanifier.length && services.donnees && <div className="pl-tout-planifie">Tout est planifié cette semaine.</div>}
-          </div>
-        </aside>
-      </div>
+          <aside className={`pl-liste${glisse && glisseAffecte ? ' cible' : ''}${survol === 'liste' ? ' survol' : ''}`}
+            aria-label="À planifier"
+            onDragOver={(e) => { if (!glisseAffecte) return; e.preventDefault(); if (survol !== 'liste') setSurvol('liste'); }}
+            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setSurvol((x) => (x === 'liste' ? null : x)); }}
+            onDrop={deposerDansListe}>
+            <div className="pl-liste-tete">
+              <h2>À planifier</h2><span className="pl-compte">{aPlanifier.length}</span>
+            </div>
+            {glisse && glisseAffecte && <div className="pl-depot">Déposer ici pour retirer l'affectation</div>}
+            <div className="pl-cartes">
+              {aPlanifier.map((s) => {
+                const cause = causes.get(s.id);
+                const { infos, retard } = infosCarte(s);
+                const enCours = brouillon?.serviceId === s.id ? brouillon : null;
+                return (
+                  <Glissable key={s.id} s={s} depuis={null}
+                    className={`pl-carte${s.priority === '1' ? ' urgent' : ''}${glisse?.serviceId === s.id ? ' en-glisse' : ''}`
+                      + `${enCours ? ' en-cours' : ''}`}
+                    onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
+                    <span className="pl-carte-client">{client(s)}</span>
+                    <span className="pl-carte-nom">{s.name}</span>
+                    <span className="pl-carte-infos">{infos}</span>
+                    {retard && <span className="pl-carte-retard">{retard}</span>}
+                    {cause && <span className="pl-carte-cause">{cause}</span>}
+                    {enCours && (
+                      <span className="pl-carte-equipe">
+                        <span>Équipe {enCours.matricules.length}/{s.nb_techniciens} : {enCours.matricules
+                          .map((m) => techniciens.find((x) => x.matricule === m)?.nom ?? m).join(', ')}</span>
+                        <button type="button" className="lien-bouton" onClick={(e) => { e.stopPropagation(); setBrouillon(null); }}>
+                          Annuler</button>
+                      </span>
+                    )}
+                  </Glissable>
+                );
+              })}
+              {!aPlanifier.length && services.donnees && <div className="pl-tout-planifie">Tout est planifié cette semaine.</div>}
+            </div>
+            <p className="pl-aide">Glissez une carte sur un technicien : ses jours libres s'allument en vert. Service à plusieurs
+              techniciens : glissez-la sur chacun.</p>
+          </aside>
+        </div>
+      </>)}
 
       {selection && (
         <DialogueService key={`${selection.id}-${selection.version}`} s={selection} brouillon={brouillon} techniciens={techniciens}
