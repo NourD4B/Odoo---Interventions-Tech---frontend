@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { EtatChargement, useDonnees } from '../composants';
+import { BoutonExport } from '../composants/BoutonExport';
+import { exportations, nomFichier } from '../exports';
 import { PastilleNote } from '../composants/Rse';
 import { co2 } from '../rse';
 import { euros, LIBELLES_ETAT, stats, type EtatService, type ResumeProjet } from '../statistiques';
@@ -53,6 +55,8 @@ export default function Dossiers() {
             placeholder="Projet ou client" /></label>
           <label className="case"><input type="checkbox" checked={simules} onChange={(e) => setSimules(e.target.checked)} />
             Inclure les services simulés</label>
+          <BoutonExport libelle="Exporter les projets" nomFichier={nomFichier('projets', 'tout')}
+            lire={() => exportations.projets()} />
         </div>
       </div>
       <EtatChargement chargement={liste.chargement && !liste.donnees} erreur={liste.erreur} />

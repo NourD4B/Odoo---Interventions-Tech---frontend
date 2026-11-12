@@ -325,6 +325,42 @@ tr:last-child td { border-bottom: 0; }
 .pl-plus-menu button:hover:not(:disabled) { background: var(--neutre-doux); }
 .pl-plus-menu button:disabled { color: var(--encre-3); cursor: not-allowed; }
 .pl-plus-menu p { margin: 2px 10px 4px; font-size: 12px; color: var(--encre-3); }
+.pl-plus-menu button { display: flex; align-items: center; gap: 8px; }
+
+/* Exports (.ex-*) : une carte par classeur, ses feuilles en onglets façon tableur */
+.icone-export { flex: none; }
+.btn-export { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.export-erreur { font-size: 12px; color: var(--erreur); }
+.ex { display: flex; flex-direction: column; gap: 18px; }
+.ex-grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.ex-carte { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--bordure); border-radius: 14px;
+  overflow: hidden; }
+.ex-tete { display: flex; gap: 14px; align-items: flex-start; padding: 20px 20px 4px; }
+.ex-tete h2 { margin: 0; font-size: 17px; }
+.ex-tete p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--encre-2); }
+.ex-icone { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 11px;
+  background: var(--accent-doux); color: var(--accent); }
+.ex-corps { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 20px 20px; }
+.ex-corps .champ { width: 100%; }
+.ex-corps .champ select { width: 100%; }
+.ex-corps .btn-export { margin-top: auto; }
+.ex-choix { flex-wrap: nowrap; max-width: 100%; }
+.ex-choix button { min-height: 38px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
+.ex-periode { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }
+.ex-detail { margin: 0; font-size: 13px; color: var(--encre-2); }
+.ex-alerte { margin: 0; font-size: 13px; font-weight: 600; color: var(--erreur); }
+.ex-onglets { list-style: none; margin: 0; padding: 0 8px; display: flex; flex-wrap: nowrap; gap: 1px; overflow-x: auto;
+  background: #f4f5f7; border-top: 1px solid var(--bordure); }
+.ex-onglets li { flex: none; padding: 7px 9px 8px; font-size: 12px; color: var(--encre-3); white-space: nowrap;
+  border-radius: 0 0 6px 6px; }
+.ex-onglets li.premier { background: var(--surface); color: #0f766e; font-weight: 600; box-shadow: inset 0 2px 0 #0f766e;
+  margin-top: -1px; }
+.ex-note { margin: 0; font-size: 12px; color: var(--encre-3); }
+.dp-actions { margin-top: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.dp-actions .dp-odoo { margin-top: 0; }
+button.dp-odoo { background: transparent; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; gap: 8px; }
+button.dp-odoo:disabled { opacity: .6; cursor: wait; }
+.dp-actions .export-erreur { color: #fecaca; flex-basis: 100%; }
 
 /* légende sous la grille (semaine et mois) */
 .pl-legende { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 12px; color: var(--encre-3); }

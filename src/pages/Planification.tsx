@@ -9,7 +9,9 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
+import { IconeTelechargement } from '../composants/BoutonExport';
 import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
+import { enregistrerFichier, exportations, nomFichier } from '../exports';
 import MenuVehicule from '../composants/MenuVehicule';
 import PlanMois from './PlanMois';
 import {
@@ -565,6 +567,17 @@ export default function Planification() {
     } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
   };
 
+  /** Classeur Excel de la période affichée (semaine ou 4 semaines) ; export journalisé (nom demandé si besoin). */
+  const exporter = async () => {
+    plus.current?.removeAttribute('open');
+    const [d, f] = vue === 'mois' ? [debut, finMois] : [debut, fin];
+    setMessage(null);
+    try {
+      const blob = await ecrire(() => exportations.planification(d, f));
+      if (blob) enregistrerFichier(blob, nomFichier('planification', `${d}_${f}`));
+    } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); }
+  };
+
   const publier = async () => {
     setConfirmerPublication(false); setMessage(null); setOccupe(true);
     try {
@@ -617,6 +630,7 @@ export default function Planification() {
             <details className="pl-plus" ref={plus}>
               <summary className="btn" aria-label="Autres actions" title="Autres actions">⋯</summary>
               <div className="pl-plus-menu">
+                <button type="button" onClick={() => void exporter()}><IconeTelechargement />Exporter la semaine (.xlsx)</button>
                 <button type="button" disabled={occupe || !duSolveur.length} onClick={() => void retirerPropositions()}>
                   Retirer les propositions du solveur{duSolveur.length ? ` (${duSolveur.length})` : ''}</button>
                 <p>Garde les services verrouillés, publiés et vos choix.</p>
@@ -629,6 +643,12 @@ export default function Planification() {
           </div>
         ) : (
           <div className="pl-actions">
+            <details className="pl-plus" ref={plus}>
+              <summary className="btn" aria-label="Autres actions" title="Autres actions">⋯</summary>
+              <div className="pl-plus-menu">
+                <button type="button" onClick={() => void exporter()}><IconeTelechargement />Exporter les 4 semaines (.xlsx)</button>
+              </div>
+            </details>
             <button type="button" className="btn" onClick={() => aller(lundi, 'semaine')}>
               {aPlanifier.length ? `${aPlanifier.length} à planifier` : 'Ouvrir la semaine'}</button>
           </div>

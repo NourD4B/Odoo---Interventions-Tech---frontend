@@ -4,6 +4,7 @@ import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
 import DossierProjet from './pages/DossierProjet';
 import Dossiers from './pages/Dossiers';
+import Exports from './pages/Exports';
 import FicheVehicule from './pages/FicheVehicule';
 import FicheService from './pages/FicheService';
 import Journal from './pages/Journal';
@@ -25,6 +26,7 @@ const LIENS = [
   { vers: '/reglages', libelle: 'Réglages' },
   { vers: '/journal', libelle: 'Journal' },
   { vers: '/vehicules', libelle: 'Véhicules et PV' },
+  { vers: '/exports', libelle: 'Exports' },
   { vers: '/reconciliation', libelle: 'Contrôle des données' },
 ];
 
@@ -72,6 +74,7 @@ export default function App() {
           <Route path="/vehicules" element={<Vehicules />} />
           <Route path="/vehicules/:id" element={<FicheVehicule />} />
           <Route path="/reconciliation" element={<Reconciliation />} />
+          <Route path="/exports" element={<Exports />} />
         </Routes>
       </main>
     </div>

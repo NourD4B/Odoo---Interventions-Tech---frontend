@@ -8,11 +8,13 @@ import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, ZoomControl
 import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
+import { BoutonExport } from '../composants/BoutonExport';
 import { ListePieces, usePieces, type Pieces } from '../composants/Pieces';
 import { BandeauRse, ChoixMode, DetailRse, IconeMode, PastilleNote } from '../composants/Rse';
 import { BadgeEtat } from '../composants/Statistiques';
 import { Plaque } from '../composants/Vehicule';
 import { dossiers, type Dossier, type Itineraire, type ServiceDossier, type TacheDossier } from '../dossiers';
+import { exportations, nomFichier } from '../exports';
 import { co2 } from '../rse';
 import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, type EtatService } from '../statistiques';
 
@@ -235,7 +237,11 @@ function Identite({ d }: { d: Dossier }) {
       <p className="dp-prochaine">{r.prochaine_intervention
         ? <>Prochaine intervention<strong>{date(r.prochaine_intervention).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong></>
         : 'Aucune intervention à venir'}</p>
-      {p.odoo_url && <a className="dp-odoo" href={p.odoo_url} target="_blank" rel="noreferrer">Ouvrir le projet dans Odoo</a>}
+      <div className="dp-actions">
+        <BoutonExport className="dp-odoo" libelle="Exporter (.xlsx)" nomFichier={nomFichier('dossier', p.nom)}
+          lire={() => exportations.dossier(p.id)} />
+        {p.odoo_url && <a className="dp-odoo" href={p.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo</a>}
+      </div>
     </div>
   );
 }
