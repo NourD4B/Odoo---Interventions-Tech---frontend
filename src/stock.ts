@@ -7,8 +7,11 @@ export interface CarteAgence {
 }
 
 // sorti / retour : faits sur 30 jours ; reserve : en attente (préparation et livraison d'une ligne comptées une fois)
+export interface Lien { id: number; nom: string }
+
 export interface InterventionProduit {
-  id: number; nom: string; sorti: number; retour: number; reserve: number; etat: 'reserve' | 'sorti';
+  id: number; nom: string; projet: Lien | null; sorti: number; retour: number; reserve: number;
+  etat: 'reserve' | 'sorti';
 }
 
 export interface ProduitAgence {
@@ -21,11 +24,14 @@ export interface Tracabilite {
   a_jour_le: string | null; fenetre_jours: number; cle: string; cartes: CarteAgence[]; produits: ProduitAgence[];
 }
 
-export type TypeEvenement = 'recu' | 'transfert' | 'reserve' | 'livre' | 'retour' | 'ajustement';
+export type TypeEvenement = 'recu' | 'transfert' | 'reserve' | 'attente' | 'livre' | 'retour' | 'ajustement';
 
+// Un mouvement Odoo, lisible : pour quelle intervention (et son projet), sinon quelle commande ; trajet
+// « Agence : Stock → Sortie » ; client = société seulement.
 export interface Evenement {
-  type: TypeEvenement; titre: string; texte: string; date: string | null; jour: string; document: string | null;
-  intervention: { id: number; nom: string } | null;
+  type: TypeEvenement; titre: string; quantite: number; trajet: string;
+  intervention: Lien | null; projet: Lien | null; commande: string | null; client: string | null;
+  document: string | null; date: string | null; jour: string;
 }
 
 export interface Parcours {

@@ -6,11 +6,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { EtatChargement, useDonnees } from '../composants';
 import { qte, stock, type CarteAgence, type Evenement, type ProduitAgence } from '../stock';
 
-type Filtre = 'tous' | 'reserves' | 'sortis' | 'negatifs';
+type Filtre = 'tous' | 'interventions' | 'reserves' | 'sortis' | 'negatifs';
 const FILTRES: { cle: Filtre; libelle: string }[] = [
-  { cle: 'tous', libelle: 'Tous' }, { cle: 'reserves', libelle: 'Réservés' }, { cle: 'sortis', libelle: 'Sortis' },
-  { cle: 'negatifs', libelle: 'Négatifs' },
+  { cle: 'tous', libelle: 'Tous' }, { cle: 'interventions', libelle: 'Interventions' },
+  { cle: 'reserves', libelle: 'Réservés' }, { cle: 'sortis', libelle: 'Sortis' }, { cle: 'negatifs', libelle: 'Négatifs' },
 ];
+
+// recherche : produit, référence, intervention ou projet
+const texteRecherche = (p: ProduitAgence) => [p.produit.nom, p.produit.reference ?? '',
+  ...p.interventions.flatMap((i) => [i.nom, i.projet?.nom ?? ''])].join(' ').toLowerCase();
 const PAS = 100;
 
 type Unites = { stock: number; reserve: number; sorti: number; retour: number };
@@ -59,19 +63,47 @@ function LigneProduit({ p, choisi, onChoisir }: { p: ProduitAgence; choisi: bool
         {p.interventions.map((i) => {
           const detail = [compte(i.sorti, 'sorti'), compte(i.retour, 'revenu'), compte(i.reserve, 'réservé')]
             .filter(Boolean).join(', ');
+          const projet = i.projet ? `, projet ${i.projet.nom}` : '';
           return (
             <Link key={i.id} to={`/statistiques/services/${i.id}`} className={`mt-puce ${i.etat}`}
-              title={`Intervention ${i.nom} : ${detail}`}>{i.nom} · {detail}</Link>);
+              title={`Intervention ${i.nom}${projet} : ${detail}`}>
+              <span>{i.nom}</span>
+              {i.projet && <span className="mt-puce-projet">projet {i.projet.nom}</span>}
+              <span className="mt-puce-qte">{detail}</span>
+            </Link>);
         })}
       </span>}
     </div>
   );
 }
 
-function TexteEvenement({ e }: { e: Evenement }) {
-  const nom = e.intervention?.nom;
-  if (!e.intervention || !nom || !e.texte.startsWith(nom)) return <span>{e.texte}</span>;
-  return <span><Link to={`/statistiques/services/${e.intervention.id}`}>{nom}</Link>{e.texte.slice(nom.length)}</span>;
+// Pour qui : l'intervention et son projet ; sinon le projet du transfert ; sinon la commande (sans intervention).
+function Pour({ e }: { e: Evenement }) {
+  const projet = e.projet && <Link to={`/projets/${e.projet.id}`}>{e.projet.nom}</Link>;
+  if (e.intervention) {
+    return (
+      <span className="mt-ev-pour">
+        <Link to={`/statistiques/services/${e.intervention.id}`}>{e.intervention.nom}</Link>
+        {projet && <span className="mt-ev-projet">projet {projet}</span>}
+      </span>);
+  }
+  if (projet) return <span className="mt-ev-pour">Projet {projet}</span>;
+  if (e.commande) {
+    return <span className="mt-ev-pour neutre">Commande {e.commande}{e.client ? `, ${e.client}` : ''}, sans intervention</span>;
+  }
+  return null;
+}
+
+function LigneParcours({ e }: { e: Evenement }) {
+  const meta = [e.jour, e.document, e.intervention && e.commande ? `commande ${e.commande}` : null].filter(Boolean);
+  return (
+    <span className="mt-ev">
+      <span className="mt-ev-tete"><b>{e.titre}</b><span className="mt-ev-qte">{compte(e.quantite, 'unité')}</span></span>
+      <Pour e={e} />
+      <span className="mt-ev-trajet">{e.trajet}</span>
+      <span className="mt-petit">{meta.join(', ')}</span>
+    </span>
+  );
 }
 
 function Panneau({ produitId, agence }: { produitId: number; agence: string }) {
@@ -104,11 +136,7 @@ function Panneau({ produitId, agence }: { produitId: number; agence: string }) {
           {p.parcours.map((e, i) => (
             <li key={i} className={`t-${e.type}`}>
               <span className="mt-rail" aria-hidden="true"><span className="mt-point" /><span className="mt-trait" /></span>
-              <span className="mt-ev">
-                <b>{e.titre}</b>
-                <TexteEvenement e={e} />
-                <span className="mt-petit">{e.jour}{e.document ? `, ${e.document}` : ''}</span>
-              </span>
+              <LigneParcours e={e} />
             </li>))}
         </ol> : <p className="mt-petit">Aucun mouvement dans Odoo.</p>}
       </section>
@@ -129,9 +157,9 @@ export default function Materiel() {
   const liste = useMemo(() => {
     const r = recherche.trim().toLowerCase();
     return (t.donnees?.produits ?? []).filter((p) => (
-      (filtre === 'tous' || (filtre === 'reserves' && (p.reserve > 0 || p.interventions.some((i) => i.reserve > 0)))
+      (filtre === 'tous' || (filtre === 'interventions' && p.interventions.length > 0) || (filtre === 'reserves' && (p.reserve > 0 || p.interventions.some((i) => i.reserve > 0)))
         || (filtre === 'sortis' && p.sorti > 0) || (filtre === 'negatifs' && p.negatif))
-      && (!r || `${p.produit.nom} ${p.produit.reference ?? ''}`.toLowerCase().includes(r))));
+      && (!r || texteRecherche(p).includes(r))));
   }, [t.donnees, filtre, recherche]);
   const produitId = produitParam ?? liste[0]?.produit.id ?? null;
   const carte = t.donnees?.cartes.find((c) => c.cle === agence);
@@ -150,8 +178,8 @@ export default function Materiel() {
           <div className="sous-titre">Ce que chaque agence a en stock, pour quelle intervention, et ce qui en est sorti
             {t.donnees?.a_jour_le ? `. Copie d'Odoo du ${new Date(t.donnees.a_jour_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}.</div>
         </div>
-        <label className="mt-recherche"><span className="lu">Rechercher un produit</span>
-          <input type="search" placeholder="Produit ou référence" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        <label className="mt-recherche"><span className="lu">Rechercher un produit, une intervention ou un projet</span>
+          <input type="search" placeholder="Produit, intervention ou projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
         </label>
       </div>
 
