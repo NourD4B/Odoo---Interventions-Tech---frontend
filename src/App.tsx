@@ -8,6 +8,7 @@ import Exports from './pages/Exports';
 import FicheVehicule from './pages/FicheVehicule';
 import FicheService from './pages/FicheService';
 import Journal from './pages/Journal';
+import Materiel from './pages/Materiel';
 import Planification from './pages/Planification';
 import { DetailProjet, ListeProjets } from './pages/Projets';
 import Reconciliation from './pages/Reconciliation';
@@ -26,6 +27,7 @@ const LIENS = [
   { vers: '/reglages', libelle: 'Réglages' },
   { vers: '/journal', libelle: 'Journal' },
   { vers: '/vehicules', libelle: 'Véhicules et PV' },
+  { vers: '/materiel', libelle: 'Matériel et traçabilité' },
   { vers: '/exports', libelle: 'Exports' },
   { vers: '/reconciliation', libelle: 'Contrôle des données' },
 ];
@@ -75,6 +77,7 @@ export default function App() {
           <Route path="/vehicules/:id" element={<FicheVehicule />} />
           <Route path="/reconciliation" element={<Reconciliation />} />
           <Route path="/exports" element={<Exports />} />
+          <Route path="/materiel" element={<Materiel />} />
         </Routes>
       </main>
     </div>
