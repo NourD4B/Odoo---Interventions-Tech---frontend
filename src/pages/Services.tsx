@@ -41,6 +41,7 @@ type Alerte = { texte: string; ou: 'ici' | 'odoo' };
 
 /** Ce qui empêche ou fausse la planification : à corriger ici (position) ou dans Odoo (temps alloué). */
 function alertes(s: ServicePlanif): Alerte[] {
+  if (s.archive_odoo) return [];                       // historique : rien à régler ici
   const a: Alerte[] = [];
   if (s.site_lat === null) a.push({ texte: 'Site sans position : les trajets ne peuvent pas être calculés', ou: 'ici' });
   else if (s.site_precision === 'commune') a.push({ texte: 'Position approximative (centre de la commune)', ou: 'ici' });
@@ -49,7 +50,8 @@ function alertes(s: ServicePlanif): Alerte[] {
     a.push({ texte: `Date limite dépassée (${quand(s.date_deadline)}) et pas encore publié`, ou: 'odoo' });
   return a;
 }
-const aRegler = (s: ServicePlanif) => s.statut_planification !== 'publie' && alertes(s).some((x) => x.ou === 'ici');
+const aRegler = (s: ServicePlanif) => !s.archive_odoo && s.statut_planification !== 'publie'
+  && alertes(s).some((x) => x.ou === 'ici');
 
 // ---------- réglages d'un service ----------
 
@@ -265,7 +267,9 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
         <div className="badges">
           {s.simule && <span className="badge b-simulation" title="N'existe pas dans Odoo (copie locale)">simulé</span>}
           {s.priority === '1' && <Badge type="urgent">Urgent</Badge>}
-          <Badge type={`planif-${s.statut_planification}`}>{LIBELLES_STATUT_PLANIF[s.statut_planification]}</Badge>
+          {s.archive_odoo
+            ? <span className="badge etat-archive" title="Archivée dans Odoo, gardée en historique (elle a une commande)">Archivée dans Odoo</span>
+            : <Badge type={`planif-${s.statut_planification}`}>{LIBELLES_STATUT_PLANIF[s.statut_planification]}</Badge>}
         </div>
       </div>
 
@@ -289,7 +293,7 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
             <div className="muet">{jourCourt(a.debut)}{a.fin !== a.debut ? ` → ${jourCourt(a.fin)}` : ''} ·{' '}
               {a.propose_par === 'dispatcher' ? 'choix du dispatcher' : 'proposé par le solveur'}
               {a.motif_derogation ? ` · dérogation : ${a.motif_derogation}` : ''}</div>
-          </>) : <div className="muet">Pas encore planifié</div>}
+          </>) : <div className="muet">{s.archive_odoo ? 'Historique : ne se planifie pas' : 'Pas encore planifié'}</div>}
         </div>
       </div>
 
@@ -300,8 +304,8 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
       )}
 
       <div className="actions">
-        <button type="button" className={`btn btn-petit${aRegler(s) ? ' btn-primaire' : ''}`} onClick={onRegler}>
-          {s.statut_planification === 'publie' ? 'Voir les réglages' : 'Régler la planification'}</button>
+        {!s.archive_odoo && <button type="button" className={`btn btn-petit${aRegler(s) ? ' btn-primaire' : ''}`} onClick={onRegler}>
+          {s.statut_planification === 'publie' ? 'Voir les réglages' : 'Régler la planification'}</button>}
         <Link className="btn btn-petit" to={`/statistiques/services/${s.id}`}>Statistiques</Link>
         {s.odoo_url && <a className="btn btn-petit" href={s.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
       </div>
@@ -309,21 +313,24 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
   );
 }
 
-type Filtre = 'tous' | StatutPlanif | 'a_regler';
+type Filtre = 'tous' | StatutPlanif | 'a_regler' | 'archive';
 const FILTRES: { cle: Filtre; libelle: string }[] = [
   { cle: 'tous', libelle: 'Tous' }, { cle: 'a_regler', libelle: 'À régler' },
   { cle: 'a_planifier', libelle: LIBELLES_STATUT_PLANIF.a_planifier }, { cle: 'propose', libelle: LIBELLES_STATUT_PLANIF.propose },
   { cle: 'verrouille', libelle: LIBELLES_STATUT_PLANIF.verrouille }, { cle: 'publie', libelle: LIBELLES_STATUT_PLANIF.publie },
+  { cle: 'archive', libelle: 'Archivées' },
 ];
-const garde = (f: Filtre, s: ServicePlanif) => f === 'tous' || (f === 'a_regler' ? aRegler(s) : s.statut_planification === f);
+/** Archivées (historique) : seulement dans « Tous » et « Archivées », jamais comptées à planifier. */
+const garde = (f: Filtre, s: ServicePlanif) => f === 'tous' || (f === 'archive' ? !!s.archive_odoo
+  : !s.archive_odoo && (f === 'a_regler' ? aRegler(s) : s.statut_planification === f));
 const sansAccents = (x: string) => x.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const ORDRE: Record<StatutPlanif, number> = { a_planifier: 0, propose: 1, verrouille: 2, publie: 3 };
 /** À traiter d'abord (à planifier, proposé, verrouillé), publiés ensuite ; puis par date. */
-const cleTri = (s: ServicePlanif) => `${ORDRE[s.statut_planification]}`
+const cleTri = (s: ServicePlanif) => `${s.archive_odoo ? 9 : ORDRE[s.statut_planification]}`
   + (s.planned_date_begin?.slice(0, 10) ?? s.fenetre_debut ?? s.date_deadline?.slice(0, 10) ?? '9999');
 
 export default function Services() {
-  const liste = useDonnees(() => planif.services(), []);
+  const liste = useDonnees(() => planif.services(undefined, undefined, true), []);   // même liste que Projets
   const refs = useDonnees(() => planif.referentiels(), []);
   const [filtre, setFiltre] = useState<Filtre>('tous');
   const [texte, setTexte] = useState('');
@@ -378,7 +385,7 @@ export default function Services() {
           </select>
         </label>
         <div className="segmente" role="radiogroup" aria-label="Statut de planification">
-          {FILTRES.map((f) => (
+          {FILTRES.filter((f) => f.cle !== 'archive' || base.some((s) => s.archive_odoo)).map((f) => (
             <button key={f.cle} type="button" role="radio" aria-checked={filtre === f.cle}
                     className={filtre === f.cle ? 'actif' : ''} onClick={() => setFiltre(f.cle)}>
               {f.libelle} <span className="compteur">{dansProjet.filter((s) => garde(f.cle, s)).length}</span></button>

@@ -53,6 +53,7 @@ export interface Intervention {
   societe: string | null;
   heures: number | null;
   position: Position | null;
+  archive?: boolean;                  // archivée dans Odoo, gardée en historique (elle a une commande)
 }
 
 /** Position d'un site ; `precision` : adresse | rue | lieu-dit | commune | null (inconnue). */

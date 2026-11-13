@@ -22,7 +22,8 @@ export interface Argent {
 
 export interface Tableau {
   periode: { debut: string; fin: string; jours_ouvres: number };
-  compteurs: { planifies: number; faits: number; a_planifier: number; en_retard: number; total: number; dont_simules: number };
+  compteurs: { planifies: number; faits: number; a_planifier: number; en_retard: number; archivees?: number; total: number;
+    dont_simules: number };
   par_jour: { date: string; planifies: number; techniciens: number; faits: number }[];
   par_technicien: { matricule: string; nom: string; agence: string | null; jours_planifies: number; services: number;
                     heures_passees: number; km_estimes: number; jours_ouvres: number; taux_charge_pct: number | null }[];

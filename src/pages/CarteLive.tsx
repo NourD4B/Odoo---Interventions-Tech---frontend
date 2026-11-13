@@ -306,7 +306,8 @@ function LigneIntervention({ i }: { i: Intervention }) {
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
         <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
           <strong>{i.client ?? i.titre}</strong>
-          <Badge type={i.statut}>{LIBELLES_STATUT[i.statut]}</Badge>
+          <span className="badges">{i.archive && <span className="badge etat-archive">Archivée dans Odoo</span>}
+            <Badge type={i.statut}>{LIBELLES_STATUT[i.statut]}</Badge></span>
         </span>
         <span className="muet">
           {heure(i.debut) && `${heure(i.debut)}–${heure(i.fin)} · `}{i.techniciens.join(', ') || 'non assignée'}

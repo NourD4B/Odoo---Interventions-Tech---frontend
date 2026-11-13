@@ -31,6 +31,7 @@ export interface ServicePlanif extends ReglagesPlanif {
   site_partner_id: number | null; site_adresse: string | null; site_precision: string | null;
   stage: number; statut_planification: StatutPlanif; source: string; odoo_task_id: number | null;
   odoo_url: string | null; simule: boolean; version: number; affectation: AffectationResume | null;
+  archive_odoo?: boolean;            // archivée dans Odoo, gardée en historique (commande) : jamais planifiée
   violations?: Violation[];                    // règles obligatoires enfreintes (réponse de planif.affecter seulement)
 }
 
@@ -176,7 +177,8 @@ export function erreursParChamp(e: unknown): Record<string, string> {
 }
 
 export const planif = {
-  services: (debut?: string, fin?: string) => appel<ServicePlanif[]>('GET', '/services', { params: { debut, fin } }),
+  services: (debut?: string, fin?: string, historique?: boolean) =>
+    appel<ServicePlanif[]>('GET', '/services', { params: { debut, fin, historique: historique ? 'true' : undefined } }),
   modifierPlanification: (id: number, corps: ReglagesPlanif & { version: number }) =>
     appel<ServicePlanif>('PUT', `/services/${id}/planification`, { corps }),
   ressources: (debut: string, fin: string) => appel<Ressources>('GET', '/ressources', { params: { debut, fin } }),

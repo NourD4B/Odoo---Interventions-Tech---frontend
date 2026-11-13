@@ -70,6 +70,8 @@ export default function Statistiques() {
           <Tuile libelle="À planifier" valeur={d.compteurs.a_planifier} />
           <Tuile libelle="En retard" valeur={d.compteurs.en_retard} detail="date limite passée, pas faits"
                  ton={d.compteurs.en_retard ? 'alerte' : undefined} />
+          {!!d.compteurs.archivees && <Tuile libelle="Archivées dans Odoo" valeur={d.compteurs.archivees}
+                 detail="historique, jamais planifiées" />}
         </section>
         <section aria-label="Argent de la période" className="kpis">
           <Tuile libelle="CA HT (lignes des services)" valeur={euros(d.argent.ca_ht)} />
