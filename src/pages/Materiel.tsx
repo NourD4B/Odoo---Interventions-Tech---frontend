@@ -87,6 +87,13 @@ function Pour({ e }: { e: Evenement }) {
         {projet && <span className="mt-ev-projet">projet {projet}</span>}
       </span>);
   }
+  if (e.intervention_commande) {
+    return (
+      <span className="mt-ev-pour neutre">
+        <span>Commande {e.commande} de l'intervention <Link to={`/statistiques/services/${e.intervention_commande.id}`}>
+          {e.intervention_commande.nom}</Link>, ligne non rattachée dans Odoo</span>
+      </span>);
+  }
   if (projet) return <span className="mt-ev-pour">Projet {projet}</span>;
   if (e.commande) {
     return <span className="mt-ev-pour neutre">Commande {e.commande}{e.client ? `, ${e.client}` : ''}, sans intervention</span>;

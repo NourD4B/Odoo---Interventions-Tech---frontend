@@ -31,6 +31,8 @@ export type TypeEvenement = 'recu' | 'transfert' | 'reserve' | 'attente' | 'livr
 export interface Evenement {
   type: TypeEvenement; titre: string; quantite: number; trajet: string;
   intervention: Lien | null; projet: Lien | null; commande: string | null; client: string | null;
+  // ligne de la commande d'une intervention, mais sans tâche dans Odoo (ex. alimentations sur S10519)
+  intervention_commande: Lien | null;
   document: string | null; date: string | null; jour: string;
 }
 
