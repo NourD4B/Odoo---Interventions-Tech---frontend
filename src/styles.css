@@ -76,6 +76,9 @@ h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .b-sur_site, .b-en_cours { background: var(--accent-doux); color: var(--accent); }
 .b-planifiee { background: var(--surface); color: var(--accent); border: 1px solid #a9c0f5; }
 .b-a_planifier { background: var(--neutre-doux); color: var(--encre-2); }
+/* technicien d'essai (application mobile) : jamais confondu avec un vrai technicien */
+.badge-essai { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px dashed var(--encre-2);
+  border-radius: 4px; font-size: 11px; font-weight: 600; color: var(--encre-2); vertical-align: 1px; }
 .b-terminee, .b-annulee { background: var(--neutre-doux); color: var(--encre-3); }
 .b-concordant, .b-terrain_confirme { background: var(--dispo-doux); color: #115e59; }
 .b-ecart, .b-ambigu, .b-a_confirmer { background: var(--alerte-doux); color: var(--alerte); }

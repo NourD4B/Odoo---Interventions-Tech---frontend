@@ -62,9 +62,11 @@ export interface Position { lat: number; lng: number; origine: 'odoo' | 'geocoda
 export interface Interventions { debut: string; fin: string; odoo: number; hfsql: number;
   avertissements: string[]; interventions: Intervention[] }
 
-/** Dernière position GPS d'un appareil Traccar (pas de vitesse : interdit par la CNIL). */
+/** Dernière position d'un technicien ou d'un appareil (pas de vitesse : interdit par la CNIL).
+ * `source` : application (téléphone, pendant une mission) | traccar | boîtier plus tard. */
 export interface PositionLive { id: string; nom: string; lat: number; lng: number; horodatage: string | null;
-  precision_m: number | null; batterie: number | null; statut: string | null }
+  precision_m: number | null; batterie: number | null; statut: string | null;
+  source: string; matricule: string | null; essai: boolean }
 
 export type Activite = 'sur_site' | 'en_route' | 'termine' | 'sans_intervention' | 'sans_gps' | 'non_associe';
 

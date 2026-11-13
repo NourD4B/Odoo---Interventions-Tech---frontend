@@ -13,6 +13,9 @@ const POINTS_MAX = 500;               // longueur maximale de la trace affichée
 const GRIS = '#8892a6';
 const PRECISIONS_SITE = new Set(['adresse', 'rue', null]);
 
+/** D'où vient la position (app/positions côté serveur). */
+const LIBELLES_SOURCE: Record<string, string> = { application: 'application mobile', traccar: 'Traccar' };
+
 function depuis(p: PositionLive): string {
   if (!p.horodatage) return 'heure inconnue';
   const min = Math.round((Date.now() - new Date(p.horodatage).getTime()) / 60_000);
@@ -249,9 +252,9 @@ function PositionTechnicien({ a, trace }: { a: ActiviteTechnicien; trace: [numbe
       ) : null}
       <Marker position={[p.lat, p.lng]} icon={icone(initiales(a.nom), c)}>
         <Popup>
-          <strong>{a.nom}</strong> · {LIBELLES_ACTIVITE[a.activite]}<br />
+          <strong>{a.nom}</strong>{p.essai ? ' (essai)' : ''} · {LIBELLES_ACTIVITE[a.activite]}<br />
           {resume(a)}<br />
-          <span className="muet">{depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}</span>
+          <span className="muet">{LIBELLES_SOURCE[p.source] ?? p.source} · {depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}</span>
         </Popup>
       </Marker>
     </>
@@ -265,13 +268,13 @@ function LigneTechnicien({ a, suivi, onSuivre }: { a: ActiviteTechnicien; suivi:
       <span className="pastille" style={{ background: couleur(a) }}>{initiales(a.nom)}</span>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, flex: 1 }}>
         <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-          <strong>{a.nom}</strong>
+          <strong>{a.nom}{p?.essai && <span className="badge-essai" title="Technicien d'essai : données hors statistiques">Essai</span>}</strong>
           <Badge type={a.activite}>{LIBELLES_ACTIVITE[a.activite]}</Badge>
         </span>
         <span>{resume(a)}</span>
         {p && (
           <span className="muet">
-            {depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}
+            {LIBELLES_SOURCE[p.source] ?? p.source} · {depuis(p)}{p.precision_m ? ` · ±${Math.round(p.precision_m)} m` : ''}
             {p.batterie != null ? ` · batterie ${Math.round(p.batterie)} %` : ''}
             {a.total ? ` · ${a.terminees}/${a.total} terminée(s)` : ''}
             {suivi ? ' · suivi' : ''}
