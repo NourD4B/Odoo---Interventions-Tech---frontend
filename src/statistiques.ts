@@ -2,10 +2,11 @@
 // Noms de champs identiques à l'API ; montants en euros HT sauf mention ; dates « AAAA-MM-JJ ».
 import type { BilanRse, ModeTransport, NoteRse, RseMission } from './rse';
 
-export type EtatService = 'a_planifier' | 'planifie' | 'en_retard' | 'fait' | 'facture';
+// archive : intervention archivée dans Odoo mais gardée (elle a une commande) : historique, jamais planifiée
+export type EtatService = 'a_planifier' | 'planifie' | 'en_retard' | 'fait' | 'facture' | 'archive';
 
 export interface LigneService {
-  id: number; nom: string; simule: boolean; projet: { id: number; nom: string } | null; client: string | null;
+  id: number; nom: string; simule: boolean; archive_odoo: boolean; projet: { id: number; nom: string; archive?: boolean } | null; client: string | null;
   societe: string | null; etat: EtatService; etat_libelle: string; priorite: 'normale' | 'urgente';
   debut: string | null; fin: string | null; techniciens: string[]; vehicule: string | number | null;
   heures_prevues: number | null; heures_passees: number | null; km_estimes: number | null; ca_ht: number | null;
@@ -51,7 +52,8 @@ export interface ResumeProjet extends Argent {
 export interface DetailProjet extends ResumeProjet { liste: LigneService[] }
 
 export interface FicheService {
-  id: number; nom: string; simule: boolean; odoo_url: string | null; projet: { id: number; nom: string } | null;
+  id: number; nom: string; simule: boolean; archive_odoo: boolean; odoo_url: string | null;
+  projet: { id: number; nom: string; archive?: boolean } | null;
   client: string | null; societe: string | null; telephone: string | null;
   site: { adresse: string | null; lat: number | null; lng: number | null; precision: string | null };
   type_service: string | null; priorite: 'normale' | 'urgente'; etat: EtatService; etat_libelle: string;
@@ -146,6 +148,7 @@ export function dateHeure(iso: string | null | undefined): string {
 }
 export const LIBELLES_ETAT: Record<EtatService, string> = {
   a_planifier: 'À planifier', planifie: 'Planifié', en_retard: 'En retard', fait: 'Fait', facture: 'Facturé',
+  archive: 'Archivée dans Odoo',
 };
 export const LIBELLES_FACTURATION: Record<string, string> = {
   no: 'rien à facturer', 'to invoice': 'à facturer', invoiced: 'facturé', upselling: 'vente additionnelle',

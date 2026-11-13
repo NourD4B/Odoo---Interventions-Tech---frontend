@@ -18,9 +18,9 @@ import { exportations, nomFichier } from '../exports';
 import { co2 } from '../rse';
 import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, type EtatService } from '../statistiques';
 
-const ETATS: EtatService[] = ['en_retard', 'planifie', 'a_planifier', 'fait', 'facture'];   // ordre d'urgence
+const ETATS: EtatService[] = ['en_retard', 'planifie', 'a_planifier', 'fait', 'facture', 'archive'];   // ordre d'urgence
 const COULEURS: Record<EtatService, string> = {
-  a_planifier: '#7a8191', planifie: '#1d4ed8', en_retard: '#b91c1c', fait: '#0f766e', facture: '#0f1d44',
+  a_planifier: '#7a8191', planifie: '#1d4ed8', en_retard: '#b91c1c', fait: '#0f766e', facture: '#0f1d44', archive: '#a8a29e',
 };
 const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const ETATS_TACHE: Record<string, string> = {
@@ -167,7 +167,7 @@ function Carte({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite:
 function Anneau({ d }: { d: Dossier }) {
   const r = d.resume, total = Math.max(1, r.services);
   const R = 30, C = 2 * Math.PI * R, ECART = r.services > 1 ? 3 : 0;
-  const ordre: EtatService[] = ['facture', 'fait', 'planifie', 'en_retard', 'a_planifier'];
+  const ordre: EtatService[] = ['facture', 'fait', 'planifie', 'en_retard', 'a_planifier', 'archive'];
   let deja = 0;
   const segments = ordre.flatMap((e) => {
     const n = r.par_etat[e] ?? 0;

@@ -31,7 +31,7 @@ export default function FicheService() {
           <Link to="/statistiques" className="muet">‹ Statistiques</Link>
           <h1>{d.nom}</h1>
           <div className="sous-titre">
-            {d.projet ? <Link to={`/projets/${d.projet.id}`}>{d.projet.nom}</Link> : 'sans projet'} · {d.societe ?? '—'}
+            {d.projet ? <><Link to={`/projets/${d.projet.id}`}>{d.projet.nom}</Link>{d.projet.archive ? ' (projet archivé dans Odoo)' : ''}</> : 'sans projet'} · {d.societe ?? '—'}
             {d.type_service && <> · {d.type_service}</>} · service n° {d.id}</div>
           <div className="badges"><BadgeEtat etat={d.etat} /><BadgeSimule simule={d.simule} />
             {d.priorite === 'urgente' && <span className="badge b-urgent">urgent</span>}</div>
@@ -66,7 +66,9 @@ export default function FicheService() {
 
         <section className="carte large" aria-labelledby="t-planif">
           <h2 id="t-planif">Planification</h2>
-          <div className="muet">Statut : {STATUTS_PLANIF[p.statut] ?? p.statut} · {p.jours.length ? p.jours.map(jourCourt).join(', ') : 'aucun jour planifié'}</div>
+          {d.archive_odoo
+            ? <div className="muet">Archivée dans Odoo : gardée ici comme historique (commande, matériel, temps), jamais planifiée.</div>
+            : <div className="muet">Statut : {STATUTS_PLANIF[p.statut] ?? p.statut} · {p.jours.length ? p.jours.map(jourCourt).join(', ') : 'aucun jour planifié'}</div>}
           {p.techniciens.length ? <div className="defilement"><table>
             <thead><tr><th>Technicien</th><th>Agence</th><th>Jours</th><th>Km aller-retour (estimé)</th><th>Route (estimée)</th></tr></thead>
             <tbody>{p.techniciens.map((t) => {
@@ -77,7 +79,7 @@ export default function FicheService() {
                   {tr?.grand_deplacement && <div className="muet">grand déplacement (un aller-retour)</div>}</td>
                 <td>{heures(tr?.heures_route)}</td></tr>);
             })}</tbody>
-          </table></div> : <div className="vide">Personne n'est encore affecté.</div>}
+          </table></div> : <div className="vide">{d.archive_odoo ? 'Aucune affectation dans l\'application.' : 'Personne n\'est encore affecté.'}</div>}
           <div>Véhicule : <strong>{p.vehicule ? (p.vehicule.plaque ?? `n° ${p.vehicule.id}`) : '—'}</strong>
             {p.trajet.km_vehicule !== null && <span className="muet"> · {nombre(p.trajet.km_vehicule)} km estimés</span>}</div>
         </section>
