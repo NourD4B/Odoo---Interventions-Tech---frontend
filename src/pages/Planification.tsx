@@ -12,8 +12,10 @@ import { useEcriture } from '../composants/Ecriture';
 import { IconeTelechargement } from '../composants/BoutonExport';
 import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import { enregistrerFichier, exportations, nomFichier } from '../exports';
+import CartePlanif, { type AgencePlanif, type SitePlanif } from '../composants/CartePlanif';
 import MenuVehicule from '../composants/MenuVehicule';
 import { nomVehicule } from '../composants/Vehicule';
+import { meteo, temps, type Meteo } from '../meteo';
 import PlanMois from './PlanMois';
 import {
   ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type Proposition, type Referentiels,
@@ -85,15 +87,18 @@ function lireGlisse(e: DragEvent): Glisse | null {
 }
 
 /** Élément glissable et activable au clavier (Entrée / Espace = ouvrir la fiche). */
-function Glissable({ s, depuis, className, style, titre, fixe = false, onOuvrir, onDebut, onFin, children }: {
+function Glissable({ s, depuis, className, style, titre, fixe = false, onOuvrir, onDebut, onFin, onSurvol, children }: {
   s: ServicePlanif; depuis: string | null; className: string; style?: CSSProperties; titre?: string; fixe?: boolean;
-  onOuvrir: () => void; onDebut: (g: Glisse) => void; onFin: () => void; children: ReactNode;
+  onOuvrir: () => void; onDebut: (g: Glisse) => void; onFin: () => void; onSurvol?: (id: number | null) => void;
+  children: ReactNode;
 }) {
   const mobile = !fixe && etatDe(s) !== 'publie';
   return (
     <div role="button" tabIndex={0} className={className} style={style} title={titre} draggable={mobile}
       aria-label={`${client(s)}, ${s.name}`}
       onClick={onOuvrir}
+      onMouseEnter={() => onSurvol?.(s.id)} onMouseLeave={() => onSurvol?.(null)}
+      onFocus={() => onSurvol?.(s.id)} onBlur={() => onSurvol?.(null)}
       onKeyDown={(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOuvrir(); } }}
       onDragStart={(e) => {
         const g: Glisse = { serviceId: s.id, depuis };
@@ -380,7 +385,9 @@ export default function Planification() {
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [survol, setSurvol] = useState<string | null>(null);
   const [recherche, setRecherche] = useState('');
-  const plus = useRef<HTMLDetailsElement>(null);
+  const [focus, setFocus] = useState<number | null>(null);          // service survolé : clignote sur la carte
+  const [maintenant, setMaintenant] = useState(() => new Date());
+  const [temps_, setTemps] = useState<Meteo | null>(null);
   const { ecrire, dialogue } = useEcriture();
 
   const liste = useMemo(() => services.donnees ?? [], [services.donnees]);
@@ -421,6 +428,21 @@ export default function Planification() {
   [techniciens, liste, jours]);
   const libre = (t: TechnicienPlanif, j: string) => !feries.has(j) && !absentSur(t, j, j) && !occupation.get(t.matricule)?.has(j);
   useEffect(() => { setBrouillon(null); }, [debut]);                                // autre semaine : abandonné
+  useEffect(() => {                                                                  // ligne « maintenant »
+    const t = window.setInterval(() => setMaintenant(new Date()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+  /** Agence de référence pour la météo : le siège (Noisy), sinon la première agence placée. */
+  const siege = useMemo(() => {
+    const placees = (ressources.donnees?.agences ?? []).filter((a) => a.lat !== null && a.lng !== null);
+    return placees.find((a) => a.code === 'noisy') ?? placees[0] ?? null;
+  }, [ressources.donnees]);
+  useEffect(() => {
+    let vivant = true;
+    setTemps(null);
+    if (siege) meteo(siege.lat!, siege.lng!, debut, fin).then((m) => { if (vivant) setTemps(m); }).catch(() => undefined);
+    return () => { vivant = false; };
+  }, [siege, debut, fin]);
   useEffect(() => {                                                                  // affecté (fiche, autre écran)
     if (brouillon && parId.get(brouillon.serviceId)?.affectation) setBrouillon(null);
   }, [brouillon, parId]);
@@ -556,7 +578,6 @@ export default function Planification() {
   };
 
   const retirerPropositions = async () => {
-    plus.current?.removeAttribute('open');
     setMessage(null); setOccupe(true);
     try {
       const r = await ecrire(() => planif.retirerPropositions(debut, fin));
@@ -570,7 +591,6 @@ export default function Planification() {
 
   /** Classeur Excel de la période affichée (semaine ou 4 semaines) ; export journalisé (nom demandé si besoin). */
   const exporter = async () => {
-    plus.current?.removeAttribute('open');
     const [d, f] = vue === 'mois' ? [debut, finMois] : [debut, fin];
     setMessage(null);
     try {
@@ -610,51 +630,67 @@ export default function Planification() {
   };
   const libresDuJour = (j: string) => techniciens.filter((t) => libre(t, j)).length;
 
+  // maintenant (heure de Paris) : ligne sur la colonne du jour, de 8 h (bord gauche) à 18 h (bord droit)
+  const parties = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit',
+    hourCycle: 'h23' }).formatToParts(maintenant);
+  const [h, mn] = ['hour', 'minute'].map((t) => Number(parties.find((x) => x.type === t)?.value ?? 0));
+  const heure = `${String(h).padStart(2, '0')}:${String(mn).padStart(2, '0')}`;
+  const kAuj = jours.indexOf(auj);
+  const fraction = Math.min(1, Math.max(0, (h + mn / 60 - 8) / 10));
+  const dateParis = maj(new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric',
+    month: 'long' }).format(maintenant));
+  const actuel = temps_?.actuelle ? temps(temps_.actuelle.code) : null;
+  const sitesCarte: SitePlanif[] = liste.filter((s) => s.site_lat !== null && s.site_lng !== null).map((s) => ({
+    id: s.id, lat: s.site_lat!, lng: s.site_lng!, etat: etatDe(s), urgent: s.priority === '1', titre: client(s),
+    detail: `${s.name}, ${s.affectation ? datesAffectation(s.affectation.debut, s.affectation.fin).toLowerCase() : 'à planifier'}` }));
+  const agencesCarte: AgencePlanif[] = (ressources.donnees?.agences ?? []).filter((a) => a.lat !== null && a.lng !== null)
+    .map((a) => ({ code: a.code, nom: a.nom, lat: a.lat!, lng: a.lng! }));
+
   return (
     <div className={`pl${glisse ? ' pl-glisse' : ''}`}>
       <header className="pl-barre-outils">
         <h1>Planification</h1>
         <nav className="pl-periode" aria-label="Période">
-          <button type="button" className="btn" aria-label={vue === 'mois' ? '4 semaines précédentes' : 'Semaine précédente'}
-            onClick={() => aller(decaler(lundi, vue === 'mois' ? -28 : -7))}>‹</button>
+          <button type="button" className="btn pl-auj" aria-current={surAujourdhui ? 'date' : undefined}
+            onClick={() => aller(lundiDe(auj))}>Aujourd'hui</button>
+          <div className="pl-fleches">
+            <button type="button" className="btn" aria-label={vue === 'mois' ? '4 semaines précédentes' : 'Semaine précédente'}
+              title={vue === 'mois' ? '4 semaines précédentes' : 'Semaine précédente'}
+              onClick={() => aller(decaler(lundi, vue === 'mois' ? -28 : -7))}>‹</button>
+            <button type="button" className="btn" aria-label={vue === 'mois' ? '4 semaines suivantes' : 'Semaine suivante'}
+              title={vue === 'mois' ? '4 semaines suivantes' : 'Semaine suivante'}
+              onClick={() => aller(decaler(lundi, vue === 'mois' ? 28 : 7))}>›</button>
+          </div>
           <strong>{vue === 'mois' ? titrePeriode(debut, finMois, true) : titrePeriode(debut, fin, false)}</strong>
-          <button type="button" className="btn" aria-label={vue === 'mois' ? '4 semaines suivantes' : 'Semaine suivante'}
-            onClick={() => aller(decaler(lundi, vue === 'mois' ? 28 : 7))}>›</button>
-          {!surAujourdhui && <button type="button" className="lien-bouton" onClick={() => aller(lundiDe(auj))}>Aujourd'hui</button>}
         </nav>
         <div className="pl-vue" role="group" aria-label="Vue">
           <button type="button" aria-pressed={vue === 'semaine'} onClick={() => aller(lundi, 'semaine')}>Semaine</button>
           <button type="button" aria-pressed={vue === 'mois'} onClick={() => aller(lundi, 'mois')}>Mois</button>
         </div>
-        {vue === 'semaine' ? (
-          <div className="pl-actions">
-            <details className="pl-plus" ref={plus}>
-              <summary className="btn" aria-label="Autres actions" title="Autres actions">⋯</summary>
-              <div className="pl-plus-menu">
-                <button type="button" onClick={() => void exporter()}><IconeTelechargement />Exporter la semaine (.xlsx)</button>
-                <button type="button" disabled={occupe || !duSolveur.length} onClick={() => void retirerPropositions()}>
-                  Retirer les propositions du solveur{duSolveur.length ? ` (${duSolveur.length})` : ''}</button>
-                <p>Garde les services verrouillés, publiés et vos choix.</p>
-              </div>
-            </details>
+        <div className="pl-actions">
+          <button type="button" className="btn pl-icone" onClick={() => void exporter()}
+            aria-label={vue === 'mois' ? 'Exporter les 4 semaines (.xlsx)' : 'Exporter la semaine (.xlsx)'}
+            title={vue === 'mois' ? 'Exporter les 4 semaines (.xlsx)' : 'Exporter la semaine (.xlsx)'}><IconeTelechargement /></button>
+          {vue === 'semaine' ? (<>
+            {duSolveur.length > 0 && <button type="button" className="btn" disabled={occupe} onClick={() => void retirerPropositions()}
+              title="Retire les propositions du solveur ; garde les services verrouillés, publiés et vos choix.">
+              Retirer les propositions ({duSolveur.length})</button>}
             <button type="button" className="btn" disabled={occupe || !aPublier.length} onClick={() => setConfirmerPublication(true)}>
               Publier{aPublier.length ? ` (${aPublier.length})` : ''}</button>
             <button type="button" className="btn btn-primaire" disabled={occupe} onClick={() => void proposer()}>
               {occupe ? 'Calcul en cours…' : 'Proposer la semaine'}</button>
-          </div>
-        ) : (
-          <div className="pl-actions">
-            <details className="pl-plus" ref={plus}>
-              <summary className="btn" aria-label="Autres actions" title="Autres actions">⋯</summary>
-              <div className="pl-plus-menu">
-                <button type="button" onClick={() => void exporter()}><IconeTelechargement />Exporter les 4 semaines (.xlsx)</button>
-              </div>
-            </details>
+          </>) : (
             <button type="button" className="btn" onClick={() => aller(lundi, 'semaine')}>
               {aPlanifier.length ? `${aPlanifier.length} à planifier` : 'Ouvrir la semaine'}</button>
-          </div>
-        )}
+          )}
+        </div>
       </header>
+      <p className="pl-contexte">
+        <span className="pl-horloge"><i aria-hidden="true" />{dateParis}, {heure} <small>heure de Paris</small></span>
+        {actuel && temps_?.actuelle && siege && <span className="pl-meteo" title={`${actuel.libelle} à ${siege.nom}`}>
+          <span aria-hidden="true">{actuel.icone}</span>{Math.round(temps_.actuelle.temperature)} °C, {actuel.libelle.toLowerCase()}
+          <small>{siege.nom}</small></span>}
+      </p>
 
       {message && <div className={message.type === 'erreur' ? 'erreur' : 'succes'} role={message.type === 'erreur' ? 'alert' : 'status'}>{message.texte}</div>}
       {enfreintes && (
@@ -676,6 +712,8 @@ export default function Planification() {
           <div className="pl-principal">
             <section className="pl-tableau" aria-label="Semaine par technicien">
               <div className="pl-grille">
+                {kAuj >= 0 && <div className="pl-maintenant" aria-hidden="true" title={`Maintenant, ${heure}`}
+                  style={{ left: `calc(var(--pl-col-tech) + (100% - var(--pl-col-tech)) * ${(kAuj + fraction) / 5})` }}><span /></div>}
                 <div className="pl-ligne pl-entete">
                   <div className="pl-coin">
                     <input type="search" className="pl-recherche" aria-label="Rechercher un technicien" placeholder="Technicien"
@@ -686,7 +724,10 @@ export default function Planification() {
                     const n = libresDuJour(j);
                     return (
                       <div key={j} className={`pl-jour${j === auj ? ' aujourdhui' : ''}${ferie ? ' ferie' : ''}`} style={{ gridColumn: k + 2 }}>
-                        <span className="pl-jour-date"><span>{JOURS[k]}</span><strong>{Number(j.slice(8))}</strong></span>
+                        <span className="pl-jour-date"><span>{JOURS[k]}</span><strong>{Number(j.slice(8))}</strong>
+                          {temps_?.jours[j] && <span className="pl-jour-meteo" title={`${temps(temps_.jours[j].code).libelle}, `
+                            + `${Math.round(temps_.jours[j].min)} à ${Math.round(temps_.jours[j].max)} °C${siege ? ` (${siege.nom})` : ''}`}>
+                            <span aria-hidden="true">{temps(temps_.jours[j].code).icone}</span>{Math.round(temps_.jours[j].max)}°</span>}</span>
                         {ferie ? <span className="pl-jour-info">Férié ({ferie})</span>
                           : ressources.donnees && <span className="pl-jour-info libres">{n} libre{n > 1 ? 's' : ''}</span>}
                       </div>
@@ -738,9 +779,9 @@ export default function Planification() {
                               <Glissable key={s.id} s={s} depuis={t.matricule} fixe={etatDe(s) === 'brouillon'}
                                 className={`pl-service etat-${etatDe(s)} a-ib${s.priority === '1' ? ' urgent' : ''}`
                                   + `${conflits.length ? ' conflit' : ''}${coupeAvant ? ' coupe-avant' : ''}${coupeApres ? ' coupe-apres' : ''}`
-                                  + `${glisse?.serviceId === s.id ? ' en-glisse' : ''}`}
+                                  + `${glisse?.serviceId === s.id ? ' en-glisse' : ''}${focus === s.id ? ' repere' : ''}`}
                                 style={{ gridColumn: `${de + 2} / ${a + 3}`, gridRow: voie + 1 }}
-                                onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
+                                onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse} onSurvol={setFocus}>
                                 <span className="pl-service-client">{client(s)}</span>
                                 <span className="pl-service-nom">{s.name}</span>
                                 {etatDe(s) === 'brouillon' && (
@@ -771,6 +812,17 @@ export default function Planification() {
             </div>
           </div>
 
+          <div className="pl-cote">
+          <section className="pl-carte-semaine" aria-labelledby="titre-carte-semaine">
+            <div className="pl-liste-tete"><h2 id="titre-carte-semaine">Carte de la semaine</h2>
+              <span className="pl-compte">{sitesCarte.length}</span></div>
+            <CartePlanif sites={sitesCarte} agences={agencesCarte} focus={focus} onSurvol={setFocus} onOuvrir={setOuvert} />
+            <div className="pc-legende" aria-hidden="true">
+              <span><i className="pc-point etat-a_planifier" />À planifier</span><span><i className="pc-point etat-propose" />Proposé</span>
+              <span><i className="pc-point etat-verrouille" />Verrouillé</span><span><i className="pc-point etat-publie" />Publié</span>
+              <span><i className="pc-agence" />Agence</span>
+            </div>
+          </section>
           <aside className={`pl-liste${glisse && glisseAffecte ? ' cible' : ''}${survol === 'liste' ? ' survol' : ''}`}
             aria-label="À planifier"
             onDragOver={(e) => { if (!glisseAffecte) return; e.preventDefault(); if (survol !== 'liste') setSurvol('liste'); }}
@@ -788,8 +840,8 @@ export default function Planification() {
                 return (
                   <Glissable key={s.id} s={s} depuis={null}
                     className={`pl-carte${s.priority === '1' ? ' urgent' : ''}${glisse?.serviceId === s.id ? ' en-glisse' : ''}`
-                      + `${enCours ? ' en-cours' : ''}`}
-                    onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse}>
+                      + `${enCours ? ' en-cours' : ''}${focus === s.id ? ' repere' : ''}`}
+                    onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse} onSurvol={setFocus}>
                     <span className="pl-carte-client">{client(s)}</span>
                     <span className="pl-carte-nom">{s.name}</span>
                     <span className="pl-carte-infos">{infos}</span>
@@ -811,6 +863,7 @@ export default function Planification() {
             <p className="pl-aide">Glissez une carte sur un technicien : ses jours libres s'allument en vert. Service à plusieurs
               techniciens : glissez-la sur chacun.</p>
           </aside>
+          </div>
         </div>
       </>)}
 
