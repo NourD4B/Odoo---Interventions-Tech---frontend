@@ -26,27 +26,21 @@ function relatif(iso: string) {
 }
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
-/** Avancement en anneau : un segment par état, le pourcentage de services faits ou facturés au centre. */
-function Anneau({ p }: { p: Projet }) {
-  const total = Math.max(1, p.services);
-  const R = 25, C = 2 * Math.PI * R, ESPACE = p.services > 1 ? 3 : 0;
-  let deja = 0;
-  const segments = ORDRE.flatMap((e) => {
-    const n = p.par_etat[e] ?? 0;
-    if (!n) return [];
-    const long = (C * n) / total, debut = deja;
-    deja += long;
-    return [{ e, long, debut }];
-  });
+/** Barre d'avancement : un segment par état (largeur = nombre de services), pourcentage de services faits ou facturés. */
+function Avancement({ p }: { p: Projet }) {
+  const etats = ORDRE.filter((e) => p.par_etat[e]);
+  const resume = etats.map((e) => `${p.par_etat[e]} ${LIBELLES_ETAT[e].toLowerCase()}`).join(', ');
   return (
-    <svg className="dc-anneau" viewBox="0 0 64 64" width="64" height="64" role="img"
-      aria-label={`Avancement ${nombre(p.avancement_pct ?? 0)} % : ${segments.map(({ e }) => `${p.par_etat[e]} ${LIBELLES_ETAT[e].toLowerCase()}`).join(', ')}`}>
-      <circle cx="32" cy="32" r={R} className="fond" />
-      {segments.map(({ e, long, debut }) => (
-        <circle key={e} cx="32" cy="32" r={R} className={`seg e-${e}`} transform="rotate(-90 32 32)"
-          strokeDasharray={`${Math.max(0.01, long - ESPACE)} ${C}`} strokeDashoffset={-debut} />))}
-      <text x="32" y="36.5" textAnchor="middle">{nombre(Math.round(p.avancement_pct ?? 0))} %</text>
-    </svg>
+    <div className="dc-avancement">
+      <div className="dc-av-ligne"><span>Avancement</span><strong>{nombre(Math.round(p.avancement_pct ?? 0))} %</strong></div>
+      <div className="dc-av-barre" role="img" aria-label={`Avancement ${nombre(p.avancement_pct ?? 0)} % : ${resume}`}>
+        {etats.map((e) => <span key={e} className={`e-${e}`} style={{ flexGrow: p.par_etat[e] }} />)}
+      </div>
+      <ul className="dc-av-legende">{etats.map((e) => (
+        <li key={e} className={e === 'en_retard' ? 'retard' : undefined}><i className={`e-${e}`} aria-hidden="true" />
+          {p.par_etat[e]} {LIBELLES_ETAT[e].toLowerCase()}</li>))}
+      </ul>
+    </div>
   );
 }
 
@@ -85,10 +79,8 @@ function CarteDossier({ p }: { p: Projet }) {
           <div className="dc-titre">
             <p className="dc-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dc-simule">simulé</span>}</p>
             <h2>{p.nom}</h2>
-            <p className="dc-compte">{termines} sur {pluriel(p.services, 'service')} terminé{termines > 1 ? 's' : ''}
-              {retard > 0 && <b>, {retard} en retard</b>}</p>
           </div>
-          <Anneau p={p} />
+          <Avancement p={p} />
         </header>
 
         <div className="dc-corps">
@@ -114,8 +106,9 @@ function CarteDossier({ p }: { p: Projet }) {
             <div><dt>Reste à facturer</dt><dd>{euros(p.reste_a_facturer_ht)}</dd></div>
             <div><dt>Heures passées</dt><dd>{heures(p.heures_passees)} <small>sur {heures(p.heures_prevues)}</small></dd></div>
             <div><dt>Marge matériel</dt><dd className={p.marge_materiel < 0 ? 'negatif' : undefined}>{euros(p.marge_materiel)}</dd></div>
-            <div><dt>Score RSE</dt><dd className="dc-rse"><PastilleNote note={p.rse.note} />
-              <small>{p.rse.kg_co2e === null ? 'à renseigner' : co2(p.rse.kg_co2e)}</small></dd></div>
+            <div><dt>Score RSE, CO2e</dt><dd className="dc-rse"><PastilleNote note={p.rse.note} />
+              <small title={p.rse.kg_co2e === null ? undefined : co2(p.rse.kg_co2e)}>
+                {p.rse.kg_co2e === null ? 'à renseigner' : `${nombre(Math.round(p.rse.kg_co2e))} kg`}</small></dd></div>
           </dl>
         </div>
 
@@ -123,10 +116,53 @@ function CarteDossier({ p }: { p: Projet }) {
           {retard > 0
             ? <span className="dc-alerte">En retard : {p.en_retard.map((x) => x.nom).join(', ')}</span>
             : <span className="dc-ok">{p.services === termines ? 'Tous les services sont terminés' : 'Aucun retard'}</span>}
-          <span className="dc-ouvrir">Ouvrir le dossier</span>
         </footer>
       </Link>
     </li>
+  );
+}
+
+/** Synthèse des projets affichés : projets et retards, services par état, facturation. */
+function Synthese({ projets }: { projets: Projet[] }) {
+  const somme = (f: (p: Projet) => number) => projets.reduce((t, p) => t + f(p), 0);
+  const retard = projets.filter((p) => p.par_etat.en_retard > 0).length;
+  const services = somme((p) => p.services);
+  const etats = ORDRE.map((e) => [e, somme((p) => p.par_etat[e] ?? 0)] as const).filter(([, n]) => n > 0);
+  const ca = somme((p) => p.ca_ht), facture = somme((p) => p.facture_ht), reste = somme((p) => p.reste_a_facturer_ht);
+  const part = ca > 0 ? Math.min(100, (100 * facture) / ca) : 0;
+  const suivante = projets.filter((p) => p.prochaine_mission)
+    .sort((a, b) => a.prochaine_mission!.jour.localeCompare(b.prochaine_mission!.jour))[0];
+  return (
+    <section className="dc-synthese" aria-label="Synthèse des projets">
+      <div className="dc-s-bloc">
+        <h2 className="dc-s-titre">Projets</h2>
+        <p className="dc-s-chiffre"><strong>{projets.length}</strong> avec des services sur site</p>
+        <p className={`dc-s-etat${retard ? ' retard' : ''}`}><i aria-hidden="true" />
+          {retard ? `${retard} avec une mission en retard` : 'Aucune mission en retard'}</p>
+        {suivante?.prochaine_mission && <p className="dc-s-note">Prochaine intervention {relatif(suivante.prochaine_mission.jour)} :
+          {' '}<strong>{suivante.prochaine_mission.nom}</strong></p>}
+      </div>
+      <div className="dc-s-bloc">
+        <h2 className="dc-s-titre">Services sur site</h2>
+        <p className="dc-s-chiffre"><strong>{services}</strong> service{services > 1 ? 's' : ''} au total</p>
+        <div className="dc-s-barre etats" role="img"
+          aria-label={etats.map(([e, n]) => `${n} ${LIBELLES_ETAT[e].toLowerCase()}`).join(', ')}>
+          {etats.map(([e, n]) => <span key={e} className={`e-${e}`} style={{ flexGrow: n }} />)}
+        </div>
+        <ul className="dc-s-legende">{etats.map(([e, n]) => (
+          <li key={e}><i className={`e-${e}`} aria-hidden="true" /><strong>{n}</strong> {LIBELLES_ETAT[e].toLowerCase()}</li>))}
+        </ul>
+      </div>
+      <div className="dc-s-bloc">
+        <h2 className="dc-s-titre">Chiffre d'affaires HT</h2>
+        <p className="dc-s-chiffre"><strong>{euros(ca)}</strong></p>
+        <div className="dc-s-barre facturation" role="img" aria-label={`${nombre(Math.round(part))} % facturé`}>
+          <span style={{ width: `${part}%` }} />
+        </div>
+        <p className="dc-s-repartition"><span><i className="facture" aria-hidden="true" />{euros(facture)} facturés</span>
+          <span><i className="reste" aria-hidden="true" />{euros(reste)} à facturer</span></p>
+      </div>
+    </section>
   );
 }
 
@@ -143,30 +179,37 @@ export default function Dossiers() {
       .sort((a, b) => Number(b.par_etat.en_retard > 0) - Number(a.par_etat.en_retard > 0)
         || (a.prochaine_intervention ?? '9999').localeCompare(b.prochaine_intervention ?? '9999') || a.nom.localeCompare(b.nom));
   }, [tous, texte]);
-  const enRetard = tous.filter((p) => p.par_etat.en_retard > 0).length;
-  const ca = tous.reduce((t, p) => t + p.ca_ht, 0), reste = tous.reduce((t, p) => t + p.reste_a_facturer_ht, 0);
 
   return (
     <>
-      <div className="entete">
-        <div><h1>Dossiers projets</h1>
-          <div className="sous-titre">Tout sur un projet au même endroit : missions, équipes, véhicules, tâches, coûts, carte,
-            itinéraires, PV et pièces jointes.</div></div>
-        <div className="filtres">
-          <label className="champ">Rechercher<input type="search" value={texte} onChange={(e) => setTexte(e.target.value)}
-            placeholder="Projet, client, véhicule…" /></label>
-          <label className="case"><input type="checkbox" checked={simules} onChange={(e) => setSimules(e.target.checked)} />
-            Inclure les services simulés</label>
-          <BoutonExport libelle="Exporter les projets" nomFichier={nomFichier('projets', 'tout')}
-            lire={() => exportations.projets()} />
+      <header className="dc-entete">
+        <div>
+          <h1>Dossiers projets</h1>
+          <p className="sous-titre">Tout sur un projet au même endroit : missions, équipes, véhicules, tâches, coûts, carte,
+            itinéraires, PV et pièces jointes.</p>
         </div>
+        <BoutonExport libelle="Exporter les projets" nomFichier={nomFichier('projets', 'tout')}
+          lire={() => exportations.projets()} />
+      </header>
+
+      <div className="dc-outils" role="search">
+        <label className="dc-recherche">
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" />
+            <path d="m13 13 4.5 4.5" /></svg>
+          <span className="visuellement-cache">Rechercher</span>
+          <input type="search" value={texte} onChange={(e) => setTexte(e.target.value)}
+            placeholder="Projet, client, technicien, véhicule" />
+        </label>
+        {texte && tous.length > 0 && <span className="dc-resultats" aria-live="polite">
+          {projets.length} sur {pluriel(tous.length, 'projet')}</span>}
+        <label className="dc-bascule">
+          <input type="checkbox" checked={simules} onChange={(e) => setSimules(e.target.checked)} />
+          <span className="pl-piste" aria-hidden="true" />Services simulés
+        </label>
       </div>
+
       <EtatChargement chargement={liste.chargement && !liste.donnees} erreur={liste.erreur} />
-      {liste.donnees && tous.length > 0 && (
-        <p className="dc-synthese">{pluriel(tous.length, 'projet')} avec des services sur site
-          {enRetard > 0 ? <>, dont <b>{enRetard} avec une mission en retard</b></> : ', aucun en retard'}.
-          {' '}{euros(ca)} HT de chiffre d'affaires, {euros(reste)} restent à facturer.</p>
-      )}
+      {liste.donnees && tous.length > 0 && <Synthese projets={tous} />}
       {liste.donnees && (
         <ul className="dc-grille">{projets.map((p) => <CarteDossier key={p.id} p={p} />)}</ul>
       )}
