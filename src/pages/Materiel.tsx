@@ -79,7 +79,7 @@ function LigneProduit({ p, choisi, onChoisir }: { p: ProduitAgence; choisi: bool
 
 // Pour qui : l'intervention et son projet ; sinon le projet du transfert ; sinon la commande (sans intervention).
 function Pour({ e }: { e: Evenement }) {
-  const projet = e.projet && <Link to={`/projets/${e.projet.id}`}>{e.projet.nom}</Link>;
+  const projet = e.projet && <Link to={`/dossiers/${e.projet.id}`}>{e.projet.nom}</Link>;
   if (e.intervention) {
     return (
       <span className="mt-ev-pour">
