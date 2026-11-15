@@ -9,6 +9,7 @@ export interface LigneService {
   id: number; nom: string; simule: boolean; archive_odoo: boolean; projet: { id: number; nom: string; archive?: boolean } | null; client: string | null;
   societe: string | null; etat: EtatService; etat_libelle: string; priorite: 'normale' | 'urgente';
   debut: string | null; fin: string | null; techniciens: string[]; vehicule: string | number | null;
+  vehicule_modele?: string | null;                  // « Marque Modèle »
   heures_prevues: number | null; heures_passees: number | null; km_estimes: number | null; ca_ht: number | null;
   marge_materiel: number | null; reste_a_facturer_ht: number | null; pct_livre: number | null;
   facturation: string | null; feuille_signee: boolean; sans_position: boolean;
@@ -28,7 +29,7 @@ export interface Tableau {
   par_technicien: { matricule: string; nom: string; agence: string | null; jours_planifies: number; services: number;
                     heures_passees: number; km_estimes: number; jours_ouvres: number; taux_charge_pct: number | null }[];
   autres_employes: { nom: string; heures_passees: number }[];
-  par_vehicule: { vehicle_id: number; plaque: string | null; jours: number; services: number; km_estimes: number;
+  par_vehicule: { vehicle_id: number; plaque: string | null; modele?: string | null; jours: number; services: number; km_estimes: number;
                   cout_estime: number }[];
   argent: Argent & { reste_a_facturer_faits_ht: number };
   rse: BilanRse;
@@ -49,6 +50,11 @@ export interface ResumeProjet extends Argent {
   km_estimes: number; commandes: Commande[]; commandes_ht: number; prochaine_intervention: string | null;
   en_retard: { id: number; nom: string }[];
   rse: BilanRse;
+  // résumé complet (cartes des dossiers) ; facultatif tant qu'un ancien serveur répond
+  prochaine_mission?: { id: number; nom: string; jour: string } | null;
+  equipe?: string[];
+  vehicules?: { id: number; plaque: string | null; modele: string | null }[];
+  sites?: string[];
 }
 export interface DetailProjet extends ResumeProjet { liste: LigneService[] }
 
@@ -62,7 +68,7 @@ export interface FicheService {
   planification: {
     statut: string; jours: string[]; debut: string | null; fin: string | null;
     techniciens: { matricule: string; nom: string; agence: string | null; jours: number }[];
-    vehicule: { id: number; plaque: string | null } | null;
+    vehicule: { id: number; plaque: string | null; modele?: string | null } | null;
     trajet: { par_technicien: { matricule: string; jours: number; km: number | null; heures_route: number | null;
                                 grand_deplacement: boolean | null; km_aller?: number; cause?: string }[];
               km_vehicule: number | null; heures_route: number | null; estime: boolean };

@@ -37,7 +37,7 @@ export default function MenuVehicule({ serviceId, matricules, debut, fin, actuel
     <label key={v.vehicle_id} className={`choix-vehicule${v.conforme ? '' : ' non-conforme'}${actuel === v.vehicle_id ? ' choisi' : ''}`}>
       <input type="radio" name="vehicule" checked={actuel === v.vehicle_id} onChange={() => onChoisir(v)} />
       <span>
-        <strong>{v.plaque}</strong> <span className="muet">{v.libelle.split('/').slice(0, 2).join(' ')}</span>
+        <strong>{v.modele ?? v.libelle.split('/').slice(0, 2).join(' ')}</strong> <span className="muet">{v.plaque}</span>
         <span className="muet raison">{v.conforme ? v.raison : v.violations.map((x) => x.message).join(' · ')}</span>
       </span>
     </label>

@@ -6,7 +6,7 @@ export type EtatAffectation = 'propose' | 'verrouille' | 'publie';
 export type VehiculeRequis = 'indifferent' | 'utilitaire';
 
 export interface AffectationResume {
-  matricules: string[]; equipe: string[]; vehicle_id: number | null; plaque: string | null;
+  matricules: string[]; equipe: string[]; vehicle_id: number | null; plaque: string | null; modele?: string | null;
   debut: string; fin: string; etat: EtatAffectation; propose_par: 'solveur' | 'dispatcher';
   raison: string | null; motif_derogation: string | null;
 }
@@ -40,7 +40,7 @@ export interface TechnicienPlanif {
   employee_id: number | null; competences: string[]; absences: { du: string; au: string }[];
 }
 export interface VehiculeRessource {
-  vehicle_id: number; plaque: string; libelle: string; type: 'voiture' | 'utilitaire' | 'exclu';
+  vehicle_id: number; plaque: string; libelle: string; modele?: string | null; type: 'voiture' | 'utilitaire' | 'exclu';
   attribution: 'pool' | 'attitre' | 'exclu'; conducteur: string | null; agence: string | null; places: number;
   electrique: boolean; immatricule: boolean;
 }
@@ -52,7 +52,7 @@ export interface Ressources {
 
 export interface AffectationProposee {
   service_id: number; service: string; matricules: string[]; equipe: string[]; vehicle_id: number | null;
-  vehicule: string | null; debut: string; fin: string; km_aller_retour: number | null;   // null : distance inconnue
+  vehicule: string | null; vehicule_modele?: string | null; debut: string; fin: string; km_aller_retour: number | null;   // null : distance inconnue
   cout_estime: number | null;
   raison_techniciens: string; raison_vehicule: string;
 }
@@ -63,7 +63,7 @@ export interface Proposition {
 
 export interface Violation { code: string; message: string }
 export interface ChoixVehicule {
-  vehicle_id: number; plaque: string; libelle: string; type_planification: string; attribution: string;
+  vehicle_id: number; plaque: string; libelle: string; modele?: string | null; type_planification: string; attribution: string;
   conforme: boolean; rang: number; raison: string; violations: Violation[];
 }
 export interface CorpsAffectation {

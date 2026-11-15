@@ -113,8 +113,8 @@ export default function Statistiques() {
               <div className="defilement"><table className="compacte">
                 <thead><tr><th>Véhicule</th><th>Jours</th><th className="nombre">Km estimés</th><th className="nombre">Coût estimé</th></tr></thead>
                 <tbody>{d.par_vehicule.map((v) => (
-                  <tr key={v.vehicle_id}><td><strong className="nowrap">{v.plaque ?? `n° ${v.vehicle_id}`}</strong>
-                    <div className="muet">{v.services} service(s)</div></td>
+                  <tr key={v.vehicle_id}><td><strong>{v.modele ?? 'Modèle non renseigné'}</strong>
+                    <div className="muet nowrap">{v.plaque ?? `n° ${v.vehicle_id}`}, {v.services} service(s)</div></td>
                     <td>{v.jours}</td><td className="nowrap nombre">{nombre(v.km_estimes)} km</td>
                     <td className="nowrap nombre">{euros(v.cout_estime)}</td></tr>))}</tbody>
               </table></div>) : <div className="vide">Aucun véhicule affecté sur la période.</div>}

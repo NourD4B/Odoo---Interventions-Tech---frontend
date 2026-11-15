@@ -15,6 +15,13 @@ export function familleDe(v: VehiculeFlotte): Famille {
   return c.includes('commerc') ? 'utilitaire' : c.includes('moto') ? 'deux_roues' : 'voiture';
 }
 export const titreDe = (v: VehiculeFlotte) => [v.retenu.marque, v.retenu.modele].filter(Boolean).join(' ') || v.name;
+/** Un véhicule cité ailleurs que dans la flotte : « Marque Modèle (PLAQUE) », jamais la plaque seule.
+ * `libelle` : nom Odoo « Marque/Modèle/PLAQUE », en repli quand le serveur n'a pas donné le modèle. */
+export function nomVehicule(v: { modele?: string | null; plaque?: string | null; libelle?: string | null; id?: number | null }) {
+  const modele = v.modele || (v.libelle ? v.libelle.split('/').slice(0, -1).join(' ') || null : null);
+  if (modele && v.plaque) return `${modele} (${v.plaque})`;
+  return modele ?? v.plaque ?? (v.id != null ? `véhicule n° ${v.id}` : 'véhicule');
+}
 export const libelleEnergie = (e: string | null) => (e ? ENERGIES[e] ?? e : null);
 export const energieDe = (v: VehiculeFlotte) => libelleEnergie(v.retenu.energie);
 export const electrifie = (v: VehiculeFlotte) =>

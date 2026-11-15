@@ -121,7 +121,7 @@ export function TableServices({ lignes, vide }: { lignes: LigneService[]; vide?:
               <td className="nowrap">{!s.debut && s.fin ? `limite ${jourCourt(s.fin)}`
                 : <>{jourCourt(s.debut)}{s.fin && s.fin !== s.debut ? ` → ${jourCourt(s.fin)}` : ''}</>}</td>
               <td>{s.techniciens.join(', ') || <span className="muet">personne</span>}
-                {s.vehicule !== null && <div className="muet">{s.vehicule}</div>}</td>
+                {s.vehicule !== null && <div className="muet">{s.vehicule_modele ? `${s.vehicule_modele} (${s.vehicule})` : s.vehicule}</div>}</td>
               <td className="nowrap">{heures(s.heures_prevues)} / {heures(s.heures_passees)}</td>
               <td style={{ minWidth: 120 }}><Jauge pct={s.pct_livre} /></td>
               <td className="nowrap nombre">{euros(s.ca_ht)}</td>

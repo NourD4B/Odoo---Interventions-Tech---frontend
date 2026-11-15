@@ -13,6 +13,7 @@ import { IconeTelechargement } from '../composants/BoutonExport';
 import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import { enregistrerFichier, exportations, nomFichier } from '../exports';
 import MenuVehicule from '../composants/MenuVehicule';
+import { nomVehicule } from '../composants/Vehicule';
 import PlanMois from './PlanMois';
 import {
   ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type Proposition, type Referentiels,
@@ -193,7 +194,7 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
         {(propose || a?.motif_derogation || cause) && (
           <div className="pl-raisons">
             {cause && <p className="pl-cause">Non planifié par le solveur : {cause}</p>}
-            {propose && <><p>{propose.raison_techniciens}</p><p>{propose.raison_vehicule}
+            {propose && <><p>{propose.raison_techniciens}</p><p>{propose.vehicle_id != null && <strong>{nomVehicule({ modele: propose.vehicule_modele, plaque: propose.vehicule, id: propose.vehicle_id })}. </strong>}{propose.raison_vehicule}
               {propose.km_aller_retour != null && ` · ${Math.round(propose.km_aller_retour)} km aller-retour`}
               {propose.cout_estime != null && ` · ≈ ${Math.round(propose.cout_estime)} € (hors hôtel et repas)`}</p>
               {!publie && !a && (
@@ -210,7 +211,7 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
         {publie ? (
           <div className="pl-bloc">
             <h3>Affectation publiée</h3>
-            <p>{a?.equipe.join(', ')} · {a?.plaque ?? 'sans véhicule'} · {a && (a.debut === a.fin ? jourLong(a.debut)
+            <p>{a?.equipe.join(', ')} · {a?.vehicle_id != null ? nomVehicule({ ...a, id: a.vehicle_id }) : 'sans véhicule'} · {a && (a.debut === a.fin ? jourLong(a.debut)
               : `${jourLong(a.debut)} → ${jourLong(a.fin)}`)}</p>
             {motif === null ? (
               <p className="muet">Publiée : figée. Pour la modifier ou la retirer, retirez d'abord la publication
@@ -730,7 +731,7 @@ export default function Planification() {
                             const lignes: [string, string][] = [
                               ['Dates', datesAffectation(aff.debut, aff.fin)],
                               ['Équipe', aff.equipe.join(', ') || '—'],
-                              ['Véhicule', aff.plaque ?? 'Aucun'],
+                              ['Véhicule', aff.vehicle_id != null ? nomVehicule({ ...aff, id: aff.vehicle_id }) : 'Aucun'],
                               ['Temps prévu', nombreH(s.allocated_hours)]];
                             if (p?.km_aller_retour != null) lignes.push(['Trajet', `${Math.round(p.km_aller_retour)} km aller-retour`]);
                             return (

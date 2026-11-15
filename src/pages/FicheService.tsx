@@ -2,6 +2,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { EtatChargement, useDonnees } from '../composants';
 import { ChoixMode, DetailRse, PastilleNote } from '../composants/Rse';
+import { nomVehicule } from '../composants/Vehicule';
 import { Barre, BadgeEtat, BadgeSimule, Jauge, Tuile } from '../composants/Statistiques';
 import { co2 } from '../rse';
 import { dateHeure, euros, heures, jourCourt, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, LIBELLES_PAIEMENT, nombre,
@@ -80,7 +81,7 @@ export default function FicheService() {
                 <td>{heures(tr?.heures_route)}</td></tr>);
             })}</tbody>
           </table></div> : <div className="vide">{d.archive_odoo ? 'Aucune affectation dans l\'application.' : 'Personne n\'est encore affecté.'}</div>}
-          <div>Véhicule : <strong>{p.vehicule ? (p.vehicule.plaque ?? `n° ${p.vehicule.id}`) : '—'}</strong>
+          <div>Véhicule : <strong>{p.vehicule ? <Link to={`/vehicules/${p.vehicule.id}`}>{nomVehicule(p.vehicule)}</Link> : '—'}</strong>
             {p.trajet.km_vehicule !== null && <span className="muet"> · {nombre(p.trajet.km_vehicule)} km estimés</span>}</div>
         </section>
       </div>

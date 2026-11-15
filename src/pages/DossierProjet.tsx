@@ -39,7 +39,7 @@ function duree(h: number | null) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
 }
 /** « 21 Rue Victor Grignard, 42000 SAINT ETIENNE » -> « Saint Etienne ». */
-function villeDe(adresse: string | null) {
+export function villeDe(adresse: string | null) {
   const v = adresse?.match(/\b\d{5}\s+([^,]+)$/)?.[1] ?? adresse?.split(',').pop() ?? null;
   return v ? v.trim().toLowerCase().replace(/(^|[\s-])\p{L}/gu, (c) => c.toUpperCase()) : null;
 }
@@ -320,7 +320,7 @@ function Mission({ s, d, ouvert, actif, futur, onBasculer, onSurvol, onModifie }
             : <span className="dp-a-faire">Équipe à planifier</span>}
           {v && <Link to={`/vehicules/${v.id}`} className="dp-vehicule" title="Fiche du véhicule">
             {plaque ? <Plaque plaque={plaque} /> : <span className="dp-sans-plaque">véhicule {v.id}</span>}
-            {veh?.modele && <span className="dp-modele">{veh.modele}</span>}
+            {(v.modele ?? veh?.modele) && <span className="dp-modele">{v.modele ?? veh?.modele}</span>}
             {mission?.conducteur && <small>conducteur : {mission.conducteur}</small>}</Link>}
         </div>
         <dl className="dp-mesures">

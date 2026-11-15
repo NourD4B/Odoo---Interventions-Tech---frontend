@@ -5,6 +5,7 @@ import { CircleMarker, MapContainer, TileLayer, useMapEvents } from 'react-leafl
 import { Link } from 'react-router-dom';
 import { Avertissements, Badge, EtatChargement, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
+import { nomVehicule } from '../composants/Vehicule';
 import { SynchroOdoo } from '../composants/Statistiques';
 import {
   ErreurPlanif, erreursParChamp, LIBELLES_PRECISION, LIBELLES_STATUT_PLANIF,
@@ -289,7 +290,7 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
         <div>
           <div className="mini-titre">Planification</div>
           {a ? (<>
-            <div>{a.equipe.join(', ') || 'équipe vide'} · {a.plaque ?? 'sans véhicule'}</div>
+            <div>{a.equipe.join(', ') || 'équipe vide'} · {a.vehicle_id != null ? nomVehicule({ ...a, id: a.vehicle_id }) : 'sans véhicule'}</div>
             <div className="muet">{jourCourt(a.debut)}{a.fin !== a.debut ? ` → ${jourCourt(a.fin)}` : ''} ·{' '}
               {a.propose_par === 'dispatcher' ? 'choix du dispatcher' : 'proposé par le solveur'}
               {a.motif_derogation ? ` · dérogation : ${a.motif_derogation}` : ''}</div>
