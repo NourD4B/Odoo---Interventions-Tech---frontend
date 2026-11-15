@@ -1487,7 +1487,16 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .sv-titre { min-width: 0; }
 .sv-titre h2 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.005em; }
 .sv-titre h2 a { color: var(--encre); text-decoration: none; }
-.sv-titre h2 a:hover, .sv-titre h2 a:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+/* toute la ligne ouvre la fiche du service (lien du titre étendu) ; boutons et liens restent au-dessus */
+.sv-ligne { position: relative; transition: border-color .15s ease, box-shadow .15s ease; }
+.sv-titre h2 a::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+.sv-titre h2 a:focus-visible { outline: none; }
+.sv-titre h2 a:focus-visible::after { outline: 3px solid var(--accent); outline-offset: 2px; }
+.sv-ligne:hover { border-top-color: #aebde6; border-right-color: #aebde6; border-bottom-color: #aebde6;
+  box-shadow: 0 14px 30px -24px rgba(15, 29, 68, .6); }
+.sv-ligne:hover .sv-titre h2 a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.sv-actions .btn, .sv-actions a { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) { .sv-ligne { transition: none; } }
 .sv-titre p { margin: 3px 0 0; font-size: 13px; color: var(--encre-3); overflow-wrap: anywhere; }
 .sv-faits { margin: 0; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1.5fr); gap: 12px 24px;
   padding-top: 12px; border-top: 1px solid #eef0f3; }

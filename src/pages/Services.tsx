@@ -306,7 +306,6 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
         <div className="sv-actions">
           {!s.archive_odoo && <button type="button" className={`btn btn-petit${aRegler(s) ? ' btn-primaire' : ''}`} onClick={onRegler}>
             {s.statut_planification === 'publie' ? 'Voir les réglages' : 'Régler la planification'}</button>}
-          <Link className="sv-lien" to={`/statistiques/services/${s.id}`}>Fiche du service</Link>
           {s.odoo_url && <a className="sv-lien" href={s.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
         </div>
       </div>
