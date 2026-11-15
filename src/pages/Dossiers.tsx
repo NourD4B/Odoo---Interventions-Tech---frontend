@@ -26,21 +26,27 @@ function relatif(iso: string) {
 }
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
-/** Barre d'avancement : un segment par état (largeur = nombre de services), pourcentage de services faits ou facturés. */
-function Avancement({ p }: { p: Projet }) {
-  const etats = ORDRE.filter((e) => p.par_etat[e]);
-  const resume = etats.map((e) => `${p.par_etat[e]} ${LIBELLES_ETAT[e].toLowerCase()}`).join(', ');
+/** Avancement en anneau : un segment par état, le pourcentage de services faits ou facturés au centre. */
+function Anneau({ p }: { p: Projet }) {
+  const total = Math.max(1, p.services);
+  const R = 25, C = 2 * Math.PI * R, ESPACE = p.services > 1 ? 3 : 0;
+  let deja = 0;
+  const segments = ORDRE.flatMap((e) => {
+    const n = p.par_etat[e] ?? 0;
+    if (!n) return [];
+    const long = (C * n) / total, debut = deja;
+    deja += long;
+    return [{ e, long, debut }];
+  });
   return (
-    <div className="dc-avancement">
-      <div className="dc-av-ligne"><span>Avancement</span><strong>{nombre(Math.round(p.avancement_pct ?? 0))} %</strong></div>
-      <div className="dc-av-barre" role="img" aria-label={`Avancement ${nombre(p.avancement_pct ?? 0)} % : ${resume}`}>
-        {etats.map((e) => <span key={e} className={`e-${e}`} style={{ flexGrow: p.par_etat[e] }} />)}
-      </div>
-      <ul className="dc-av-legende">{etats.map((e) => (
-        <li key={e} className={e === 'en_retard' ? 'retard' : undefined}><i className={`e-${e}`} aria-hidden="true" />
-          {p.par_etat[e]} {LIBELLES_ETAT[e].toLowerCase()}</li>))}
-      </ul>
-    </div>
+    <svg className="dc-anneau" viewBox="0 0 64 64" width="64" height="64" role="img"
+      aria-label={`Avancement ${nombre(p.avancement_pct ?? 0)} % : ${segments.map(({ e }) => `${p.par_etat[e]} ${LIBELLES_ETAT[e].toLowerCase()}`).join(', ')}`}>
+      <circle cx="32" cy="32" r={R} className="fond" />
+      {segments.map(({ e, long, debut }) => (
+        <circle key={e} cx="32" cy="32" r={R} className={`seg e-${e}`} transform="rotate(-90 32 32)"
+          strokeDasharray={`${Math.max(0.01, long - ESPACE)} ${C}`} strokeDashoffset={-debut} />))}
+      <text x="32" y="36.5" textAnchor="middle">{nombre(Math.round(p.avancement_pct ?? 0))} %</text>
+    </svg>
   );
 }
 
@@ -79,8 +85,10 @@ function CarteDossier({ p }: { p: Projet }) {
           <div className="dc-titre">
             <p className="dc-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dc-simule">simulé</span>}</p>
             <h2>{p.nom}</h2>
+            <p className="dc-compte">{termines} sur {pluriel(p.services, 'service')} terminé{termines > 1 ? 's' : ''}
+              {retard > 0 && <b>, {retard} en retard</b>}</p>
           </div>
-          <Avancement p={p} />
+          <Anneau p={p} />
         </header>
 
         <div className="dc-corps">
