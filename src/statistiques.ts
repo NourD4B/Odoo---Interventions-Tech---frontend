@@ -56,7 +56,6 @@ export interface ResumeProjet extends Argent {
   vehicules?: { id: number; plaque: string | null; modele: string | null }[];
   sites?: string[];
 }
-export interface DetailProjet extends ResumeProjet { liste: LigneService[] }
 
 export interface FicheService {
   id: number; nom: string; simule: boolean; archive_odoo: boolean; odoo_url: string | null;
@@ -127,7 +126,6 @@ export const stats = {
   tableau: (debut: string, fin: string, simules: boolean) =>
     lire<Tableau>('/api/statistiques/tableau', { debut, fin, simules }),
   projets: (simules: boolean) => lire<ResumeProjet[]>('/api/statistiques/projets', { simules }),
-  projet: (id: number) => lire<DetailProjet>(`/api/statistiques/projets/${id}`),
   service: (id: number) => lire<FicheService>(`/api/statistiques/services/${id}`),
   synchro: () => lire<EtatSynchro>('/api/synchro'),
   synchroniser: () => lire<EtatSynchro>('/api/synchro', {}, 'POST'),

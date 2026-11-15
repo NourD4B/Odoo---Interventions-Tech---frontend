@@ -1,6 +1,6 @@
 // Briques des écrans de statistiques : état d'un service, barres, jauge, graphique par jour.
 // Couleurs des séries (palette de référence validée : bleu, orange ; contrôles CVD réussis) dans styles.css.
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDonnees } from '../composants';
 import { dateHeure, euros, heures, jourCourt, LIBELLES_ETAT, nombre, stats, type EtatService,
@@ -30,17 +30,6 @@ export function Barre({ valeur, max, texte, titre, serie = 1 }: { valeur: number
 export function Jauge({ pct, texte }: { pct: number | null; texte?: string }) {
   if (pct === null) return <span className="muet">—</span>;
   return <Barre valeur={pct} max={100} texte={texte ?? `${nombre(pct)} %`} />;
-}
-
-export function Tuile({ libelle, valeur, detail, ton }: { libelle: string; valeur: ReactNode; detail?: ReactNode;
-  ton?: 'alerte' | 'estime' }) {
-  return (
-    <div className={`kpi${ton ? ` kpi-${ton}` : ''}`}>
-      <span>{libelle}</span>
-      <strong>{valeur}</strong>
-      {detail && <div className="muet">{detail}</div>}
-    </div>
-  );
 }
 
 /** Services planifiés et faits par jour : barres groupées (2 séries), légende, valeurs, infobulle au survol. */
