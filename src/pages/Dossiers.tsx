@@ -85,8 +85,11 @@ function CarteDossier({ p }: { p: Projet }) {
           <div className="dc-titre">
             <p className="dc-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dc-simule">simulé</span>}</p>
             <h2>{p.nom}</h2>
-            <p className="dc-compte">{termines} sur {pluriel(p.services, 'service')} terminé{termines > 1 ? 's' : ''}
-              {retard > 0 && <b>, {retard} en retard</b>}</p>
+            <p className="dc-compte">{termines} sur {pluriel(p.services, 'service')} terminé{termines > 1 ? 's' : ''}</p>
+            <ul className="dc-legende">{ORDRE.filter((e) => p.par_etat[e]).map((e) => (
+              <li key={e} className={e === 'en_retard' ? 'retard' : undefined}><i className={`e-${e}`} aria-hidden="true" />
+                {p.par_etat[e]} {LIBELLES_ETAT[e].toLowerCase()}</li>))}
+            </ul>
           </div>
           <Anneau p={p} />
         </header>
