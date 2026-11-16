@@ -41,7 +41,7 @@ export function horsPlanification(v: VehiculeFlotte): { libelle: string; explica
       ? ` (${v.registre.commentaire})` : ''}. Planifiable dès son passage à l'état « Inscrit ».`,
   };
   if (!v.immatricule) return { libelle: 'Non disponible', explication: `État Odoo « ${v.etat ?? 'inconnu'} » : seuls les véhicules à l'état « Inscrit » sont planifiables` };
-  if (v.type_planification === 'exclu') return { libelle: 'Hors planification', explication: 'Deux-roues ou catégorie inconnue : pas proposé pour une équipe' };
+  if (v.type_planification === 'exclu') return { libelle: 'Hors planification', explication: 'Pas lu par la planification (véhicule introuvable dans Odoo Fleet)' };
   return { libelle: 'Hors planification', explication: 'Pas un véhicule de service (conducteur « Véhicule de service » dans Odoo)' };
 }
 

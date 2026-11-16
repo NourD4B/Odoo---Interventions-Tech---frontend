@@ -40,7 +40,7 @@ export interface TechnicienPlanif {
   employee_id: number | null; competences: string[]; absences: { du: string; au: string }[];
 }
 export interface VehiculeRessource {
-  vehicle_id: number; plaque: string; libelle: string; modele?: string | null; type: 'voiture' | 'utilitaire' | 'exclu';
+  vehicle_id: number; plaque: string; libelle: string; modele?: string | null; type: 'voiture' | 'utilitaire' | 'deux_roues' | 'exclu';
   attribution: 'pool' | 'attitre' | 'exclu'; conducteur: string | null; agence: string | null; places: number;
   electrique: boolean; immatricule: boolean;
 }

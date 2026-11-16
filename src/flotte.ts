@@ -26,7 +26,7 @@ export interface AffectationVehicule {
 
 export interface VehiculeFlotte {
   id: number; plaque: string; name: string; marque: string | null; modele: string | null; model_name: string | null;
-  categorie: string | null; type_planification: 'voiture' | 'utilitaire' | 'exclu';
+  categorie: string | null; type_planification: 'voiture' | 'utilitaire' | 'deux_roues' | 'exclu';
   attribution: 'pool' | 'attitre' | 'exclu'; conducteur: string | null; conducteur_matricule: string | null;
   agence_code: string | null; location: string | null; etat: string | null; immatricule: boolean;
   energie: string | null; boite: string | null; places: number; portes: number; couleur: string | null;
