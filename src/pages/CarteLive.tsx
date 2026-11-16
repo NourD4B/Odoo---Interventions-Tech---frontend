@@ -9,6 +9,7 @@ import { Avertissements, Badge, COULEURS_ACTIVITE, COULEURS_STATUT, EtatChargeme
 
 const FRANCE: [number, number] = [46.6, 2.4];
 const RAFRAICHISSEMENT_MS = 10_000;   // positions GPS et activité toutes les 10 s
+const INTERVENTIONS_MS = 60_000;      // interventions (Odoo + planification publiée) toutes les minutes
 const POINTS_MAX = 500;               // longueur maximale de la trace affichée
 const GRIS = '#8892a6';
 const PRECISIONS_SITE = new Set(['adresse', 'rue', null]);
@@ -119,6 +120,21 @@ export default function CarteLive() {
   const interv = useDonnees(() => api.interventions(jour), [jour]);
   const live = useActivite();
 
+  // Services publiés dans la planification et avancement Odoo : relus chaque minute et au retour sur l'onglet
+  // (la planification est lue hors cache côté serveur : une publication apparaît au plus tard une minute après).
+  const { actualiser } = interv;
+  useEffect(() => {
+    const minuterie = setInterval(actualiser, INTERVENTIONS_MS);
+    const auRetour = () => { if (document.visibilityState === 'visible') actualiser(); };
+    window.addEventListener('focus', auRetour);
+    document.addEventListener('visibilitychange', auRetour);
+    return () => {
+      clearInterval(minuterie);
+      window.removeEventListener('focus', auRetour);
+      document.removeEventListener('visibilitychange', auRetour);
+    };
+  }, [actualiser]);
+
   const toutes = interv.donnees?.interventions ?? [];
   const options = useMemo(() => ({
     clients: [...new Set(toutes.map((i) => i.client).filter(Boolean) as string[])].sort(),
@@ -147,7 +163,7 @@ export default function CarteLive() {
           <h1>Carte live</h1>
           <div className="sous-titre">
             {avecGps.length} technicien(s) suivi(s) par GPS, dont {avecGps.filter((a) => a.en_direct).length} en direct
-            {' '}· actualisé toutes les 10 s
+            {' '}· positions toutes les 10 s, interventions chaque minute
           </div>
         </div>
         <button type="button" className="btn" onClick={() => { api.viderCache().then(interv.recharger); }}>

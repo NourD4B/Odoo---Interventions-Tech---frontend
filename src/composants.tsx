@@ -19,8 +19,19 @@ export function useDonnees<T>(charger: () => Promise<T>, deps: unknown[]) {
       .finally(() => { if (numero === dernier.current) setChargement(false); });
   }, deps);
 
+  /** Rechargement discret (minuterie, retour sur l'onglet) : pas d'indicateur de chargement, les données restent
+   *  affichées jusqu'à la réponse. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const actualiser = useCallback(() => {
+    const numero = ++dernier.current;
+    charger()
+      .then((d) => { if (numero === dernier.current) { setDonnees(d); setErreur(null); } })
+      .catch((e: Error) => { if (numero === dernier.current) setErreur(e.message); })
+      .finally(() => { if (numero === dernier.current) setChargement(false); });
+  }, deps);
+
   useEffect(() => { recharger(); }, [recharger]);
-  return { donnees, erreur, chargement, recharger };
+  return { donnees, erreur, chargement, recharger, actualiser };
 }
 
 /** Nom de la personne qui modifie la planification (journal), demandé à la première écriture. */
