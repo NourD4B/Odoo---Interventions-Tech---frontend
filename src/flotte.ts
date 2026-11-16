@@ -30,6 +30,8 @@ export interface VehiculeFlotte {
   attribution: 'pool' | 'attitre' | 'exclu'; conducteur: string | null; conducteur_matricule: string | null;
   agence_code: string | null; location: string | null; etat: string | null; immatricule: boolean;
   energie: string | null; boite: string | null; places: number; portes: number; couleur: string | null;
+  places_source?: 'odoo' | 'fiche' | null;   // places d'Odoo, sinon de la fiche constructeur (Odoo à 0)
+  planifiable?: boolean;                     // « Inscrit » dans Fleet, véhicule de service, voiture ou utilitaire
   annee_modele: string | null; date_immatriculation: string | null; puissance_ch: number | null;
   puissance_kw: number | null; co2_g_km: number | null; compteur: number | null; compteur_unite: string | null;
   autonomie_km: number | null; attelage: boolean; photo: PhotoVehicule | null; fiche: FicheModele | null;

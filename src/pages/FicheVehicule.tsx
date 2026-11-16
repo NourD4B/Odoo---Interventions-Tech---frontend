@@ -10,7 +10,7 @@ import { useEcriture } from '../composants/Ecriture';
 import { ListePieces, PastillePiece, usePieces, type Pieces } from '../composants/Pieces';
 import { ConsommationVehicule } from '../composants/Rse';
 import {
-  electrifie, energieDe, FicheConstructeur, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
+  electrifie, energieDe, FicheConstructeur, horsPlanification, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
 } from '../composants/Vehicule';
 import {
   BOITES, flotte, type AffectationFleet, type ConducteurDuJour, type ConducteurVehicule, type DetailVehicule,
@@ -192,7 +192,9 @@ function Entete({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
           <h1>{titreDe(v)}</h1>
           <div className="fv-puces">
             {energieDe(v) && <span className={`fl-energie statique${electrifie(v) ? ' electrifie' : ''}`}>{energieDe(v)}</span>}
-            <span className={`fv-puce ${planifiable(v) ? 'ok' : 'non'}`}>{planifiable(v) ? 'Planifiable' : 'Hors planification'}</span>
+            <span className={`fv-puce ${planifiable(v) ? 'ok' : 'non'}`}
+              title={planifiable(v) ? 'État « Inscrit » dans Odoo : proposé par le solveur de planification' : horsPlanification(v).explication}>
+              {planifiable(v) ? 'Planifiable' : horsPlanification(v).libelle}</span>
             <span className="fv-puce">Véhicule de service</span>
           </div>
           <p className="fv-sous">{[fiche?.generation, r.annee, r.lieu].filter(Boolean).join(' · ')}</p>
@@ -206,7 +208,7 @@ function Entete({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
           <Fait libelle="Lieu" valeur={r.lieu} />
           <Fait libelle="Immatriculé le" valeur={v.date_immatriculation && jour(v.date_immatriculation)} />
           <Fait libelle="État" valeur={v.etat} />
-          <Fait libelle="Places" valeur={v.places || null} />
+          <Fait libelle="Places" valeur={v.places ? `${v.places}${v.places_source === 'fiche' ? ' (fiche constructeur)' : ''}` : null} />
           <Fait libelle="Boîte" valeur={v.boite ? BOITES[v.boite] ?? v.boite : null} />
           <Fait libelle="Puissance" valeur={[v.puissance_ch && `${v.puissance_ch} ch`, v.puissance_kw && `${v.puissance_kw} kW`]
             .filter(Boolean).join(' · ') || null} />

@@ -26,7 +26,16 @@ export const libelleEnergie = (e: string | null) => (e ? ENERGIES[e] ?? e : null
 export const energieDe = (v: VehiculeFlotte) => libelleEnergie(v.retenu.energie);
 export const electrifie = (v: VehiculeFlotte) =>
   ['electric', 'full_hybrid', 'hybrid', 'plug_in_hybrid_gasoline', 'plug_in_hybrid_diesel'].includes(v.retenu.energie ?? '');
-export const planifiable = (v: VehiculeFlotte) => v.attribution === 'pool' && v.type_planification !== 'exclu';
+/** Disponible pour la planification : état « Inscrit » dans Odoo Fleet (règle du serveur), véhicule de service,
+ * voiture ou utilitaire. Ancien serveur sans le champ : même règle recalculée ici. */
+export const planifiable = (v: VehiculeFlotte) => v.planifiable
+  ?? (v.immatricule && v.attribution === 'pool' && v.type_planification !== 'exclu');
+/** Pourquoi un véhicule n'est pas proposé par la planification (libellé court, puis explication). */
+export function horsPlanification(v: VehiculeFlotte): { libelle: string; explication: string } {
+  if (!v.immatricule) return { libelle: 'Non disponible', explication: `État Odoo « ${v.etat ?? 'inconnu'} » : seuls les véhicules à l'état « Inscrit » sont planifiables` };
+  if (v.type_planification === 'exclu') return { libelle: 'Hors planification', explication: 'Deux-roues ou catégorie inconnue : pas proposé pour une équipe' };
+  return { libelle: 'Hors planification', explication: 'Pas un véhicule de service (conducteur « Véhicule de service » dans Odoo)' };
+}
 
 export const nombre = (n: number, decimales = 1) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: decimales }).format(n);
 export const jour = (s: string) => new Date(`${s.slice(0, 10)}T12:00:00`)
