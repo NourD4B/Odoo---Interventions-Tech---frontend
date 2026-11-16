@@ -402,7 +402,7 @@ export default function Planification() {
   const [occupe, setOccupe] = useState(false);
   const [enfreintes, setEnfreintes] = useState<{ client: string; regles: string[] } | null>(null);   // dernière dérogation
   const [confirmerPublication, setConfirmerPublication] = useState(false);
-  const [retrait, setRetrait] = useState<{ publiees: boolean; motif: string } | null>(null);   // « Tout retirer »
+  const [confirmerRetrait, setConfirmerRetrait] = useState(false);   // « Tout retirer »
   const [glisse, setGlisse] = useState<Glisse | null>(null);
   const [brouillon, setBrouillon] = useState<Brouillon | null>(null);
   const [survol, setSurvol] = useState<string | null>(null);
@@ -623,17 +623,14 @@ export default function Planification() {
     } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); }
   };
 
-  /** Retire toutes les affectations de la semaine (publiées seulement si cochées) ; motif journalisé. */
+  /** Retire toutes les affectations de la semaine, publiées comprises ; le journal garde qui l'a fait. */
   const toutRetirer = async () => {
-    if (!retrait) return;
-    const { publiees: avecPubliees, motif } = retrait;
-    setRetrait(null); setMessage(null); setOccupe(true);
+    setConfirmerRetrait(false); setMessage(null); setOccupe(true);
     try {
-      const r = await ecrire(() => planif.retirerTout(debut, fin, avecPubliees, motif.trim() || null));
+      const r = await ecrire(() => planif.retirerTout(debut, fin, true, null));
       if (r) {
         setProposition(null);
-        setMessage({ type: 'ok', texte: `${r.services} affectation(s) retirée(s) : les services repassent « à planifier »`
-          + (r.publies_gardes ? ` ; ${r.publies_gardes} publiée(s) gardée(s).` : '.') });
+        setMessage({ type: 'ok', texte: `${r.services} affectation(s) retirée(s) : les services repassent « à planifier ».` });
         recharger();
       }
     } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
@@ -718,8 +715,8 @@ export default function Planification() {
             <button type="button" className="btn" disabled={occupe || !aPublier.length} onClick={() => setConfirmerPublication(true)}>
               Publier{aPublier.length ? ` (${aPublier.length})` : ''}</button>
             <button type="button" className="btn pl-btn-retirer" disabled={occupe || !(aRetirer.length + publiees.length)}
-              onClick={() => setRetrait({ publiees: false, motif: '' })}
-              title="Retire toutes les affectations de la semaine (confirmation demandée)">Tout retirer</button>
+              onClick={() => setConfirmerRetrait(true)}
+              title="Retire toutes les affectations de la semaine, publiées comprises">Tout retirer</button>
             <button type="button" className="btn btn-primaire" disabled={occupe} onClick={() => void proposer()}>
               {occupe ? 'Calcul en cours…' : 'Proposer la semaine'}</button>
           </>) : (
@@ -915,46 +912,18 @@ export default function Planification() {
           agences={agences} propose={proposes.get(selection.id)} cause={causes.get(selection.id)} refs={refs.donnees}
           enregistrer={enregistrer} retirer={retirer} depublier={depublier} onFermer={() => setOuvert(null)} />
       )}
-      {retrait && (() => {
-        const compte = [
-          { n: aRetirer.filter((s) => s.affectation?.etat === 'propose' && s.affectation.propose_par === 'solveur').length,
-            quoi: ['proposée', 'par le solveur'] },
-          { n: aRetirer.filter((s) => s.affectation?.etat === 'propose' && s.affectation.propose_par !== 'solveur').length,
-            quoi: ['choisie', 'par vous'] },
-          { n: aRetirer.filter((s) => s.affectation?.etat === 'verrouille').length, quoi: ['verrouillée', ''] },
-        ].filter((c) => c.n > 0).map((c) => ({ n: c.n, quoi: `${c.quoi[0]}${c.n > 1 ? 's' : ''} ${c.quoi[1]}`.trim() }));
-        const total = aRetirer.length + (retrait.publiees ? publiees.length : 0);
-        return (
-          <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-retrait"
-            onKeyDown={(e) => { if (e.key === 'Escape') setRetrait(null); }}>
-            <div className="dialogue pl-retrait">
-              <h2 id="titre-retrait">Tout retirer de la semaine ?</h2>
-              <p className="pl-retrait-periode">{titrePeriode(debut, fin, false)}</p>
-              {compte.length > 0 && <ul className="pl-retrait-compte">
-                {compte.map((c) => <li key={c.quoi}><strong>{c.n}</strong>{c.quoi}</li>)}
-              </ul>}
-              <p className="muet">Les services repassent « à planifier ». Rien n'est modifié dans Odoo.</p>
-              {publiees.length > 0 && (
-                <label className="pl-retrait-publiees">
-                  <input type="checkbox" checked={retrait.publiees}
-                    onChange={(e) => setRetrait({ ...retrait, publiees: e.target.checked })} />
-                  <span>Retirer aussi {publiees.length > 1 ? `les ${publiees.length} publiées` : 'la publiée'}
-                    <small>Déjà confirmée{publiees.length > 1 ? 's' : ''} : prévenir les techniciens concernés.</small></span>
-                </label>
-              )}
-              <label className="pf-motif">Motif <small>facultatif, enregistré dans le journal</small>
-                <textarea rows={2} maxLength={500} value={retrait.motif} placeholder="Ex. : semaine replanifiée avec le client"
-                  onChange={(e) => setRetrait({ ...retrait, motif: e.target.value })} />
-              </label>
-              <div className="actions">
-                <button type="button" className="btn" onClick={() => setRetrait(null)}>Annuler</button>
-                <button type="button" className="btn btn-danger" disabled={!total} onClick={() => void toutRetirer()}>
-                  {total ? `Retirer ${total} affectation${total > 1 ? 's' : ''}` : 'Rien à retirer'}</button>
-              </div>
+      {confirmerRetrait && (
+        <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-retrait"
+          onKeyDown={(e) => { if (e.key === 'Escape') setConfirmerRetrait(false); }}>
+          <div className="dialogue">
+            <h2 id="titre-retrait">Tout retirer de la semaine ?</h2>
+            <div className="actions">
+              <button type="button" className="btn" onClick={() => setConfirmerRetrait(false)}>Annuler</button>
+              <button type="button" className="btn btn-danger" onClick={() => void toutRetirer()}>Tout retirer</button>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
       {confirmerPublication && (
         <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-publier">
           <div className="dialogue">
