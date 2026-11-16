@@ -65,8 +65,12 @@ const client = (s: ServicePlanif) => s.partner_name ?? 'Client non renseigné';
 const etatDe = (s: ServicePlanif): string => s.affectation?.etat ?? 'a_planifier';
 const absentSur = (t: TechnicienPlanif, du: string, au: string) => t.absences.some((a) => a.du <= au && a.au >= du);
 
+/** « Date prévue » saisie à la création dans Odoo Field Service : plage du planned_date_begin au date_deadline.
+ * Sans date dans Odoo : fenêtre réglée dans l'application (ancienne donnée). */
 function contrainteDate(s: ServicePlanif): string | null {
-  if (s.planned_date_begin) return `Prévu le ${jj(s.planned_date_begin)}`;
+  const du = s.planned_date_begin, au = s.date_deadline;
+  if (du && au) return jj(du) === jj(au) ? `Le ${jj(du)}` : `Entre le ${jj(du)} et le ${jj(au)}`;
+  if (du) return `À partir du ${jj(du)}`;
   if (s.fenetre_debut || s.fenetre_fin) {
     return s.fenetre_debut && s.fenetre_fin ? `Entre le ${jj(s.fenetre_debut)} et le ${jj(s.fenetre_fin)}`
       : s.fenetre_debut ? `À partir du ${jj(s.fenetre_debut)}` : `Avant le ${jj(s.fenetre_fin!)}`;
@@ -193,7 +197,9 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
         <div className="pf-corps">
           <dl className="sv-d-faits">
             <div><dt>Date prévue</dt><dd>{contrainteDate(s) ?? 'Libre'}</dd></div>
-            <div><dt>Durée</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens} technicien{s.nb_techniciens > 1 ? 's' : ''}
+            <div><dt>Durée</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens > 1
+              ? `${s.nb_techniciens} techniciens, ${nombreH(s.allocated_hours / s.nb_techniciens)} chacun`
+              : '1 technicien'}, soit {dureeService(s)} jour{dureeService(s) > 1 ? 's' : ''} sur site
               {s.vehicule_requis === 'utilitaire' ? ', utilitaire requis' : ''}</small></dd></div>
             <div><dt>Projet</dt><dd>{s.project_name ?? `n° ${s.project_id}`}</dd></div>
             {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
@@ -422,7 +428,6 @@ export default function Planification() {
   const aPlanifier = liste.filter((s) => !s.affectation)
     .sort((x, y) => Number(y.priority === '1') - Number(x.priority === '1') || x.name.localeCompare(y.name, 'fr'));
   const aPublier = liste.filter((s) => s.affectation && s.statut_planification !== 'publie');
-  const duSolveur = liste.filter((s) => s.affectation?.etat === 'propose' && s.affectation.propose_par === 'solveur');
   const aRetirer = liste.filter((s) => s.affectation && s.statut_planification !== 'publie');
   const publiees = liste.filter((s) => s.affectation && s.statut_planification === 'publie');
   const groupes = useMemo(() => {
@@ -601,18 +606,6 @@ export default function Planification() {
     } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
   };
 
-  const retirerPropositions = async () => {
-    setMessage(null); setOccupe(true);
-    try {
-      const r = await ecrire(() => planif.retirerPropositions(debut, fin));
-      if (r) {
-        setProposition(null);
-        setMessage({ type: 'ok', texte: `${r.services} proposition(s) du solveur retirée(s) ; verrouillés et vos choix gardés.` });
-        recharger();
-      }
-    } catch (e) { setMessage({ type: 'erreur', texte: erreurTexte(e) }); } finally { setOccupe(false); }
-  };
-
   /** Classeur Excel de la période affichée (semaine ou 4 semaines) ; export journalisé (nom demandé si besoin). */
   const exporter = async () => {
     const [d, f] = vue === 'mois' ? [debut, finMois] : [debut, fin];
@@ -709,12 +702,9 @@ export default function Planification() {
             aria-label={vue === 'mois' ? 'Exporter les 4 semaines (.xlsx)' : 'Exporter la semaine (.xlsx)'}
             title={vue === 'mois' ? 'Exporter les 4 semaines (.xlsx)' : 'Exporter la semaine (.xlsx)'}><IconeTelechargement /></button>
           {vue === 'semaine' ? (<>
-            {duSolveur.length > 0 && <button type="button" className="btn" disabled={occupe} onClick={() => void retirerPropositions()}
-              title="Retire les propositions du solveur ; garde les services verrouillés, publiés et vos choix.">
-              Retirer les propositions ({duSolveur.length})</button>}
             <button type="button" className="btn" disabled={occupe || !aPublier.length} onClick={() => setConfirmerPublication(true)}>
               Publier{aPublier.length ? ` (${aPublier.length})` : ''}</button>
-            <button type="button" className="btn pl-btn-retirer" disabled={occupe || !(aRetirer.length + publiees.length)}
+            <button type="button" className="btn btn-danger" disabled={occupe || !(aRetirer.length + publiees.length)}
               onClick={() => setConfirmerRetrait(true)}
               title="Retire toutes les affectations de la semaine, publiées comprises">Tout retirer</button>
             <button type="button" className="btn btn-primaire" disabled={occupe} onClick={() => void proposer()}>

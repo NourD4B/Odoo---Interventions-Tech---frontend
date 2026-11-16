@@ -1,4 +1,5 @@
-import { NavLink, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
@@ -37,16 +38,27 @@ function VersDossier() {
 
 export default function App() {
   const etat = useDonnees(() => api.etat(), []);
+  // téléphone : la barre latérale devient une barre en haut, menu replié (rouvert par « Menu »)
+  const [menuOuvert, setMenuOuvert] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => { setMenuOuvert(false); }, [pathname]);
   return (
     <div className="app">
-      <nav className="barre-laterale" aria-label="Navigation principale">
-        <div className="logo">
-          <div className="logo-carre">D4B</div>
-          <div><strong>Interventions</strong><small>Digital4Business</small></div>
+      <nav className={`barre-laterale${menuOuvert ? ' ouverte' : ''}`} aria-label="Navigation principale">
+        <div className="barre-tete">
+          <div className="logo">
+            <div className="logo-carre">D4B</div>
+            <div><strong>Interventions</strong><small>Digital4Business</small></div>
+          </div>
+          <button type="button" className="btn menu-bascule" aria-expanded={menuOuvert} aria-controls="menu-principal"
+            onClick={() => setMenuOuvert((o) => !o)}>
+            <span className="menu-traits" aria-hidden="true"><i /><i /><i /></span>{menuOuvert ? 'Fermer' : 'Menu'}
+          </button>
         </div>
-        <div className="nav">
+        <div className="nav" id="menu-principal">
           {LIENS.map((l) => (
-            <NavLink key={l.vers} to={l.vers} className={({ isActive }) => (isActive ? 'actif' : '')}>{l.libelle}</NavLink>
+            <NavLink key={l.vers} to={l.vers} className={({ isActive }) => (isActive ? 'actif' : '')}
+              onClick={() => setMenuOuvert(false)}>{l.libelle}</NavLink>
           ))}
         </div>
         <div className="sources" aria-label="État des sources">
