@@ -228,7 +228,7 @@ function Identite({ d }: { d: Dossier }) {
   if (p.debut || p.fin) faits.push(['Période', `${p.debut ? jourCourt(p.debut) : '…'} au ${p.fin ? jourCourt(p.fin) : '…'}`]);
   return (
     <div className="dp-identite">
-      <Link to="/dossiers" className="dp-retour">‹ Dossiers projets</Link>
+      <Link to="/dossiers" className="dp-retour">‹ Dossiers d'intervention</Link>
       <p className="dp-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
       <h1>{p.nom}</h1>
       {faits.length > 0 && <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}

@@ -20,7 +20,7 @@ import Vehicules from './pages/Vehicules';
 const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
   { vers: '/statistiques', libelle: 'Statistiques' },
-  { vers: '/dossiers', libelle: 'Dossiers projets' },
+  { vers: '/dossiers', libelle: "Dossiers d'intervention" },
   { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/reglages', libelle: 'Réglages' },
