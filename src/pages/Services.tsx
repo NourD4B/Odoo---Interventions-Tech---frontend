@@ -3,7 +3,7 @@
 // réglages déjà enregistrés sont renvoyés tels quels).
 import { useEffect, useMemo, useState } from 'react';
 import { CircleMarker, MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Avertissements, Badge, EtatChargement, initiales, useDonnees } from '../composants';
 import { useEcriture } from '../composants/Ecriture';
 import { nomVehicule } from '../composants/Vehicule';
@@ -339,6 +339,19 @@ export default function Services() {
   const [edition, setEdition] = useState<ServicePlanif | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const { ecrire, dialogue } = useEcriture();
+  // ?regler=<id> (lien « Réglages du service » de la planification) : ouvre directement les réglages de ce service
+  const [params, setParams] = useSearchParams();
+  const aOuvrir = Number(params.get('regler')) || null;
+  useEffect(() => {
+    if (aOuvrir === null || !liste.donnees || !refs.donnees) return;
+    const cible = liste.donnees.find((x) => x.id === aOuvrir);
+    if (cible) {
+      if (cible.simule) setSimules(true);
+      setEdition(cible);
+      window.setTimeout(() => document.getElementById(`service-${cible.id}`)?.scrollIntoView({ block: 'center' }), 0);
+    }
+    setParams({}, { replace: true });
+  }, [aOuvrir, liste.donnees, refs.donnees, setParams]);
 
   const base = useMemo(() => (liste.donnees ?? []).filter((s) => simules || !s.simule)
     .sort((a, b) => cleTri(a).localeCompare(cleTri(b)) || a.name.localeCompare(b.name, 'fr')), [liste.donnees, simules]);

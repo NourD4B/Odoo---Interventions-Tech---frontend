@@ -14,7 +14,7 @@ import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import { enregistrerFichier, exportations, nomFichier } from '../exports';
 import CartePlanif, { type AgencePlanif, type SitePlanif } from '../composants/CartePlanif';
 import MenuVehicule from '../composants/MenuVehicule';
-import { nomVehicule } from '../composants/Vehicule';
+import { nomVehicule, Plaque } from '../composants/Vehicule';
 import { meteo, temps, type Meteo } from '../meteo';
 import PlanMois from './PlanMois';
 import {
@@ -170,139 +170,160 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
     try { if (await action()) onFermer(); } finally { setEnvoi(false); }
   };
 
+  const etat = etatDe(s);
+  const premier = a ? new Date(`${a.debut}T12:00:00`) : null;
   return (
     <div className="voile pl-voile" role="dialog" aria-modal="true" aria-labelledby="pl-titre-fiche"
          onMouseDown={(e) => { if (e.target === e.currentTarget && !envoi) onFermer(); }}>
-      <div className={`pl-fiche etat-${etatDe(s)}`}>
-        <header className="pl-fiche-tete">
-          <div className="pl-fiche-titres">
-            <h2 id="pl-titre-fiche">{client(s)}</h2>
-            <p>{s.name}</p>
+      <div className={`pl-fiche pf etat-${etat}`}>
+        <header className="pf-tete">
+          <div className="pf-titre">
+            <p>{client(s)}{s.simule && <span className="dc-simule">simulé</span>}</p>
+            <h2 id="pl-titre-fiche">{s.name}</h2>
+            <div className="pf-badges">
+              <span className={`pf-etat etat-${etat}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
+                verrouille: 'Verrouillé', publie: 'Publié' }[etat]}</span>
+              {s.priority === '1' && <span className="pf-etat urgent">Urgent</span>}
+            </div>
           </div>
-          <span className={`pl-etat etat-${etatDe(s)}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
-            verrouille: 'Verrouillé', publie: 'Publié' }[etatDe(s)]}</span>
-          <button ref={fermer} type="button" className="pl-fermer" aria-label="Fermer" onClick={onFermer}>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-          </button>
+          <button ref={fermer} type="button" className="sv-fermer" aria-label="Fermer" onClick={onFermer} disabled={envoi}>
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
         </header>
 
-        <dl className="pl-faits">
-          <div><dt>Date (Odoo et fenêtre)</dt><dd>{contrainteDate(s) ?? 'Libre'}</dd></div>
-          <div><dt>Charge</dt><dd>{nombreH(s.allocated_hours)} · {s.nb_techniciens} technicien{s.nb_techniciens > 1 ? 's' : ''}</dd></div>
-          <div><dt>Véhicule</dt><dd>{s.vehicule_requis === 'utilitaire' ? 'Utilitaire requis' : 'Indifférent'}</dd></div>
-          {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
-          <div className="large"><dt>Site</dt><dd>{s.site_adresse ?? 'Adresse non renseignée'}
-            {s.site_lat === null && <span className="pl-alerte-texte"> — sans position, à placer dans Services</span>}</dd></div>
-        </dl>
+        <div className="pf-corps">
+          <dl className="sv-d-faits">
+            <div><dt>Date prévue</dt><dd>{contrainteDate(s) ?? 'Libre'}</dd></div>
+            <div><dt>Durée</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens} technicien{s.nb_techniciens > 1 ? 's' : ''}
+              {s.vehicule_requis === 'utilitaire' ? ', utilitaire requis' : ''}</small></dd></div>
+            <div><dt>Projet</dt><dd>{s.project_name ?? `n° ${s.project_id}`}</dd></div>
+            {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
+            <div className="pf-large"><dt>Site</dt><dd>{s.site_adresse ?? 'Adresse non renseignée'}
+              {s.site_lat === null && <small className="precision-faible">Sans position : à placer dans les réglages du service</small>}</dd></div>
+          </dl>
 
-        {(propose || a?.motif_derogation || cause) && (
-          <div className="pl-raisons">
-            {cause && <p className="pl-cause">Non planifié par le solveur : {cause}</p>}
-            {propose && <><p>{propose.raison_techniciens}</p><p>{propose.vehicle_id != null && <strong>{nomVehicule({ modele: propose.vehicule_modele, plaque: propose.vehicule, id: propose.vehicle_id })}. </strong>}{propose.raison_vehicule}
-              {propose.km_aller_retour != null && ` · ${Math.round(propose.km_aller_retour)} km aller-retour`}
-              {propose.cout_estime != null && ` · ≈ ${Math.round(propose.cout_estime)} € (hors hôtel et repas)`}</p>
-              {!publie && !a && (
-                <button type="button" className="lien-bouton" onClick={() => {
-                  setEquipe(propose.matricules); setDebut(propose.debut);
-                  setJours(ouvresApres(propose.debut, propose.fin) + 1); setVehicule(propose.vehicle_id);
-                }}>Reprendre la proposition du solveur ({propose.equipe.join(', ')}, {jj(propose.debut)}
-                  {propose.fin !== propose.debut ? ` → ${jj(propose.fin)}` : ''})</button>
-              )}</>}
-            {a?.motif_derogation && <p className="pl-cause">Dérogation : {a.motif_derogation}</p>}
-          </div>
-        )}
+          {(propose || a?.motif_derogation || cause) && (
+            <div className="pf-raisons">
+              {cause && <p className="pf-cause">Non planifié par le solveur : {cause}</p>}
+              {propose && <>
+                <p className="pf-raisons-titre">Proposition du solveur</p>
+                <p>{propose.raison_techniciens}</p>
+                <p>{propose.vehicle_id != null && <strong>{nomVehicule({ modele: propose.vehicule_modele, plaque: propose.vehicule, id: propose.vehicle_id })}. </strong>}
+                  {propose.raison_vehicule}
+                  {propose.km_aller_retour != null && `, ${Math.round(propose.km_aller_retour)} km aller-retour`}
+                  {propose.cout_estime != null && `, environ ${Math.round(propose.cout_estime)} € (hors hôtel et repas)`}</p>
+                {!publie && !a && (
+                  <button type="button" className="btn btn-petit" onClick={() => {
+                    setEquipe(propose.matricules); setDebut(propose.debut);
+                    setJours(ouvresApres(propose.debut, propose.fin) + 1); setVehicule(propose.vehicle_id);
+                  }}>Reprendre la proposition ({propose.equipe.join(', ')}, {jj(propose.debut)}
+                    {propose.fin !== propose.debut ? ` au ${jj(propose.fin)}` : ''})</button>
+                )}</>}
+              {a?.motif_derogation && <p className="pf-cause">Dérogation : {a.motif_derogation}</p>}
+            </div>
+          )}
 
-        {publie ? (
-          <div className="pl-bloc">
-            <h3>Affectation publiée</h3>
-            <p>{a?.equipe.join(', ')} · {a?.vehicle_id != null ? nomVehicule({ ...a, id: a.vehicle_id }) : 'sans véhicule'} · {a && (a.debut === a.fin ? jourLong(a.debut)
-              : `${jourLong(a.debut)} → ${jourLong(a.fin)}`)}</p>
+          {publie ? (<>
+            <section className="pf-publiee" aria-labelledby="pf-titre-publiee">
+              <div className="pf-jour" aria-hidden="true">
+                {premier && <><b>{premier.getDate()}</b><span>{MOIS_COURT[premier.getMonth()]}</span>
+                  <small>{premier.toLocaleDateString('fr-FR', { weekday: 'short' })}</small></>}
+              </div>
+              <div className="pf-publiee-corps">
+                <h3 id="pf-titre-publiee">Affectation publiée</h3>
+                <p className="pf-dates">{a && datesAffectation(a.debut, a.fin)}</p>
+                {a && a.equipe.length > 0 && <div className="sv-equipe">{a.equipe.map((n) => (
+                  <span key={n} className="dc-tech"><i aria-hidden="true">{initiales(n)}</i>{n}</span>))}</div>}
+                <p className="pf-vehicule">{a?.vehicle_id != null
+                  ? <><strong>{a.modele ?? 'Véhicule'}</strong>{a.plaque && <Plaque plaque={a.plaque} />}</>
+                  : <span className="muet">Sans véhicule</span>}</p>
+              </div>
+            </section>
             {motif === null ? (
-              <p className="muet">Publiée : figée. Pour la modifier ou la retirer, retirez d'abord la publication
-                (elle repasse « verrouillée », équipe, dates et véhicule gardés).</p>
+              <p className="pf-note">Publiée, donc figée. Pour la modifier ou la retirer, retirez d'abord la publication : elle
+                repasse « verrouillée », avec la même équipe, les mêmes dates et le même véhicule.</p>
             ) : (
-              <label className="champ">Pourquoi retirer la publication ? <span className="muet">(facultatif, enregistré dans le journal)</span>
+              <label className="pf-motif">Pourquoi retirer la publication ? <small>Facultatif, enregistré dans le journal</small>
                 <textarea autoFocus rows={2} maxLength={500} value={motif} onChange={(e) => setMotif(e.target.value)}
                   placeholder="Ex. : le client a déplacé le rendez-vous" />
               </label>
             )}
-          </div>
-        ) : (<>
-          <section className="pl-bloc" aria-labelledby="pl-equipe">
-            <div className="pl-bloc-tete">
-              <h3 id="pl-equipe">Équipe</h3>
-              <span className={equipe.length === s.nb_techniciens ? 'pl-compte ok' : 'pl-compte'}>
-                {equipe.length} / {s.nb_techniciens}</span>
-            </div>
-            {parAgence.map(([code, techs]) => (
-              <div key={code} className="pl-groupe-techs">
-                <span className="pl-groupe-nom">{agences.get(code) ?? code}</span>
-                <div className="pl-choix-techs">
-                  {techs.map((t) => <ChoixTechnicien key={t.matricule} t={t} choisi={equipe.includes(t.matricule)}
-                    absent={absentSur(t, debut, fin)} onBasculer={() => basculer(t.matricule)} />)}
-                </div>
+          </>) : (<>
+            <section className="pf-section" aria-labelledby="pl-equipe">
+              <div className="pf-section-tete">
+                <h3 id="pl-equipe">Équipe</h3>
+                <span className={equipe.length === s.nb_techniciens ? 'pf-compte ok' : 'pf-compte'}>
+                  {equipe.length} sur {s.nb_techniciens}</span>
               </div>
-            ))}
-          </section>
+              {parAgence.map(([code, techs]) => (
+                <div key={code} className="pl-groupe-techs">
+                  <span className="pl-groupe-nom">{agences.get(code) ?? code}</span>
+                  <div className="pl-choix-techs">
+                    {techs.map((t) => <ChoixTechnicien key={t.matricule} t={t} choisi={equipe.includes(t.matricule)}
+                      absent={absentSur(t, debut, fin)} onBasculer={() => basculer(t.matricule)} />)}
+                  </div>
+                </div>
+              ))}
+            </section>
 
-          <section className="pl-bloc" aria-labelledby="pl-dates">
-            <h3 id="pl-dates">Dates</h3>
-            <div className="pl-dates">
-              <label className="champ">Premier jour<input type="date" value={debut} onChange={(e) => e.target.value && setDebut(e.target.value)} /></label>
-              <label className="champ">Jours ouvrés<input type="number" min={1} max={20} value={jours}
-                onChange={(e) => setJours(Math.max(1, Number(e.target.value) || 1))} /></label>
-              <div className="pl-dernier">jusqu'au <strong>{jourLong(fin)}</strong></div>
-            </div>
-          </section>
+            <section className="pf-section" aria-labelledby="pl-dates">
+              <div className="pf-section-tete"><h3 id="pl-dates">Dates</h3>
+                <span className="pf-aide">jusqu'au <strong>{jourLong(fin)}</strong></span></div>
+              <div className="pf-dates">
+                <label>Premier jour<input type="date" value={debut} onChange={(e) => e.target.value && setDebut(e.target.value)} /></label>
+                <label>Jours ouvrés<input type="number" min={1} max={20} value={jours}
+                  onChange={(e) => setJours(Math.max(1, Number(e.target.value) || 1))} /></label>
+              </div>
+            </section>
 
-          <section className="pl-bloc" aria-labelledby="pl-vehicule">
-            <h3 id="pl-vehicule">Véhicule</h3>
-            <MenuVehicule serviceId={s.id} matricules={equipe} debut={debut} fin={fin} actuel={vehicule}
-              onChoisir={(v) => setVehicule(v?.vehicle_id ?? null)} />
-          </section>
+            <section className="pf-section" aria-labelledby="pl-vehicule">
+              <div className="pf-section-tete"><h3 id="pl-vehicule">Véhicule</h3>
+                <span className="pf-aide">les conformes d'abord</span></div>
+              <MenuVehicule serviceId={s.id} matricules={equipe} debut={debut} fin={fin} actuel={vehicule}
+                onChoisir={(v) => setVehicule(v?.vehicle_id ?? null)} />
+            </section>
 
-          <section className="pl-bloc pl-note" aria-labelledby="pl-motif">
-            <div className="pl-bloc-tete">
-              <h3 id="pl-motif">Motif</h3>
-              <span className="muet">facultatif · enregistré dans le journal, utile si une règle est enfreinte</span>
-            </div>
-            <textarea aria-labelledby="pl-motif" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="Ex. : congé annulé par téléphone" />
-          </section>
+            <section className="pf-section" aria-labelledby="pl-motif">
+              <div className="pf-section-tete"><h3 id="pl-motif">Motif</h3>
+                <span className="pf-aide">facultatif, enregistré dans le journal (utile si une règle est enfreinte)</span></div>
+              <textarea className="pf-texte" aria-labelledby="pl-motif" rows={2} maxLength={500} value={note}
+                onChange={(e) => setNote(e.target.value)} placeholder="Ex. : congé annulé par téléphone" />
+            </section>
 
-          <label className="pl-interrupteur">
-            <input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />
-            <span className="pl-piste" aria-hidden="true" />
-            <span>Verrouiller <span className="muet">— le solveur ne changera plus cette affectation</span></span>
-          </label>
-        </>)}
+            <label className="pf-verrou">
+              <input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />
+              <span className="pl-piste" aria-hidden="true" />
+              <span><strong>Verrouiller</strong><small>Le solveur ne changera plus cette affectation</small></span>
+            </label>
+          </>)}
+        </div>
 
-        <footer className="pl-fiche-pied">
-          <div className="pl-liens">
-            <Link to={`/statistiques/services/${s.id}`}>Statistiques</Link>
-            <Link to="/services">Réglages du service</Link>
-            {s.odoo_url && <a href={s.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo</a>}
+        <footer className="sv-d-pied pf-pied">
+          <div className="pf-liens">
+            <Link to={`/statistiques/services/${s.id}`}>Fiche du service</Link>
+            <Link to={`/services?regler=${s.id}`}>Réglages du service</Link>
+            {s.odoo_url && <a href={s.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
           </div>
-          {!publie && a && (
-            <button type="button" className="btn pl-btn-retirer" disabled={envoi} onClick={() => void agir(() => retirer(s))}>
-              Retirer l'affectation</button>
-          )}
-          {publie && motif === null && (
-            <button type="button" className="btn pl-btn-retirer" onClick={() => setMotif('')}>Retirer la publication</button>
-          )}
-          {publie && motif !== null && (
-            <button type="button" className="btn btn-primaire" disabled={envoi}
-              onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim() || null); } finally { setEnvoi(false); } }}>
-              {envoi ? 'Retrait…' : 'Confirmer le retrait'}</button>
-          )}
-          <button type="button" className="btn" onClick={onFermer} disabled={envoi}>{publie ? 'Fermer' : 'Annuler'}</button>
-          {!publie && (
-            <button type="button" className="btn btn-primaire" disabled={!equipe.length || envoi}
-              onClick={() => void agir(() => enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou },
-                note.trim() || null))}>
-              {envoi ? 'Enregistrement…' : a ? 'Enregistrer' : 'Affecter'}</button>
-          )}
+          <div className="sv-d-boutons">
+            {!publie && a && (
+              <button type="button" className="btn pl-btn-retirer" disabled={envoi} onClick={() => void agir(() => retirer(s))}>
+                Retirer l'affectation</button>
+            )}
+            {publie && motif === null && (
+              <button type="button" className="btn pl-btn-retirer" onClick={() => setMotif('')}>Retirer la publication</button>
+            )}
+            {publie && motif !== null && (
+              <button type="button" className="btn btn-primaire" disabled={envoi}
+                onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim() || null); } finally { setEnvoi(false); } }}>
+                {envoi ? 'Retrait…' : 'Confirmer le retrait'}</button>
+            )}
+            <button type="button" className="btn" onClick={onFermer} disabled={envoi}>{publie ? 'Fermer' : 'Annuler'}</button>
+            {!publie && (
+              <button type="button" className="btn btn-primaire" disabled={!equipe.length || envoi}
+                onClick={() => void agir(() => enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou },
+                  note.trim() || null))}>
+                {envoi ? 'Enregistrement…' : a ? 'Enregistrer' : 'Affecter'}</button>
+            )}
+          </div>
         </footer>
       </div>
     </div>
