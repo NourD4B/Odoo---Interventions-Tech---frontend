@@ -32,6 +32,7 @@ export interface VehiculeFlotte {
   energie: string | null; boite: string | null; places: number; portes: number; couleur: string | null;
   places_source?: 'odoo' | 'fiche' | null;   // places d'Odoo, sinon de la fiche constructeur (Odoo à 0)
   planifiable?: boolean;                     // « Inscrit » dans Fleet, véhicule de service, voiture ou utilitaire
+  en_livraison?: boolean;                    // « Nouvelle demande » dans Fleet : commandé, pas encore livré
   annee_modele: string | null; date_immatriculation: string | null; puissance_ch: number | null;
   puissance_kw: number | null; co2_g_km: number | null; compteur: number | null; compteur_unite: string | null;
   autonomie_km: number | null; attelage: boolean; photo: PhotoVehicule | null; fiche: FicheModele | null;

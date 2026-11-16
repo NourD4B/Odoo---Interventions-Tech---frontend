@@ -10,7 +10,7 @@ import { useEcriture } from '../composants/Ecriture';
 import { ListePieces, PastillePiece, usePieces, type Pieces } from '../composants/Pieces';
 import { ConsommationVehicule } from '../composants/Rse';
 import {
-  electrifie, energieDe, FicheConstructeur, horsPlanification, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
+  electrifie, energieDe, enLivraison, FicheConstructeur, horsPlanification, jour, lundiDe, nombre, Plaque, planifiable, titreDe, Visuel,
 } from '../composants/Vehicule';
 import {
   BOITES, flotte, type AffectationFleet, type ConducteurDuJour, type ConducteurVehicule, type DetailVehicule,
@@ -192,7 +192,7 @@ function Entete({ v, onPhoto }: { v: VehiculeFlotte; onPhoto: () => void }) {
           <h1>{titreDe(v)}</h1>
           <div className="fv-puces">
             {energieDe(v) && <span className={`fl-energie statique${electrifie(v) ? ' electrifie' : ''}`}>{energieDe(v)}</span>}
-            <span className={`fv-puce ${planifiable(v) ? 'ok' : 'non'}`}
+            <span className={`fv-puce ${planifiable(v) ? 'ok' : enLivraison(v) ? 'livraison' : 'non'}`}
               title={planifiable(v) ? 'État « Inscrit » dans Odoo : proposé par le solveur de planification' : horsPlanification(v).explication}>
               {planifiable(v) ? 'Planifiable' : horsPlanification(v).libelle}</span>
             <span className="fv-puce">Véhicule de service</span>

@@ -5,7 +5,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Avertissements, EtatChargement, useDonnees } from '../composants';
 import {
-  electrifie, energieDe, FAMILLES, familleDe, horsPlanification, Plaque, planifiable, reperes, titreDe, Visuel, type Famille,
+  electrifie, energieDe, enLivraison, FAMILLES, familleDe, horsPlanification, Plaque, planifiable, reperes, titreDe, Visuel,
+  type Famille,
 } from '../composants/Vehicule';
 import { flotte, type VehiculeFlotte } from '../flotte';
 
@@ -28,7 +29,7 @@ function Carte({ v, lieu }: { v: VehiculeFlotte; lieu: string | null }) {
         <span className="fl-reperes">{reperes(v).map((r) => <span key={r}>{r}</span>)}</span>
         <span className="fl-role" title={ok ? 'État « Inscrit » dans Odoo : proposé par le solveur de planification'
           : horsPlanification(v).explication}>
-          <span className={`fl-pastille ${ok ? 'pool' : ''}`} aria-hidden="true" />
+          <span className={`fl-pastille ${ok ? 'pool' : enLivraison(v) ? 'livraison' : ''}`} aria-hidden="true" />
           <span className="fl-qui">{ok ? 'Planifiable' : horsPlanification(v).libelle}</span>
           <span className="fl-lieu">{lieu ?? ''}</span>
         </span>

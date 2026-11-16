@@ -685,6 +685,9 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .fl-pastille { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #c3c8cf; display: inline-block; }
 .fl-pastille.pool { background: var(--accent); }
 .fl-pastille.attitre { background: var(--dispo); }
+/* véhicule commandé, pas encore livré (« Nouvelle demande » dans Fleet) : anneau pointillé, il arrive */
+.fl-pastille.livraison { background: transparent; border: 1.5px dashed #7c5cc4; width: 9px; height: 9px; }
+.fv-puce.livraison { background: #f1ecfb; color: #5b3fa3; border-color: #d9cdf3; border-style: dashed; }
 .fl-occupation { display: flex; align-items: center; gap: 8px; }
 .fl-jauge { flex: 1; height: 5px; border-radius: 3px; background: var(--neutre-doux); overflow: hidden; }
 .fl-jauge i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
