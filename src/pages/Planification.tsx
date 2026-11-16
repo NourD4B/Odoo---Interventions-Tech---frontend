@@ -494,7 +494,17 @@ export default function Planification() {
     if (brouillon && parId.get(brouillon.serviceId)?.affectation) setBrouillon(null);
   }, [brouillon, parId]);
 
-  const recharger = () => { services.recharger(); };
+  // Tout se recalcule depuis le serveur après chaque changement : calendrier, carte, « À planifier », jours libres,
+  // charge des techniciens et compteurs de la barre ; aussi au retour sur l'onglet (changement fait ailleurs).
+  const recharger = () => { services.recharger(); ressources.recharger(); };
+  const rechargerRef = useRef(recharger);
+  rechargerRef.current = recharger;
+  useEffect(() => {
+    const auRetour = () => { if (document.visibilityState === 'visible') rechargerRef.current(); };
+    document.addEventListener('visibilitychange', auRetour);
+    window.addEventListener('focus', auRetour);
+    return () => { document.removeEventListener('visibilitychange', auRetour); window.removeEventListener('focus', auRetour); };
+  }, []);
   const erreurTexte = (e: unknown) =>
     (e instanceof ErreurPlanif && e.statut === 409 ? CONFLIT : e instanceof Error ? e.message : String(e));
   const finGlisse = () => { setGlisse(null); setSurvol(null); };
@@ -690,9 +700,10 @@ export default function Planification() {
   const dateParis = maj(new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric',
     month: 'long' }).format(maintenant));
   const actuel = temps_?.actuelle ? temps(temps_.actuelle.code) : null;
-  const sitesCarte: SitePlanif[] = liste.filter((s) => s.site_lat !== null && s.site_lng !== null).map((s) => ({
+  // carte : services affectés seulement (proposés, verrouillés, publiés) ; retirés -> ils quittent la carte
+  const sitesCarte: SitePlanif[] = liste.filter((s) => s.affectation && s.site_lat !== null && s.site_lng !== null).map((s) => ({
     id: s.id, lat: s.site_lat!, lng: s.site_lng!, etat: etatDe(s), urgent: s.priority === '1', titre: client(s),
-    detail: `${s.name}, ${s.affectation ? datesAffectation(s.affectation.debut, s.affectation.fin).toLowerCase() : 'à planifier'}` }));
+    detail: `${s.name}, ${datesAffectation(s.affectation!.debut, s.affectation!.fin).toLowerCase()}` }));
   const agencesCarte: AgencePlanif[] = (ressources.donnees?.agences ?? []).filter((a) => a.lat !== null && a.lng !== null)
     .map((a) => ({ code: a.code, nom: a.nom, lat: a.lat!, lng: a.lng! }));
 
@@ -868,7 +879,7 @@ export default function Planification() {
               <span className="pl-compte">{sitesCarte.length}</span></div>
             <CartePlanif sites={sitesCarte} agences={agencesCarte} focus={focus} onSurvol={setFocus} onOuvrir={setOuvert} />
             <div className="pc-legende" aria-hidden="true">
-              <span><i className="pc-point etat-a_planifier" />À planifier</span><span><i className="pc-point etat-propose" />Proposé</span>
+              <span><i className="pc-point etat-propose" />Proposé</span>
               <span><i className="pc-point etat-verrouille" />Verrouillé</span><span><i className="pc-point etat-publie" />Publié</span>
               <span><i className="pc-agence" />Agence</span>
             </div>
