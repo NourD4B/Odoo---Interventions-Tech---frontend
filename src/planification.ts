@@ -55,6 +55,7 @@ export interface AffectationProposee {
   vehicule: string | null; vehicule_modele?: string | null; debut: string; fin: string; km_aller_retour: number | null;   // null : distance inconnue
   cout_estime: number | null;
   raison_techniciens: string; raison_vehicule: string;
+  avertissement?: string | null;             // ex. finit après l'échéance Odoo (jamais bloquant)
 }
 export interface Proposition {
   statut: 'optimal' | 'limite_de_temps' | 'echec'; affectations: AffectationProposee[];

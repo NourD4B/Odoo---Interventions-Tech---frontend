@@ -424,7 +424,25 @@ export default function Planification() {
   const feries = useMemo(() => new Map((ressources.donnees?.feries ?? []).map((f) => [f.date, f.nom])), [ressources.donnees]);
   const parId = useMemo(() => new Map(liste.map((s) => [s.id, s])), [liste]);
   const proposes = useMemo(() => new Map((proposition?.affectations ?? []).map((a) => [a.service_id, a])), [proposition]);
-  const causes = useMemo(() => new Map((proposition?.non_planifies ?? []).map((n) => [n.service_id, n.cause])), [proposition]);
+  // avertissements éphémères : messages, dérogations et causes du solveur s'effacent seuls après quelques secondes
+  const [causesVisibles, setCausesVisibles] = useState(false);
+  useEffect(() => {
+    if (!message) return undefined;
+    const t = window.setTimeout(() => setMessage(null), message.type === 'erreur' ? 9000 : 6000);
+    return () => window.clearTimeout(t);
+  }, [message]);
+  useEffect(() => {
+    if (!enfreintes) return undefined;
+    const t = window.setTimeout(() => setEnfreintes(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [enfreintes]);
+  useEffect(() => {
+    if (!causesVisibles) return undefined;
+    const t = window.setTimeout(() => setCausesVisibles(false), 8000);
+    return () => window.clearTimeout(t);
+  }, [causesVisibles, proposition]);
+  const causes = useMemo(() => new Map(causesVisibles
+    ? (proposition?.non_planifies ?? []).map((n) => [n.service_id, n.cause]) : []), [proposition, causesVisibles]);
   const aPlanifier = liste.filter((s) => !s.affectation)
     .sort((x, y) => Number(y.priority === '1') - Number(x.priority === '1') || x.name.localeCompare(y.name, 'fr'));
   const aPublier = liste.filter((s) => s.affectation && s.statut_planification !== 'publie');
@@ -598,8 +616,10 @@ export default function Planification() {
     try {
       const p = await ecrire(() => planif.proposer(debut, fin));
       if (p) {
-        setProposition(p);
+        setProposition(p); setCausesVisibles(true);
+        const tardifs = p.affectations.filter((a) => a.avertissement);
         setMessage({ type: 'ok', texte: `Le solveur a proposé ${p.affectations.length} service(s)`
+          + (tardifs.length ? ` ; ${tardifs.map((a) => `${a.service} : ${a.avertissement}`).join(' ; ')}` : '')
           + (p.non_planifies.length ? ` ; ${p.non_planifies.length} restent à planifier (cause sur chaque carte).` : '.') });
         recharger();
       }
