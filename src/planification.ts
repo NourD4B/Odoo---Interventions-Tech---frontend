@@ -194,6 +194,10 @@ export const planif = {
     appel<ServicePlanif>('DELETE', `/affectations/${serviceId}`, { params: { version } }),
   retirerPropositions: (debut: string, fin: string) =>
     appel<{ services: number; ids: number[] }>('DELETE', '/affectations', { params: { debut, fin } }),
+  /** « Tout retirer » de la période : propositions, vos choix et verrouillées ; les publiées si `publiees`. */
+  retirerTout: (debut: string, fin: string, publiees: boolean, motif: string | null) =>
+    appel<{ services: number; ids: number[]; publies_gardes: number }>('POST', '/retirer-tout',
+      { corps: { debut, fin, publiees, motif } }),
   publier: (debut: string, fin: string) =>
     appel<{ services: number; ids: number[] }>('POST', '/publier', { corps: { debut, fin } }),
   regles: () => appel<Regle[]>('GET', '/regles'),
