@@ -144,9 +144,9 @@ function Synthese({ projets }: { projets: Projet[] }) {
   const suivante = projets.filter((p) => p.prochaine_mission)
     .sort((a, b) => a.prochaine_mission!.jour.localeCompare(b.prochaine_mission!.jour))[0];
   return (
-    <section className="dc-synthese" aria-label="Synthèse des dossiers">
+    <section className="dc-synthese" aria-label="Synthèse des projets">
       <div className="dc-s-bloc">
-        <h2 className="dc-s-titre">Dossiers</h2>
+        <h2 className="dc-s-titre">Projets</h2>
         <p className="dc-s-chiffre"><strong>{projets.length}</strong> avec des services sur site</p>
         <p className={`dc-s-etat${retard ? ' retard' : ''}`}><i aria-hidden="true" />
           {retard ? `${retard} avec une mission en retard` : 'Aucune mission en retard'}</p>
@@ -195,11 +195,11 @@ export default function Dossiers() {
     <>
       <header className="dc-entete">
         <div>
-          <h1>Dossiers d'intervention</h1>
-          <p className="sous-titre">Tout sur un dossier au même endroit : interventions sur site, équipes, véhicules,
-            tâches, coûts, carte, itinéraires, PV et pièces jointes.</p>
+          <h1>Dossiers projets</h1>
+          <p className="sous-titre">Tout sur un projet au même endroit : missions, équipes, véhicules, tâches, coûts, carte,
+            itinéraires, PV et pièces jointes.</p>
         </div>
-        <BoutonExport libelle="Exporter les dossiers" nomFichier={nomFichier('projets', 'tout')}
+        <BoutonExport libelle="Exporter les projets" nomFichier={nomFichier('projets', 'tout')}
           lire={() => exportations.projets()} />
       </header>
 
@@ -225,7 +225,7 @@ export default function Dossiers() {
         <ul className="dc-grille">{projets.map((p) => <CarteDossier key={p.id} p={p} />)}</ul>
       )}
       {liste.donnees && !projets.length && <p className="vide">{texte ? 'Aucun projet ne correspond à la recherche.'
-        : 'Aucun dossier avec une intervention sur site active. Les interventions se créent dans Odoo (Services sur site).'}</p>}
+        : 'Aucun projet avec un service sur site actif. Les services se créent dans Odoo (Services sur site).'}</p>}
     </>
   );
 }
