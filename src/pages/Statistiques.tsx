@@ -30,9 +30,9 @@ const SURVEILLER: { cle: keyof Tableau['a_surveiller']; titre: string; grave?: b
   { cle: 'materiel_non_livre', titre: 'Matériel pas entièrement livré' },
   { cle: 'sans_position', titre: 'Site sans position (adresse à corriger dans Odoo)' },
 ];
-type Regroupement = 'par_projet' | 'par_client' | 'par_type_service';
+type Regroupement = 'par_dossier' | 'par_client' | 'par_type_service';
 const REGROUPEMENTS: { cle: Regroupement; libelle: string }[] = [
-  { cle: 'par_projet', libelle: 'Projet' }, { cle: 'par_client', libelle: 'Société' },
+  { cle: 'par_dossier', libelle: 'Dossier' }, { cle: 'par_client', libelle: 'Société' },
   { cle: 'par_type_service', libelle: 'Type de service' },
 ];
 
@@ -40,7 +40,7 @@ export default function Statistiques() {
   const [debut, setDebut] = useState(() => iso(lundi(new Date())));
   const [fin, setFin] = useState(() => plus(iso(lundi(new Date())), 6));
   const [simules, setSimules] = useState(true);
-  const [regroupement, setRegroupement] = useState<Regroupement>('par_projet');
+  const [regroupement, setRegroupement] = useState<Regroupement>('par_dossier');
   const t = useDonnees(() => stats.tableau(debut, fin, simules), [debut, fin, simules]);
   const semaine = (n: number) => { setDebut(plus(debut, 7 * n)); setFin(plus(fin, 7 * n)); };
   const lundiCourant = iso(lundi(new Date()));
@@ -201,7 +201,7 @@ export default function Statistiques() {
 
         <section className="carte sf-bloc" aria-labelledby="titre-services">
           <div className="sf-bloc-tete"><h2 id="titre-services">Services de la période <span className="st-total neutre">{d.services.length}</span></h2>
-            <Link to="/dossiers" className="sv-lien">Voir par projet</Link></div>
+            <Link to="/dossiers" className="sv-lien">Voir par dossier</Link></div>
           <TableServices lignes={d.services} vide="Aucun service planifié, fait, à planifier ou en retard sur la période." />
         </section>
       </>)}

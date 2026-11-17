@@ -90,7 +90,7 @@ export function GraphiqueJours({ jours }: { jours: { date: string; planifies: nu
   );
 }
 
-/** Tableau des services (période, projet, à surveiller). */
+/** Tableau des services (période, dossier, à surveiller). */
 export function TableServices({ lignes, vide }: { lignes: LigneService[]; vide?: string }) {
   if (!lignes.length) return <div className="vide">{vide ?? 'Aucun service.'}</div>;
   return (
@@ -102,7 +102,7 @@ export function TableServices({ lignes, vide }: { lignes: LigneService[]; vide?:
           {lignes.map((s) => (
             <tr key={s.id}>
               <td><Link to={`/statistiques/services/${s.id}`}><strong>{s.nom}</strong></Link>
-                <div className="muet">{s.projet?.nom ?? 'sans projet'} · {s.societe ?? s.client ?? '—'}</div>
+                <div className="muet">{s.dossier.type === 'commande' ? s.dossier.nom : 'sans commande'} · {s.societe ?? s.client ?? '—'}</div>
                 <div className="badges"><BadgeSimule simule={s.simule} />
                   {s.priorite === 'urgente' && <span className="badge b-urgent">urgent</span>}
                   {s.sans_position && <span className="badge b-a_confirmer">site sans position</span>}</div></td>

@@ -7,7 +7,7 @@ import { ChoixMode, DetailRse, PastilleNote } from '../composants/Rse';
 import { Plaque } from '../composants/Vehicule';
 import { Barre, Jauge } from '../composants/Statistiques';
 import { co2 } from '../rse';
-import { dateHeure, euros, heures, jourCourt, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, LIBELLES_PAIEMENT,
+import { dateHeure, euros, heures, jourCourt, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, LIBELLES_PAIEMENT, lienDossier,
          nombre, stats } from '../statistiques';
 
 const STATUTS_PLANIF: Record<string, string> = {
@@ -45,9 +45,8 @@ export default function FicheService() {
     <>
       <header className="sf-tete">
         <div className="sf-haut">
-          {d.projet
-            ? <Link to={`/dossiers/${d.projet.id}`} className="dp-retour">‹ Dossier du projet</Link>
-            : <Link to="/services" className="dp-retour">‹ Services sur site</Link>}
+          <Link to={lienDossier(d.dossier)} className="dp-retour">
+            ‹ {d.dossier.type === 'commande' ? `Dossier ${d.dossier.nom}` : 'Dossier de l\'intervention'}</Link>
           {d.odoo_url && <a className="dp-odoo" href={d.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo</a>}
         </div>
         <div className="sf-identite">
@@ -67,7 +66,7 @@ export default function FicheService() {
           </div>
         </div>
         <dl className="sf-faits">
-          <div><dt>Projet</dt><dd>{d.projet ? <>{d.projet.nom}{d.projet.archive ? ' (archivé dans Odoo)' : ''}</> : 'Sans projet'}</dd></div>
+          <div><dt>Commande</dt><dd>{d.dossier.type === 'commande' ? d.dossier.nom : 'Non facturable (sans commande)'}</dd></div>
           <div><dt>Prévu dans Odoo</dt><dd>{d.prevu.debut ? `${dateHeure(d.prevu.debut)} au ${dateHeure(d.prevu.fin)}` : `au plus tard ${dateHeure(d.prevu.fin)}`}</dd></div>
           <div><dt>Durée prévue</dt><dd>{heures(d.prevu.heures)}</dd></div>
           <div><dt>Site</dt><dd>{d.site.adresse ?? '—'}{d.site.lat === null && <small>sans position</small>}</dd></div>
@@ -176,7 +175,10 @@ export default function FicheService() {
               <td className={`nombre${l.marge < 0 ? ' negatif' : ''}`}>{euros(l.marge, true)}</td></tr>))}</tbody>
         </table></div> : <p className="vide">Aucun matériel rattaché à ce service.</p>}
         {m.livraisons.length > 0 && <ul className="sf-livraisons">{m.livraisons.map((x) => (
-          <li key={x.nom}><strong>{x.nom}</strong> {LIBELLES_LIVRAISON[x.etat ?? ''] ?? x.etat}{x.faite ? `, le ${dateHeure(x.faite)}` : ''}</li>))}</ul>}
+          <li key={x.nom}><strong>{x.nom}</strong> {LIBELLES_LIVRAISON[x.etat ?? ''] ?? x.etat}{x.faite ? `, le ${dateHeure(x.faite)}` : ''}
+            {x.transporteur && <> · {x.transporteur}</>}
+            {x.suivi && <> · suivi {x.suivi_url
+              ? <a href={x.suivi_url} target="_blank" rel="noreferrer">{x.suivi}</a> : x.suivi}</>}</li>))}</ul>}
       </section>
 
       <div className="sf-grille sf-grille-argent">

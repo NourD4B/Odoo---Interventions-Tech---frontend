@@ -152,12 +152,21 @@ function DialogueReglages({ service: s, refs, ecrire, onFini, onConflit }: {
 
         <div className="sv-d-corps">
           <dl className="sv-d-faits">
-            <div><dt>Projet</dt><dd>{s.project_name ?? <span className="muet">n° {s.project_id}, pas encore synchronisé</span>}</dd></div>
             <div><dt>Client</dt><dd>{s.partner_name ?? '—'}{s.partner_phone && <small>{s.partner_phone}</small>}</dd></div>
+            <div><dt>Commande</dt><dd>{s.commande_nom ?? 'Non facturable'}{s.article_commande && <small>{s.article_commande}</small>}</dd></div>
             <div><dt>Priorité</dt><dd>{s.priority === '1' ? 'Urgente' : 'Normale'}</dd></div>
             <div><dt>Dates planifiées</dt><dd>{datesOdoo(s)}</dd></div>
             <div><dt>Temps alloué</dt><dd>{nombreH(s.allocated_hours)}</dd></div>
+            <div><dt>Étape dans Odoo</dt><dd>{s.etape_odoo ?? '—'}{s.cloture_odoo && <small>terminé ou annulé dans Odoo</small>}</dd></div>
+            {s.feuille_modele && <div><dt>Feuille de travail</dt><dd>{s.feuille_modele}</dd></div>}
+            {!!s.assignes_odoo?.length && <div><dt>Assignés dans Odoo</dt><dd>{s.assignes_odoo.join(', ')}</dd></div>}
+            {!!s.etiquettes?.length && <div><dt>Étiquettes</dt><dd>{s.etiquettes.join(', ')}</dd></div>}
+            <div><dt>Sous garantie</dt><dd>{s.under_warranty ? 'Oui' : 'Non'}</dd></div>
             <div><dt>Adresse du site</dt><dd>{s.site_adresse ?? '—'}</dd></div>
+            {!!s.livraisons_attente?.length && <div><dt>Matériel en livraison</dt><dd>{s.livraisons_attente.map((l) => (
+              <span key={l.nom} className="sv-livraison">{l.transporteur ?? 'Livraison'} {l.nom}{l.suivi && <>, suivi {l.suivi_url
+                ? <a href={l.suivi_url} target="_blank" rel="noreferrer">{l.suivi}</a> : l.suivi}</>}{l.prevue
+                ? `, prévue le ${l.prevue.slice(8, 10)}/${l.prevue.slice(5, 7)}` : ''}</span>))}</dd></div>}
           </dl>
 
           {publie && <p className="sv-d-note">Service publié : réglages figés. Pour les modifier, ouvrir
@@ -268,12 +277,18 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
         <header className="sv-tete">
           <div className="sv-titre">
             <h2 id={`service-${s.id}`}><Link to={`/statistiques/services/${s.id}`}>{s.name}</Link></h2>
-            <p>{s.project_name ?? `Projet n° ${s.project_id}, pas encore synchronisé`}
+            <p>{s.commande_nom ? `Commande ${s.commande_nom}` : 'Non facturable'}
               {s.partner_name && <><span aria-hidden="true">, </span>{s.partner_name}</>}</p>
           </div>
           <div className="badges">
             {s.simule && <span className="badge b-simulation" title="N'existe pas dans Odoo (copie locale)">simulé</span>}
             {s.priority === '1' && <Badge type="urgent">Urgent</Badge>}
+            {s.under_warranty && <span className="badge">Sous garantie</span>}
+            {!!s.livraisons_attente?.length && <span className="badge b-a_confirmer"
+              title={s.livraisons_attente.map((l) => [l.transporteur, l.nom, l.suivi].filter(Boolean).join(' ')).join(' ; ')}>
+              {s.livraisons_attente[0].transporteur ?? 'Matériel'} en livraison</span>}
+            {(s.etiquettes ?? []).map((e) => <span key={e} className="badge">{e}</span>)}
+            {s.cloture_odoo && !s.archive_odoo && <span className="badge etat-archive">Terminé ou annulé dans Odoo</span>}
             {s.archive_odoo
               ? <span className="badge etat-archive" title="Archivée dans Odoo, gardée en historique (elle a une commande)">Archivée dans Odoo</span>
               : <Badge type={`planif-${s.statut_planification}`}>{LIBELLES_STATUT_PLANIF[s.statut_planification]}</Badge>}
@@ -330,11 +345,11 @@ const cleTri = (s: ServicePlanif) => `${s.archive_odoo ? 9 : ORDRE[s.statut_plan
   + (s.planned_date_begin?.slice(0, 10) ?? s.fenetre_debut ?? s.date_deadline?.slice(0, 10) ?? '9999');
 
 export default function Services() {
-  const liste = useDonnees(() => planif.services(undefined, undefined, true), []);   // même liste que Projets
+  const liste = useDonnees(() => planif.services(undefined, undefined, true), []);   // même liste que les dossiers
   const refs = useDonnees(() => planif.referentiels(), []);
   const [filtre, setFiltre] = useState<Filtre>('tous');
   const [texte, setTexte] = useState('');
-  const [projet, setProjet] = useState<number | ''>('');
+  const [commande, setCommande] = useState<string | null>(null);     // null : toutes ; '' : sans commande
   const [simules, setSimules] = useState(true);
   const [edition, setEdition] = useState<ServicePlanif | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -355,22 +370,25 @@ export default function Services() {
 
   const base = useMemo(() => (liste.donnees ?? []).filter((s) => simules || !s.simule)
     .sort((a, b) => cleTri(a).localeCompare(cleTri(b)) || a.name.localeCompare(b.name, 'fr')), [liste.donnees, simules]);
-  /** Projets présents dans la liste (project_id Odoo), avec leur nombre de services, par nom. */
-  const projets = useMemo(() => {
-    const m = new Map<number, { id: number; nom: string; n: number }>();
+  /** Commandes clientes présentes dans la liste (dossiers), avec leur nombre de services ; '' : sans commande. */
+  const commandes = useMemo(() => {
+    const m = new Map<string, { cle: string; nom: string; n: number }>();
     for (const s of base) {
-      const p = m.get(s.project_id) ?? { id: s.project_id, nom: s.project_name ?? `Projet n° ${s.project_id} (pas encore synchronisé)`, n: 0 };
-      p.n += 1;
-      m.set(s.project_id, p);
+      const cle = s.commande_nom ?? '';
+      const c = m.get(cle) ?? { cle, nom: cle || 'Non facturable (sans commande)', n: 0 };
+      c.n += 1;
+      m.set(cle, c);
     }
-    return [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    return [...m.values()].sort((a, b) => Number(a.cle === '') - Number(b.cle === '') || a.nom.localeCompare(b.nom, 'fr'));
   }, [base]);
-  const projetActif = projet !== '' && projets.some((p) => p.id === projet) ? projet : '';
-  const dansProjet = useMemo(() => base.filter((s) => projetActif === '' || s.project_id === projetActif), [base, projetActif]);
+  const commandeActive = commande !== null && commandes.some((c) => c.cle === commande) ? commande : null;
+  const dansProjet = useMemo(() => base.filter((s) => commandeActive === null || (s.commande_nom ?? '') === commandeActive),
+    [base, commandeActive]);
   const services = useMemo(() => {
     const q = sansAccents(texte.trim());
     return dansProjet.filter((s) => garde(filtre, s)
-      && (!q || sansAccents([s.name, s.partner_name, s.project_name, s.site_adresse].filter(Boolean).join(' ')).includes(q)));
+      && (!q || sansAccents([s.name, s.partner_name, s.commande_nom, s.site_adresse, ...(s.etiquettes ?? [])]
+        .filter(Boolean).join(' ')).includes(q)));
   }, [dansProjet, filtre, texte]);
   const nbSimules = (liste.donnees ?? []).filter((s) => s.simule).length;
 
@@ -390,13 +408,14 @@ export default function Services() {
           <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" />
             <path d="m13 13 4.5 4.5" /></svg>
           <span className="visuellement-cache">Rechercher</span>
-          <input type="search" value={texte} placeholder="Service, client, projet, adresse" onChange={(e) => setTexte(e.target.value)} />
+          <input type="search" value={texte} placeholder="Service, client, commande, adresse, étiquette" onChange={(e) => setTexte(e.target.value)} />
         </label>
         <label className="sv-projet">
-          <span className="visuellement-cache">Projet</span>
-          <select value={projetActif} onChange={(e) => setProjet(e.target.value === '' ? '' : Number(e.target.value))}>
-            <option value="">Tous les projets ({base.length})</option>
-            {projets.map((p) => <option key={p.id} value={p.id}>{p.nom} ({p.n})</option>)}
+          <span className="visuellement-cache">Commande</span>
+          <select value={commandeActive === null ? '*' : commandeActive}
+            onChange={(e) => setCommande(e.target.value === '*' ? null : e.target.value)}>
+            <option value="*">Toutes les commandes ({base.length})</option>
+            {commandes.map((c) => <option key={c.cle || 'sans'} value={c.cle}>{c.nom} ({c.n})</option>)}
           </select>
         </label>
         {nbSimules > 0 && <label className="dc-bascule">

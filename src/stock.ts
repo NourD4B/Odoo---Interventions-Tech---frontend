@@ -1,5 +1,6 @@
 // Client de l'API /api/stock (lecture seule de la copie Odoo) : page « Matériel et traçabilité ».
 // Noms de champs identiques à l'API ; quantités en unités ; « sorti » et « retour » = 30 derniers jours.
+import type { RefDossier } from './statistiques';
 
 export interface CarteAgence {
   cle: string; nom: string; agence: string | null; unites: number; articles: number; reserve: number;
@@ -8,9 +9,11 @@ export interface CarteAgence {
 
 // sorti / retour : faits sur 30 jours ; reserve : en attente (préparation et livraison d'une ligne comptées une fois)
 export interface Lien { id: number; nom: string }
+/** Dossier d'intervention : commande client, ou intervention sans commande. */
+export type LienDossier = RefDossier;
 
 export interface InterventionProduit {
-  id: number; nom: string; projet: Lien | null; sorti: number; retour: number; reserve: number;
+  id: number; nom: string; dossier: LienDossier | null; sorti: number; retour: number; reserve: number;
   etat: 'reserve' | 'sorti';
 }
 
@@ -26,11 +29,11 @@ export interface Tracabilite {
 
 export type TypeEvenement = 'recu' | 'transfert' | 'reserve' | 'attente' | 'livre' | 'retour' | 'ajustement';
 
-// Un mouvement Odoo, lisible : pour quelle intervention (et son projet), sinon quelle commande ; trajet
+// Un mouvement Odoo, lisible : pour quelle intervention (et son dossier), sinon quelle commande ; trajet
 // « Agence : Stock → Sortie » ; client = société seulement.
 export interface Evenement {
   type: TypeEvenement; titre: string; quantite: number; trajet: string;
-  intervention: Lien | null; projet: Lien | null; commande: string | null; client: string | null;
+  intervention: Lien | null; dossier: LienDossier | null; commande: string | null; client: string | null;
   // ligne de la commande d'une intervention, mais sans tâche dans Odoo (ex. alimentations sur S10519)
   intervention_commande: Lien | null;
   document: string | null; date: string | null; jour: string;

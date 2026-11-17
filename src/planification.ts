@@ -19,8 +19,15 @@ export interface ReglagesPlanif {
   site_lat: number | null; site_lng: number | null;
 }
 
+/** Livraison de la commande pas encore faite (pièce de rechange, équipement de swap expédié par Chronopost…) :
+ *  affichée, jamais bloquante. Lien de suivi calculé par Odoo (module « Livraison »). */
+export interface LivraisonAttente {
+  nom: string; etat: string | null; prevue: string | null; transporteur: string | null; suivi: string | null;
+  suivi_url: string | null;
+}
+
 /** Service sur site = tâche Odoo Field Service (id = id de la tâche) + réglages de planification.
- *  Les champs Odoo (nom, projet, client, dates, heures, priorité, adresse) se modifient dans Odoo. Dates-heures :
+ *  Les champs Odoo (nom, client, dates, temps alloué, priorité, adresse…) se modifient dans Odoo. Dates-heures :
  *  ISO avec décalage, heure de Paris. */
 export interface ServicePlanif extends ReglagesPlanif {
   id: number; name: string; project_id: number; project_name: string | null; company_id: number | null;
@@ -32,6 +39,15 @@ export interface ServicePlanif extends ReglagesPlanif {
   stage: number; statut_planification: StatutPlanif; source: string; odoo_task_id: number | null;
   odoo_url: string | null; simule: boolean; version: number; affectation: AffectationResume | null;
   archive_odoo?: boolean;            // archivée dans Odoo, gardée en historique (commande) : jamais planifiée
+  // formulaire Services sur site, tel que saisi dans Odoo (affichage)
+  etape_odoo?: string | null;        // étape (Nouveau, Planifié, En cours, Fait…)
+  cloture_odoo?: boolean;            // « Marquer comme terminé » ou annulé
+  feuille_modele?: string | null;    // « Modèle de feuille de travail »
+  assignes_odoo?: string[];          // « Assignés » (utilisateurs Odoo, souvent la personne qui a créé le service)
+  etiquettes?: string[];             // « Étiquettes »
+  commande_nom?: string | null;      // commande client, sinon aucune
+  article_commande?: string | null;  // « Article de la commande client » ; null = « Non facturable »
+  livraisons_attente?: LivraisonAttente[];
   violations?: Violation[];                    // règles obligatoires enfreintes (réponse de planif.affecter seulement)
 }
 
@@ -145,12 +161,12 @@ function texteDetail(detail: unknown, statut: number): string {
   return `erreur ${statut}`;
 }
 
-async function appel<T>(methode: string, chemin: string, options: { corps?: unknown;
+async function appel<T>(methode: string, chemin: string, options: { corps?: unknown; avecAuteur?: boolean;
   params?: Record<string, string | number | undefined | null> } = {}): Promise<T> {
   const url = new URL(`/api/planification${chemin}`, window.location.origin);
   Object.entries(options.params ?? {}).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v)); });
   const entetes: Record<string, string> = { Accept: 'application/json' };
-  if (methode !== 'GET') {
+  if (methode !== 'GET' || options.avecAuteur) {               // écriture, ou lecture journalisée
     const nom = auteur();
     if (!nom) throw new AuteurManquant('Indiquez votre nom (journal des modifications)');
     entetes['X-Auteur'] = encodeURIComponent(nom);
@@ -180,6 +196,11 @@ export function erreursParChamp(e: unknown): Record<string, string> {
 export const planif = {
   services: (debut?: string, fin?: string, historique?: boolean) =>
     appel<ServicePlanif[]>('GET', '/services', { params: { debut, fin, historique: historique ? 'true' : undefined } }),
+  /** Services prévus dans Odoo après la période affichée : combien, et le lundi de la semaine du premier. */
+  plusTard: (apres: string) => appel<{ nombre: number; semaine: string | null }>('GET', '/services/plus-tard',
+    { params: { apres } }),
+  /** Onglet « Description » du service, lu dans Odoo à l'ouverture (jamais copié) ; lecture journalisée. */
+  description: (id: number) => appel<{ texte: string | null }>('GET', `/services/${id}/description`, { avecAuteur: true }),
   modifierPlanification: (id: number, corps: ReglagesPlanif & { version: number }) =>
     appel<ServicePlanif>('PUT', `/services/${id}/planification`, { corps }),
   ressources: (debut: string, fin: string) => appel<Ressources>('GET', '/ressources', { params: { debut, fin } }),

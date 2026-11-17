@@ -38,7 +38,7 @@ export function PastilleNote({ note, grande = false, titre }: { note: NoteRse | 
   );
 }
 
-/** Étiquette en escalier, la note du projet ressortie (lecture familière de l'étiquette énergie). */
+/** Étiquette en escalier, la note du dossier ressortie (lecture familière de l'étiquette énergie). */
 export function Etiquette({ note }: { note: NoteRse | null }) {
   return (
     <ol className="rs-etiquette" aria-label={note ? `Score RSE : ${note}` : 'Pas encore de score RSE'}>
@@ -50,7 +50,7 @@ export function Etiquette({ note }: { note: NoteRse | null }) {
   );
 }
 
-/** Bandeau du projet : étiquette, émissions, part évitée, répartition par mode, missions notées, méthode. */
+/** Bandeau du dossier : étiquette, émissions, part évitée, répartition par mode, missions notées, méthode. */
 export function BandeauRse({ b }: { b: BilanRse }) {
   const max = Math.max(1, ...b.par_mode.map((p) => p.kg_co2e));
   return (

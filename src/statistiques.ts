@@ -5,8 +5,20 @@ import type { BilanRse, ModeTransport, NoteRse, RseMission } from './rse';
 // archive : intervention archivée dans Odoo mais gardée (elle a une commande) : historique, jamais planifiée
 export type EtatService = 'a_planifier' | 'planifie' | 'en_retard' | 'fait' | 'facture' | 'archive';
 
+/** Dossier d'intervention : la commande client et ses interventions sur site ; une intervention sans commande
+ *  (« Non facturable » dans Odoo) est son propre dossier. Le module Projet d'Odoo n'entre pas en jeu. */
+export type TypeDossier = 'commande' | 'intervention';
+export interface RefDossier { type: TypeDossier; id: number; nom: string; cle: string }
+export const lienDossier = (d: Pick<RefDossier, 'type' | 'id'>) => `/dossiers/${d.type}/${d.id}`;
+/** Titre d'un dossier : l'intervention s'il n'y en a qu'une, sinon « 3 interventions » (la commande est dite à côté). */
+export function titreDossier(d: { type: TypeDossier; nom: string; interventions?: { nom: string }[] }): string {
+  const liste = d.interventions ?? [];
+  if (d.type === 'intervention' || liste.length === 0) return d.nom;
+  return liste.length === 1 ? liste[0].nom : `${liste.length} interventions`;
+}
+
 export interface LigneService {
-  id: number; nom: string; simule: boolean; archive_odoo: boolean; projet: { id: number; nom: string; archive?: boolean } | null; client: string | null;
+  id: number; nom: string; simule: boolean; archive_odoo: boolean; dossier: RefDossier; client: string | null;
   societe: string | null; etat: EtatService; etat_libelle: string; priorite: 'normale' | 'urgente';
   debut: string | null; fin: string | null; techniciens: string[]; vehicule: string | number | null;
   vehicule_modele?: string | null;                  // « Marque Modèle »
@@ -33,7 +45,7 @@ export interface Tableau {
                   cout_estime: number }[];
   argent: Argent & { reste_a_facturer_faits_ht: number };
   rse: BilanRse;
-  par_projet: (Argent & { nom: string; services: number; faits: number })[];
+  par_dossier: (Argent & { nom: string; services: number; faits: number })[];
   par_client: (Argent & { nom: string; services: number; faits: number })[];
   par_type_service: (Argent & { nom: string; services: number; faits: number })[];
   a_surveiller: Record<'en_retard' | 'faits_sans_feuille_signee' | 'faits_non_factures' | 'materiel_non_livre' |
@@ -44,13 +56,21 @@ export interface Tableau {
 export interface Commande { id: number; nom: string; etat: string | null; montant_ht: number; montant_ttc?: number;
   marge: number | null; facturation: string | null; type_service: string | null }
 
-export interface ResumeProjet extends Argent {
-  id: number | null; nom: string; client: string | null; simule: boolean; services: number;
+/** Commande client du dossier (devis accepté), telle que copiée d'Odoo. */
+export interface CommandeDossier {
+  id: number; nom: string; etat: string | null; date: string | null; montant_ht: number | null;
+  montant_ttc: number | null; facturation: string | null; type_service: string | null;
+}
+
+export interface ResumeDossier extends Argent, RefDossier {
+  client: string | null; simule: boolean; services: number;
+  commande: CommandeDossier | null;                 // null : intervention sans commande (« Non facturable »)
+  interventions: { id: number; nom: string; etat: EtatService; etat_libelle: string }[];
   par_etat: Record<EtatService, number>; avancement_pct: number | null; heures_prevues: number; heures_passees: number;
   km_estimes: number; commandes: Commande[]; commandes_ht: number; prochaine_intervention: string | null;
   en_retard: { id: number; nom: string }[];
   rse: BilanRse;
-  // résumé complet (cartes des dossiers) ; facultatif tant qu'un ancien serveur répond
+  // résumé complet (cartes des dossiers)
   prochaine_mission?: { id: number; nom: string; jour: string } | null;
   equipe?: string[];
   vehicules?: { id: number; plaque: string | null; modele: string | null }[];
@@ -59,7 +79,7 @@ export interface ResumeProjet extends Argent {
 
 export interface FicheService {
   id: number; nom: string; simule: boolean; archive_odoo: boolean; odoo_url: string | null;
-  projet: { id: number; nom: string; archive?: boolean } | null;
+  dossier: RefDossier;
   client: string | null; societe: string | null; telephone: string | null;
   site: { adresse: string | null; lat: number | null; lng: number | null; precision: string | null };
   type_service: string | null; priorite: 'normale' | 'urgente'; etat: EtatService; etat_libelle: string;
@@ -84,7 +104,8 @@ export interface FicheService {
               facture: number; prix_unitaire: number; sous_total_ht: number; cout_unitaire: number; cout_total: number;
               marge: number }[];
     quantite: number; livre: number; pct_livre: number | null;
-    livraisons: { nom: string; etat: string | null; prevue: string | null; faite: string | null; type: string | null }[];
+    livraisons: { nom: string; etat: string | null; prevue: string | null; faite: string | null; type: string | null;
+                  transporteur?: string | null; suivi?: string | null; suivi_url?: string | null }[];
   };
   argent: {
     ca_ht: number; cout_materiel: number; marge_materiel: number; facture_ht: number; reste_a_facturer_ht: number;
@@ -101,6 +122,9 @@ export interface FicheService {
 
 export interface EtatSynchro {
   intervalle_s: number; en_cours: boolean;
+  dernier_cycle?: string | null;                    // fin du dernier cycle (boucle automatique, planning ou bouton)
+  saute?: boolean;                                  // demande sautée : dernier cycle trop récent
+  services?: { ajoutes: number[]; mis_a_jour: number[]; sortis: number[]; sans_position: number[] } | null;
   modeles: { modele: string; derniere_synchro: string | null; dernier_write_date: string | null; nb_odoo: number | null;
              nb_local: number | null; nb_lus: number | null; duree_s: number | null; erreur: string | null }[];
 }
@@ -125,10 +149,12 @@ async function lire<T>(chemin: string, params: Record<string, string | number | 
 export const stats = {
   tableau: (debut: string, fin: string, simules: boolean) =>
     lire<Tableau>('/api/statistiques/tableau', { debut, fin, simules }),
-  projets: (simules: boolean) => lire<ResumeProjet[]>('/api/statistiques/projets', { simules }),
+  dossiers: (simules: boolean) => lire<ResumeDossier[]>('/api/statistiques/dossiers', { simules }),
   service: (id: number) => lire<FicheService>(`/api/statistiques/services/${id}`),
   synchro: () => lire<EtatSynchro>('/api/synchro'),
-  synchroniser: () => lire<EtatSynchro>('/api/synchro', {}, 'POST'),
+  /** Copie d'Odoo à jour ; `siPlusVieuxQue` (s) : sautée si le dernier cycle est plus récent (ouverture du planning). */
+  synchroniser: (siPlusVieuxQue?: number) =>
+    lire<EtatSynchro>('/api/synchro', { si_plus_vieux_que_s: siPlusVieuxQue }, 'POST'),
 };
 
 // ---------- mise en forme ----------

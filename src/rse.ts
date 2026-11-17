@@ -31,7 +31,7 @@ export interface RseMission {
   evite_pct: number | null; note: NoteRse | null; detail: string[]; alertes: string[]; estime: boolean;
 }
 
-/** Score RSE de plusieurs missions (projet, période). */
+/** Score RSE de plusieurs missions (dossier, période). */
 export interface BilanRse {
   kg_co2e: number | null; reference_kg: number | null; evite_pct: number | null; note: NoteRse | null;
   missions: number; notees: number; sans_mode: number;

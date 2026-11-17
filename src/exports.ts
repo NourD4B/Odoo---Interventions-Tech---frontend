@@ -1,6 +1,8 @@
-// Exports Excel (.xlsx) : projets et missions, dossier d'un projet, planification d'une période.
+// Exports Excel (.xlsx) : dossiers et interventions, dossier d'une commande (ou d'une intervention sans commande),
+// planification d'une période.
 // Chaque export est journalisé côté serveur : en-tête X-Auteur (nom demandé une fois, comme pour les écritures).
 import { lireAvecAuteur } from './flotte';
+import type { TypeDossier } from './statistiques';
 
 const requete = (params: Record<string, string>) => {
   const q = new URLSearchParams(params).toString();
@@ -8,9 +10,9 @@ const requete = (params: Record<string, string>) => {
 };
 
 export const exportations = {
-  projets: (debut?: string, fin?: string) =>
-    lireAvecAuteur(`/api/exports/projets.xlsx${requete(debut && fin ? { debut, fin } : {})}`),
-  dossier: (projectId: number) => lireAvecAuteur(`/api/exports/dossiers/${projectId}.xlsx`),
+  dossiers: (debut?: string, fin?: string) =>
+    lireAvecAuteur(`/api/exports/dossiers.xlsx${requete(debut && fin ? { debut, fin } : {})}`),
+  dossier: (type: TypeDossier, id: number) => lireAvecAuteur(`/api/exports/dossiers/${type}/${id}.xlsx`),
   planification: (debut: string, fin: string) => lireAvecAuteur(`/api/exports/planification.xlsx${requete({ debut, fin })}`),
 };
 

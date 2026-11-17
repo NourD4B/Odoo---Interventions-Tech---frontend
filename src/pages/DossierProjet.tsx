@@ -1,5 +1,5 @@
-// Dossier d'un projet, tout au même endroit : carte des sites et des agences de départ (itinéraires Google Maps),
-// missions dans l'ordre des dates (équipe, véhicule et conducteur désigné), coûts et marge, véhicules, commandes et
+// Dossier d'intervention (une commande client et ses interventions sur site, ou une intervention sans commande), tout
+// au même endroit : carte des sites et des agences de départ (itinéraires Google Maps), interventions dans l'ordre des dates (équipe, véhicule et conducteur désigné), coûts et marge, véhicules, commandes et
 // leurs pièces jointes, tâches Odoo. Conducteurs Fleet et PV : fiche du véhicule (lien). Lecture seule ; pièces
 // lues dans Odoo à l'ouverture et chaque consultation journalisée.
 import L from 'leaflet';
@@ -16,7 +16,8 @@ import { Plaque } from '../composants/Vehicule';
 import { dossiers, type Dossier, type Itineraire, type ServiceDossier, type TacheDossier } from '../dossiers';
 import { exportations, nomFichier } from '../exports';
 import { co2 } from '../rse';
-import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, type EtatService } from '../statistiques';
+import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, titreDossier, type EtatService,
+  type TypeDossier } from '../statistiques';
 
 const ETATS: EtatService[] = ['en_retard', 'planifie', 'a_planifier', 'fait', 'facture', 'archive'];   // ordre d'urgence
 const COULEURS: Record<EtatService, string> = {
@@ -125,7 +126,7 @@ function Carte({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite:
   const { sites, trajets } = useMemo(() => geographie(d), [d]);
   const points = [...sites.map((s) => s.position), ...trajets.map((t) => t.depart)];
   const agences = regrouperAgences(trajets);
-  if (!points.length) return <div className="dp-carte dp-carte-vide">Aucun site géolocalisé pour ce projet.</div>;
+  if (!points.length) return <div className="dp-carte dp-carte-vide">Aucun site géolocalisé pour ce dossier.</div>;
   return (
     <MapContainer bounds={L.latLngBounds(points)} className="dp-carte" zoomControl={false} scrollWheelZoom={false}>
       <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19}
@@ -162,7 +163,7 @@ function Carte({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite:
   );
 }
 
-// ---------- identité du projet (sur la carte) ----------
+// ---------- identité du dossier (sur la carte) ----------
 
 function Anneau({ d }: { d: Dossier }) {
   const r = d.resume, total = Math.max(1, r.services);
@@ -196,7 +197,7 @@ function Anneau({ d }: { d: Dossier }) {
   );
 }
 
-/** Toute l'équipe du projet (techniciens planifiés sur ses services) et ses véhicules. */
+/** Toute l'équipe du dossier (techniciens planifiés sur ses interventions) et ses véhicules. */
 function Equipe({ d }: { d: Dossier }) {
   const techs = new Map<string, string>();
   d.services.forEach((s) => s.planification.techniciens.forEach((t) => techs.set(t.matricule, t.nom)));
@@ -221,16 +222,19 @@ function Equipe({ d }: { d: Dossier }) {
 }
 
 function Identite({ d }: { d: Dossier }) {
-  const p = d.projet, r = d.resume;
+  const p = d.dossier, r = d.resume, c = p.commande;
   const faits: [string, string][] = [];
-  if (p.etape) faits.push(['Étape Odoo', p.etape]);
-  if (p.commande) faits.push(['Commande', p.commande]);
-  if (p.debut || p.fin) faits.push(['Période', `${p.debut ? jourCourt(p.debut) : '…'} au ${p.fin ? jourCourt(p.fin) : '…'}`]);
+  if (p.type === 'commande') {
+    faits.push(['Commande', p.nom]);
+    if (c?.date) faits.push(['Date de commande', jourCourt(c.date)]);
+    if (c && c.montant_ht !== null) faits.push(['Montant', `${euros(c.montant_ht)} HT`]);
+    if (c?.type_service) faits.push(['Type de service', c.type_service]);
+  } else faits.push(['Commande', 'Non facturable (sans commande)']);
   return (
     <div className="dp-identite">
-      <Link to="/dossiers" className="dp-retour">‹ Dossiers projets</Link>
+      <Link to="/dossiers" className="dp-retour">‹ Dossiers d'intervention</Link>
       <p className="dp-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
-      <h1>{p.nom}</h1>
+      <h1>{titreDossier(r)}</h1>
       {faits.length > 0 && <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
       <Anneau d={d} />
       <Equipe d={d} />
@@ -239,7 +243,7 @@ function Identite({ d }: { d: Dossier }) {
         : 'Aucune intervention à venir'}</p>
       <div className="dp-actions">
         <BoutonExport className="dp-odoo" libelle="Exporter (.xlsx)" nomFichier={nomFichier('dossier', p.nom)}
-          lire={() => exportations.dossier(p.id)} />
+          lire={() => exportations.dossier(p.type, p.id)} />
         {p.odoo_url && <a className="dp-odoo" href={p.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo</a>}
       </div>
     </div>
@@ -254,7 +258,7 @@ function Equation({ d }: { d: Dossier }) {
     vehicule: a.vehicule + s.couts_estimes.vehicule }), { travail: 0, route: 0, vehicule: 0 });
   const hors = d.services.find((s) => s.couts_estimes.hors)?.couts_estimes.hors;
   return (
-    <section className="dp-equation" aria-label="Coûts et marge estimée du projet">
+    <section className="dp-equation" aria-label="Coûts et marge estimée du dossier">
       <div className="dp-termes">
         <div className="dp-terme"><span>Chiffre d'affaires HT</span><strong>{euros(r.ca_ht)}</strong>
           <small>{r.commandes.length} commande{r.commandes.length > 1 ? 's' : ''}, {euros(r.facture_ht)} facturés</small></div>
@@ -414,7 +418,7 @@ function Missions({ d, actif, ouverts, basculer, onSurvol, onModifie }: {
         {aVenir === -1 && dates.length > 0 && repere}
         {sansDate.map((s) => ligne(s, true))}
       </ol>
-      {d.services.length === 0 && <p className="vide">Aucun service sur site dans ce projet.</p>}
+      {d.services.length === 0 && <p className="vide">Aucune intervention sur site dans ce dossier.</p>}
     </section>
   );
 }
@@ -459,7 +463,7 @@ function Vehicules({ d }: { d: Dossier }) {
   return (
     <section className="carte dp-bloc">
       <h2>Véhicules</h2>
-      {d.vehicules.length === 0 && <p className="vide">Aucun véhicule de service planifié sur ce projet.</p>}
+      {d.vehicules.length === 0 && <p className="vide">Aucun véhicule planifié sur ce dossier.</p>}
       {d.vehicules.map((v) => (
         <div key={v.vehicle_id} className="dp-veh">
           <div className="dp-veh-tete">
@@ -488,7 +492,7 @@ function Documents({ d, pieces }: { d: Dossier; pieces: Pieces }) {
     <section className="carte dp-bloc">
       <h2>Commandes et pièces jointes</h2>
       {!d.documents_disponibles && <p className="avertissement">Pièces jointes indisponibles : Odoo injoignable.</p>}
-      {ids.length === 0 && <p className="vide">Aucune commande liée au projet.</p>}
+      {ids.length === 0 && <p className="vide">Sans commande : non facturable dans Odoo.</p>}
       {ids.map((cid) => {
         const c = commandes.get(cid), x = pj.get(cid);
         return (
@@ -536,10 +540,14 @@ function Taches({ d, onMission }: { d: Dossier; onMission: (id: number) => void 
 
 // ---------- page ----------
 
+const TYPES: TypeDossier[] = ['commande', 'intervention'];
+
 export default function DossierProjet() {
-  const id = Number(useParams().id);
-  const charge = useDonnees(() => dossiers.projet(id), [id]);
-  const piecesCommandes = usePieces((aid) => dossiers.piece(id, aid));
+  const params = useParams();
+  const type = (TYPES.includes(params.type as TypeDossier) ? params.type : 'commande') as TypeDossier;
+  const id = Number(params.id);
+  const charge = useDonnees(() => dossiers.dossier(type, id), [type, id]);
+  const piecesCommandes = usePieces((aid) => dossiers.piece(type, id, aid));
   const [ouverts, setOuverts] = useState<Set<number>>(new Set());
   const [actif, setActif] = useState<number | null>(null);
   const d = charge.donnees;
@@ -567,7 +575,7 @@ export default function DossierProjet() {
           <span><i className="dp-leg-agence" />agence de départ</span>
           <span><i className="dp-leg-site" />site (nombre de missions)</span>
           <span><i className="dp-leg-trajet" />trajet</span>
-          {geo && geo.sansPosition > 0 && <span>{geo.sansPosition} service{geo.sansPosition > 1 ? 's' : ''} sans position</span>}
+          {geo && geo.sansPosition > 0 && <span>{geo.sansPosition} intervention{geo.sansPosition > 1 ? 's' : ''} sans position</span>}
         </div>
       </section>
       <Equation d={d} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
 import CarteLive from './pages/CarteLive';
@@ -20,7 +20,7 @@ import Vehicules from './pages/Vehicules';
 const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
   { vers: '/statistiques', libelle: 'Statistiques' },
-  { vers: '/dossiers', libelle: 'Dossiers projets' },
+  { vers: '/dossiers', libelle: "Dossiers d'intervention" },
   { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/reglages', libelle: 'Réglages' },
@@ -30,11 +30,6 @@ const LIENS = [
   { vers: '/exports', libelle: 'Exports' },
   { vers: '/reconciliation', libelle: 'Contrôle des données' },
 ];
-
-/** Ancienne adresse /projets/:id : le dossier du même projet. */
-function VersDossier() {
-  return <Navigate to={`/dossiers/${useParams().id ?? ''}`} replace />;
-}
 
 export default function App() {
   const etat = useDonnees(() => api.etat(), []);
@@ -77,11 +72,12 @@ export default function App() {
           <Route path="/carte" element={<CarteLive />} />
           <Route path="/statistiques" element={<Statistiques />} />
           <Route path="/statistiques/services/:id" element={<FicheService />} />
-          {/* ancienne page Projets : tout est dans Dossiers projets (cartes, puis dossier complet) */}
-          <Route path="/projets" element={<Navigate to="/dossiers" replace />} />
-          <Route path="/projets/:id" element={<VersDossier />} />
+          {/* dossier = commande client et ses interventions (le module Projet d'Odoo n'entre pas en jeu) ; anciennes
+              adresses par projet : la liste des dossiers */}
+          <Route path="/projets/*" element={<Navigate to="/dossiers" replace />} />
           <Route path="/dossiers" element={<Dossiers />} />
-          <Route path="/dossiers/:id" element={<DossierProjet />} />
+          <Route path="/dossiers/:type/:id" element={<DossierProjet />} />
+          <Route path="/dossiers/:id" element={<Navigate to="/dossiers" replace />} />
           <Route path="/services" element={<Services />} />
           <Route path="/planification" element={<Planification />} />
           <Route path="/reglages" element={<Reglages />} />

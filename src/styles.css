@@ -457,8 +457,8 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
   overflow-y: auto; transition: border-color .12s, background .12s; }
 .pl-liste.cible { border: 1.5px dashed var(--accent); }
 .pl-liste.survol { background: var(--accent-doux); }
-.pl-liste-tete { display: flex; align-items: center; gap: 8px; }
-.pl-liste-tete h2 { font-size: 16px; margin: 0; }
+.pl-liste-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.pl-liste-tete h2 { font-size: 16px; margin: 0; white-space: nowrap; }
 .pl-compte { display: inline-flex; min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; align-items: center;
   justify-content: center; background: var(--neutre-doux); color: var(--encre-2); font-size: 12px; font-weight: 600;
   font-variant-numeric: tabular-nums; }
@@ -476,6 +476,16 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .pl-carte-retard { font-size: 12px; font-weight: 600; color: var(--erreur); }
 .pl-carte-cause { margin-top: 4px; font-size: 12px; color: var(--alerte); background: var(--alerte-doux); border-radius: 6px;
   padding: 4px 8px; }
+.pl-carte-signes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+.pl-carte-signes span { padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--encre-2);
+  background: var(--fond, #f2f4f8); border: 1px solid var(--bordure); }
+.pl-carte-signes .livraison { color: var(--alerte); background: var(--alerte-doux); border-color: transparent; }
+.pl-carte-signes .alerte { color: var(--erreur); border-color: transparent; background: #fdecec; }
+/* services prévus dans Odoo après la semaine affichée : lien vers leur semaine */
+.pl-plus-tard { margin-left: auto; padding: 2px 10px; border: 1px dashed var(--bordure-forte); border-radius: 999px;
+  background: none; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; white-space: nowrap; }
+.pl-plus-tard:hover { border-style: solid; border-color: var(--accent); }
+.pl-plus-tard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pl-tout-planifie { font-size: 13px; color: #115e59; background: var(--dispo-doux); border-radius: 10px; padding: 12px; }
 .pl-vide { padding: 16px; }
 
@@ -1220,6 +1230,9 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
   white-space: nowrap; display: inline-block; }
 .dc h2 { margin: 0; font-size: 18px; line-height: 1.22; font-weight: 650; letter-spacing: -.012em; text-wrap: balance; overflow-wrap: anywhere; }
 .dc-compte { margin: 2px 0 0; font-size: 12px; color: #c7d4f7; }
+/* commande client du dossier (le dossier = la commande et ses interventions), ou « Sans commande » */
+.dc-commande { margin: 0; font-size: 12.5px; color: #dbe3fb; font-variant-numeric: tabular-nums; }
+.dc-commande strong { font-weight: 650; color: #fff; letter-spacing: .01em; }
 .dc-compte b { font-weight: 600; color: #ffb4b4; }
 .dc-anneau { flex: none; }
 .dc-legende { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 3px 14px; font-size: 12px; color: #c7d4f7; }
@@ -1518,6 +1531,7 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .sv-faits { margin: 0; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1.5fr); gap: 12px 24px;
   padding-top: 12px; border-top: 1px solid #eef0f3; }
 .sv-faits dt { font-size: 12px; color: var(--encre-3); }
+.sv-livraison { display: block; }                    /* une livraison en attente par ligne (réglages du service) */
 .sv-faits dd { margin: 3px 0 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--encre); overflow-wrap: anywhere; }
 .sv-faits dd small { font-size: 12.5px; color: var(--encre-3); line-height: 1.45; }
 .sv-equipe { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1690,6 +1704,13 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .pl-meteo { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px 3px 8px; border: 1px solid var(--bordure);
   border-radius: 999px; background: var(--surface); }
 .pl-meteo > span { font-size: 15px; }
+/* état de la copie d'Odoo (Services sur site) : mise à jour à l'ouverture, au retour sur l'onglet, par le bouton */
+.pl-synchro { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--encre-2); }
+.pl-synchro i { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; }
+.pl-synchro i.en-cours { background: var(--accent); animation: pl-pulsation 1s ease-in-out infinite; }
+.pl-synchro .lien-bouton { font-size: 12.5px; }
+@keyframes pl-pulsation { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pl-synchro i.en-cours { animation: none; } }
 .pl-jour-meteo { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600;
   color: var(--encre-3); font-variant-numeric: tabular-nums; }
 .pl-jour-meteo > span { font-size: 14px; }
@@ -1830,6 +1851,20 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .pf-raisons-titre { font-size: 12px; font-weight: 700; color: var(--accent); }
 .pf-raisons .btn { align-self: flex-start; margin-top: 2px; }
 .pf-cause { color: var(--alerte); font-weight: 600; }
+/* formulaire Services sur site : étape Odoo et étiquettes (en-tête bleu nuit) */
+.pf-etat.odoo { border-style: dotted; }
+.pf-etat.etiquette { border-color: rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .08); font-weight: 500; }
+/* matériel en livraison (swap expédié, pièces) : information, jamais un blocage */
+.pf-livraisons { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-left: 3px solid var(--alerte);
+  border-radius: 0 10px 10px 0; background: var(--alerte-doux); font-size: 13px; color: var(--encre-2); }
+.pf-livraisons .pf-raisons-titre { color: var(--alerte); }
+.pf-livraisons ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pf-livraisons strong { color: var(--encre); }
+.pf-livraisons small { color: var(--encre-3); font-size: 12px; }
+.pf-description { display: flex; flex-direction: column; gap: 6px; }
+.pf-description .btn { align-self: flex-start; }
+.pf-description-texte { margin: 0; padding: 12px 14px; border: 1px solid var(--bordure); border-radius: 10px; font-size: 13px;
+  line-height: 1.5; color: var(--encre-2); white-space: pre-line; max-height: 220px; overflow-y: auto; }
 
 .pf-publiee { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border: 1px solid var(--bordure); border-radius: 14px; }
 .pf-jour { flex: none; width: 62px; padding: 8px 0 7px; display: flex; flex-direction: column; align-items: center; line-height: 1;

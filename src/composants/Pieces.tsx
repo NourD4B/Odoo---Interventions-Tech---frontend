@@ -1,5 +1,5 @@
 // Pièces jointes lues dans Odoo à l'ouverture (jamais copiées) ; chaque consultation est journalisée, d'où le nom
-// de la personne demandé avant la première ouverture. Partagé par la fiche véhicule (PV) et le dossier projet.
+// de la personne demandé avant la première ouverture. Partagé par la fiche véhicule (PV) et le dossier d'intervention.
 import { useState } from 'react';
 import { auteur } from '../planification';
 import type { PieceJointe } from '../flotte';
@@ -16,7 +16,7 @@ export function genre(p: PieceJointe) {
   return (p.nom.split('.').pop() ?? 'Fichier').toUpperCase().slice(0, 5);
 }
 
-/** Ouverture des pièces : `lire` va chercher le contenu (route de la flotte ou du dossier projet). */
+/** Ouverture des pièces : `lire` va chercher le contenu (route de la flotte ou du dossier d'intervention). */
 export function usePieces(lire: (id: number) => Promise<Blob>) {
   const { ecrire, dialogue } = useEcriture();
   const [erreur, setErreur] = useState<string | null>(null);

@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EtatChargement, useDonnees } from '../composants';
-import { qte, stock, type CarteAgence, type Evenement, type ProduitAgence } from '../stock';
+import { lienDossier } from '../statistiques';
+import { qte, stock, type CarteAgence, type Evenement, type LienDossier, type ProduitAgence } from '../stock';
 
 type Filtre = 'tous' | 'interventions' | 'reserves' | 'sortis' | 'negatifs';
 const FILTRES: { cle: Filtre; libelle: string }[] = [
@@ -12,9 +13,12 @@ const FILTRES: { cle: Filtre; libelle: string }[] = [
   { cle: 'reserves', libelle: 'Réservés' }, { cle: 'sortis', libelle: 'Sortis' }, { cle: 'negatifs', libelle: 'Négatifs' },
 ];
 
-// recherche : produit, référence, intervention ou projet
+// recherche : produit, référence, intervention ou dossier (commande)
 const texteRecherche = (p: ProduitAgence) => [p.produit.nom, p.produit.reference ?? '',
-  ...p.interventions.flatMap((i) => [i.nom, i.projet?.nom ?? ''])].join(' ').toLowerCase();
+  ...p.interventions.flatMap((i) => [i.nom, i.dossier?.nom ?? ''])].join(' ').toLowerCase();
+
+/** Dossier d'intervention : « commande S10695 », ou rien pour une intervention sans commande (son propre dossier). */
+const libelleDossier = (d: LienDossier | null) => (d && d.type === 'commande' ? `commande ${d.nom}` : null);
 const PAS = 100;
 
 type Unites = { stock: number; reserve: number; sorti: number; retour: number };
@@ -63,12 +67,12 @@ function LigneProduit({ p, choisi, onChoisir }: { p: ProduitAgence; choisi: bool
         {p.interventions.map((i) => {
           const detail = [compte(i.sorti, 'sorti'), compte(i.retour, 'revenu'), compte(i.reserve, 'réservé')]
             .filter(Boolean).join(', ');
-          const projet = i.projet ? `, projet ${i.projet.nom}` : '';
+          const commande = libelleDossier(i.dossier);
           return (
             <Link key={i.id} to={`/statistiques/services/${i.id}`} className={`mt-puce ${i.etat}`}
-              title={`Intervention ${i.nom}${projet} : ${detail}`}>
+              title={`Intervention ${i.nom}${commande ? `, ${commande}` : ''} : ${detail}`}>
               <span>{i.nom}</span>
-              {i.projet && <span className="mt-puce-projet">projet {i.projet.nom}</span>}
+              {commande && <span className="mt-puce-projet">{commande}</span>}
               <span className="mt-puce-qte">{detail}</span>
             </Link>);
         })}
@@ -77,14 +81,15 @@ function LigneProduit({ p, choisi, onChoisir }: { p: ProduitAgence; choisi: bool
   );
 }
 
-// Pour qui : l'intervention et son projet ; sinon le projet du transfert ; sinon la commande (sans intervention).
+// Pour qui : l'intervention et son dossier (commande) ; sinon la commande (sans intervention).
 function Pour({ e }: { e: Evenement }) {
-  const projet = e.projet && <Link to={`/dossiers/${e.projet.id}`}>{e.projet.nom}</Link>;
+  const dossier = e.dossier && e.dossier.type === 'commande'
+    && <Link to={lienDossier(e.dossier)}>{e.dossier.nom}</Link>;
   if (e.intervention) {
     return (
       <span className="mt-ev-pour">
         <Link to={`/statistiques/services/${e.intervention.id}`}>{e.intervention.nom}</Link>
-        {projet && <span className="mt-ev-projet">projet {projet}</span>}
+        {dossier && <span className="mt-ev-projet">commande {dossier}</span>}
       </span>);
   }
   if (e.intervention_commande) {
@@ -94,7 +99,6 @@ function Pour({ e }: { e: Evenement }) {
           {e.intervention_commande.nom}</Link>, ligne non rattachée dans Odoo</span>
       </span>);
   }
-  if (projet) return <span className="mt-ev-pour">Projet {projet}</span>;
   if (e.commande) {
     return <span className="mt-ev-pour neutre">Commande {e.commande}{e.client ? `, ${e.client}` : ''}, sans intervention</span>;
   }
@@ -185,8 +189,8 @@ export default function Materiel() {
           <div className="sous-titre">Ce que chaque agence a en stock, pour quelle intervention, et ce qui en est sorti
             {t.donnees?.a_jour_le ? `. Copie d'Odoo du ${new Date(t.donnees.a_jour_le).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}.</div>
         </div>
-        <label className="mt-recherche"><span className="lu">Rechercher un produit, une intervention ou un projet</span>
-          <input type="search" placeholder="Produit, intervention ou projet" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
+        <label className="mt-recherche"><span className="lu">Rechercher un produit, une intervention ou une commande</span>
+          <input type="search" placeholder="Produit, intervention ou commande" value={recherche} onChange={(e) => setRecherche(e.target.value)} />
         </label>
       </div>
 

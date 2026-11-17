@@ -18,9 +18,10 @@ import { nomVehicule, Plaque } from '../composants/Vehicule';
 import { meteo, temps, type Meteo } from '../meteo';
 import PlanMois from './PlanMois';
 import {
-  ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type Proposition, type Referentiels,
-  type ServicePlanif, type TechnicienPlanif,
+  ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type LivraisonAttente, type Proposition,
+  type Referentiels, type ServicePlanif, type TechnicienPlanif,
 } from '../planification';
+import { ErreurStats, stats } from '../statistiques';
 
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre',
@@ -61,6 +62,11 @@ function jourLong(s: string) {
 const dureeService = (s: ServicePlanif) => Math.max(1, Math.ceil(s.allocated_hours / Math.max(1, s.nb_techniciens) / 8));
 const nombreH = (h: number) => `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(h)} h`;
 const client = (s: ServicePlanif) => s.partner_name ?? 'Client non renseigné';
+/** « à l'instant », « il y a 3 min », « il y a 2 h » (heure de fin du dernier cycle de synchronisation, UTC). */
+function depuisQuand(iso: string, maintenant: Date): string {
+  const min = Math.max(0, Math.round((maintenant.getTime() - new Date(iso).getTime()) / 60_000));
+  return min < 1 ? "à l'instant" : min < 60 ? `il y a ${min} min` : `il y a ${Math.round(min / 60)} h`;
+}
 /** État affiché ; « brouillon » = équipe en cours de composition (jamais renvoyé par l'API). */
 const etatDe = (s: ServicePlanif): string => s.affectation?.etat ?? 'a_planifier';
 const absentSur = (t: TechnicienPlanif, du: string, au: string) => t.absences.some((a) => a.du <= au && a.au >= du);
@@ -131,6 +137,52 @@ function ChoixTechnicien({ t, choisi, absent, onBasculer }: {
   );
 }
 
+/** Matériel pas encore arrivé (pièce de rechange, équipement de swap expédié par Chronopost…) : affiché, jamais
+ *  bloquant ; le lien de suivi est celui calculé par Odoo. */
+function LivraisonsAttente({ liste }: { liste: LivraisonAttente[] }) {
+  if (!liste.length) return null;
+  return (
+    <div className="pf-livraisons" role="note">
+      <p className="pf-raisons-titre">Matériel en livraison</p>
+      <ul>{liste.map((l) => (
+        <li key={l.nom}><strong>{l.transporteur ?? 'Livraison'}</strong> {l.nom}
+          {l.suivi && <> · suivi {l.suivi_url
+            ? <a href={l.suivi_url} target="_blank" rel="noreferrer">{l.suivi}</a> : l.suivi}</>}
+          {l.prevue && <> · prévue le {jj(l.prevue)}</>}</li>))}
+      </ul>
+      <small>Vérifier l'arrivée avant de publier : le planning ne bloque pas.</small>
+    </div>
+  );
+}
+
+/** Onglet « Description » du service : lu dans Odoo à la demande, jamais copié (lecture journalisée, nom demandé). */
+function DescriptionOdoo({ s }: { s: ServicePlanif }) {
+  const { ecrire, dialogue } = useEcriture();
+  const [texte, setTexte] = useState<string | null | undefined>(undefined);       // undefined : pas encore lue
+  const [lecture, setLecture] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  if (s.simule) return null;
+  const lire = async () => {
+    setLecture(true);
+    setErreur(null);
+    try {
+      const r = await ecrire(() => planif.description(s.id));
+      if (r) setTexte(r.texte);
+    } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setLecture(false); }
+  };
+  return (
+    <div className="pf-description">
+      {texte === undefined
+        ? <button type="button" className="btn btn-petit" onClick={() => void lire()} disabled={lecture}>
+          {lecture ? 'Lecture dans Odoo…' : 'Lire la description (Odoo)'}</button>
+        : <><p className="pf-raisons-titre">Description (Odoo)</p>
+          <p className="pf-description-texte">{texte ?? 'Aucune description dans Odoo.'}</p></>}
+      {erreur && <p className="erreur">{erreur}</p>}
+      {dialogue}
+    </div>
+  );
+}
+
 function DialogueService({ s, brouillon, techniciens, agences, propose, cause, refs, enregistrer, retirer, depublier,
   onFermer }: {
   s: ServicePlanif; brouillon: Brouillon | null; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
@@ -188,6 +240,9 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
               <span className={`pf-etat etat-${etat}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
                 verrouille: 'Verrouillé', publie: 'Publié' }[etat]}</span>
               {s.priority === '1' && <span className="pf-etat urgent">Urgent</span>}
+              {s.etape_odoo && <span className="pf-etat odoo" title="Étape dans Odoo">{s.etape_odoo}</span>}
+              {s.under_warranty && <span className="pf-etat">Sous garantie</span>}
+              {(s.etiquettes ?? []).map((e) => <span key={e} className="pf-etat etiquette">{e}</span>)}
             </div>
           </div>
           <button ref={fermer} type="button" className="sv-fermer" aria-label="Fermer" onClick={onFermer} disabled={envoi}>
@@ -200,12 +255,19 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
             <div><dt>Durée</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens > 1
               ? `${s.nb_techniciens} techniciens, ${nombreH(s.allocated_hours / s.nb_techniciens)} chacun`
               : '1 technicien'}, soit {dureeService(s)} jour{dureeService(s) > 1 ? 's' : ''} sur site
-              {s.vehicule_requis === 'utilitaire' ? ', utilitaire requis' : ''}</small></dd></div>
-            <div><dt>Projet</dt><dd>{s.project_name ?? `n° ${s.project_id}`}</dd></div>
+              {s.vehicule_requis === 'utilitaire' ? ', utilitaire requis' : ''}</small>
+              {!s.allocated_hours && <small className="precision-faible">Temps alloué à 0 h dans Odoo : compté 1 jour</small>}</dd></div>
+            <div><dt>Commande</dt><dd>{s.commande_nom ?? 'Non facturable'}
+              {s.article_commande && <small>{s.article_commande}</small>}</dd></div>
+            {s.feuille_modele && <div><dt>Feuille de travail</dt><dd>{s.feuille_modele}</dd></div>}
+            {!!s.assignes_odoo?.length && <div><dt>Assignés dans Odoo</dt><dd>{s.assignes_odoo.join(', ')}</dd></div>}
+            {s.partner_phone && <div><dt>Contact</dt><dd>{s.partner_phone}</dd></div>}
             {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
             <div className="pf-large"><dt>Site</dt><dd>{s.site_adresse ?? 'Adresse non renseignée'}
               {s.site_lat === null && <small className="precision-faible">Sans position : à placer dans les réglages du service</small>}</dd></div>
           </dl>
+          <LivraisonsAttente liste={s.livraisons_attente ?? []} />
+          <DescriptionOdoo s={s} />
 
           {(propose || a?.motif_derogation || cause) && (
             <div className="pf-raisons">
@@ -400,6 +462,7 @@ export default function Planification() {
   const surAujourdhui = vue === 'semaine' ? debut === lundiAuj : lundiAuj >= debut && lundiAuj <= finMois;
 
   const services = useDonnees(() => planif.services(debut, vue === 'mois' ? finMois : fin), [debut, vue]);
+  const plusTard = useDonnees(() => planif.plusTard(fin), [fin]);         // prévus dans Odoo après la semaine
   const ressources = useDonnees(() => planif.ressources(debut, fin), [debut]);
   const refs = useDonnees(() => planif.referentiels(), []);
   const [proposition, setProposition] = useState<Proposition | null>(null);
@@ -496,14 +559,52 @@ export default function Planification() {
 
   // Tout se recalcule depuis le serveur après chaque changement : calendrier, carte, « À planifier », jours libres,
   // charge des techniciens et compteurs de la barre ; aussi au retour sur l'onglet (changement fait ailleurs).
-  const recharger = () => { services.recharger(); ressources.recharger(); };
+  const recharger = () => { services.recharger(); ressources.recharger(); plusTard.recharger(); };
   const rechargerRef = useRef(recharger);
   rechargerRef.current = recharger;
+
+  // Services créés ou modifiés dans Odoo (Services sur site) : copie mise à jour à l'ouverture, au retour sur l'onglet et
+  // toutes les 2 minutes (sautée si le dernier cycle a moins de 60 s), ou tout de suite par le bouton ; la
+  // synchronisation automatique du serveur continue. Un changement recharge la semaine.
+  const [synchro, setSynchro] = useState<{ fin: string | null; enCours: boolean }>({ fin: null, enCours: false });
+  const synchroniser = async (bouton: boolean) => {
+    setSynchro((x) => ({ ...x, enCours: true }));
+    try {
+      const r = await stats.synchroniser(bouton ? undefined : 60);
+      setSynchro({ fin: r.dernier_cycle ?? null, enCours: false });
+      const b = r.services;
+      if (b && b.ajoutes.length + b.mis_a_jour.length + b.sortis.length > 0) rechargerRef.current();
+      if (bouton) {
+        setMessage({ type: 'ok', texte: b?.ajoutes.length
+          ? `${b.ajoutes.length} nouveau${b.ajoutes.length > 1 ? 'x' : ''} service${b.ajoutes.length > 1 ? 's' : ''} depuis Odoo.`
+          : 'Odoo est à jour.' });
+      }
+    } catch (e) {
+      setSynchro((x) => ({ ...x, enCours: false }));
+      if (bouton) {
+        setMessage({ type: 'erreur', texte: e instanceof ErreurStats && e.statut === 409
+          ? 'Synchronisation déjà en cours : réessayer dans un instant.' : `Synchronisation Odoo : ${e instanceof Error ? e.message : String(e)}` });
+      }
+    }
+  };
+  const synchroRef = useRef(synchroniser);
+  synchroRef.current = synchroniser;
   useEffect(() => {
-    const auRetour = () => { if (document.visibilityState === 'visible') rechargerRef.current(); };
+    const auRetour = () => {
+      if (document.visibilityState !== 'visible') return;
+      rechargerRef.current();
+      void synchroRef.current(false);
+    };
+    void synchroRef.current(false);
+    const minuterie = window.setInterval(() => { if (document.visibilityState === 'visible') void synchroRef.current(false); },
+      120_000);
     document.addEventListener('visibilitychange', auRetour);
     window.addEventListener('focus', auRetour);
-    return () => { document.removeEventListener('visibilitychange', auRetour); window.removeEventListener('focus', auRetour); };
+    return () => {
+      window.clearInterval(minuterie);
+      document.removeEventListener('visibilitychange', auRetour);
+      window.removeEventListener('focus', auRetour);
+    };
   }, []);
   const erreurTexte = (e: unknown) =>
     (e instanceof ErreurPlanif && e.statut === 409 ? CONFLIT : e instanceof Error ? e.message : String(e));
@@ -751,6 +852,11 @@ export default function Planification() {
         {actuel && temps_?.actuelle && siege && <span className="pl-meteo" title={`${actuel.libelle} à ${siege.nom}`}>
           <span aria-hidden="true">{actuel.icone}</span>{Math.round(temps_.actuelle.temperature)} °C, {actuel.libelle.toLowerCase()}
           <small>{siege.nom}</small></span>}
+        <span className="pl-synchro" title="Services sur site d'Odoo : copie mise à jour automatiquement">
+          <i className={synchro.enCours ? 'en-cours' : ''} aria-hidden="true" />
+          {synchro.enCours ? 'Odoo : synchronisation…' : synchro.fin ? `Odoo à jour ${depuisQuand(synchro.fin, maintenant)}` : 'Odoo'}
+          <button type="button" className="lien-bouton" disabled={synchro.enCours} onClick={() => void synchroniser(true)}>
+            Synchroniser</button></span>
       </p>
 
       {message && <div className={message.type === 'erreur' ? 'erreur' : 'succes'} role={message.type === 'erreur' ? 'alert' : 'status'}>{message.texte}</div>}
@@ -891,6 +997,10 @@ export default function Planification() {
             onDrop={deposerDansListe}>
             <div className="pl-liste-tete">
               <h2>À planifier</h2><span className="pl-compte">{aPlanifier.length}</span>
+              {vue === 'semaine' && !!plusTard.donnees?.nombre && plusTard.donnees.semaine && (
+                <button type="button" className="pl-plus-tard" onClick={() => aller(lundiDe(plusTard.donnees!.semaine!))}
+                  title="Services prévus dans Odoo après cette semaine : ils apparaissent dans leur semaine">
+                  {plusTard.donnees.nombre} plus tard · semaine du {jj(plusTard.donnees.semaine)}</button>)}
             </div>
             {glisse && glisseAffecte && <div className="pl-depot">Déposer ici pour retirer l'affectation</div>}
             <div className="pl-cartes">
@@ -907,6 +1017,13 @@ export default function Planification() {
                     <span className="pl-carte-nom">{s.name}</span>
                     <span className="pl-carte-infos">{infos}</span>
                     {retard && <span className="pl-carte-retard">{retard}</span>}
+                    {(s.under_warranty || !!s.livraisons_attente?.length || !s.allocated_hours) && (
+                      <span className="pl-carte-signes">
+                        {!!s.livraisons_attente?.length && <span className="livraison">
+                          {s.livraisons_attente[0].transporteur ?? 'Matériel'} en livraison</span>}
+                        {s.under_warranty && <span>Sous garantie</span>}
+                        {!s.allocated_hours && <span className="alerte">0 h dans Odoo</span>}
+                      </span>)}
                     {cause && <span className="pl-carte-cause">{cause}</span>}
                     {enCours && (
                       <span className="pl-carte-equipe">

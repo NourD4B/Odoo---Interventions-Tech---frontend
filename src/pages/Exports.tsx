@@ -61,18 +61,18 @@ export default function Exports() {
   const auj = aujourdhui();
   const lundi = lundiDe(auj);
 
-  // projets et missions
+  // dossiers et interventions
   const [toutesDates, setToutesDates] = useState(true);
   const [pDebut, setPDebut] = useState(lundi);
   const [pFin, setPFin] = useState(decaler(lundi, 4));
   const pInverse = !toutesDates && pFin < pDebut;
 
-  // dossier d'un projet
-  const projets = useDonnees(() => stats.projets(true), []);
-  const choixProjets = useMemo(() => (projets.donnees ?? []).filter((p) => p.id !== null)
-    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr')), [projets.donnees]);
-  const [projetId, setProjetId] = useState<number | null>(null);
-  const projet = choixProjets.find((p) => p.id === projetId) ?? null;
+  // dossier d'une commande (ou d'une intervention sans commande)
+  const dossiers = useDonnees(() => stats.dossiers(true), []);
+  const choixDossiers = useMemo(() => [...(dossiers.donnees ?? [])]
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr')), [dossiers.donnees]);
+  const [cle, setCle] = useState<string | null>(null);
+  const dossier = choixDossiers.find((d) => d.cle === cle) ?? null;
 
   // planification
   const [choix, setChoix] = useState<ChoixPlanif>('semaine');
@@ -90,15 +90,15 @@ export default function Exports() {
       <div className="entete">
         <div>
           <h1>Exports</h1>
-          <div className="sous-titre">Classeurs Excel des projets, des dossiers et de la planification, prêts à trier et à
-            filtrer.</div>
+          <div className="sous-titre">Classeurs Excel des dossiers d'intervention et de la planification, prêts à trier et
+            à filtrer.</div>
         </div>
       </div>
 
       <div className="ex-grille">
-        <Carte titre="Projets et missions" feuilles={['Projets', 'Missions']}
-          description="Une ligne par projet, puis chaque mission : dates, équipe, véhicule et modèle, heures, coûts, marge, CO2e.">
-          <div className="segmente ex-choix" role="radiogroup" aria-label="Missions exportées">
+        <Carte titre="Dossiers et interventions" feuilles={['Dossiers', 'Interventions']}
+          description="Une ligne par dossier (commande client, ou intervention sans commande), puis chaque intervention : dates, équipe, véhicule et modèle, heures, coûts, marge, CO2e.">
+          <div className="segmente ex-choix" role="radiogroup" aria-label="Interventions exportées">
             <button type="button" role="radio" aria-checked={toutesDates} className={toutesDates ? 'actif' : ''}
               onClick={() => setToutesDates(true)}>Toutes les dates</button>
             <button type="button" role="radio" aria-checked={!toutesDates} className={!toutesDates ? 'actif' : ''}
@@ -106,26 +106,27 @@ export default function Exports() {
           </div>
           {!toutesDates && <Periode debut={pDebut} fin={pFin} onDebut={setPDebut} onFin={setPFin} />}
           {pInverse && <p className="ex-alerte">La fin précède le début.</p>}
-          <BoutonExport libelle="Télécharger les projets" desactive={pInverse}
-            nomFichier={nomFichier('projets', toutesDates ? 'tout' : `${pDebut}_${pFin}`)}
-            lire={() => (toutesDates ? exportations.projets() : exportations.projets(pDebut, pFin))} />
+          <BoutonExport libelle="Télécharger les dossiers" desactive={pInverse}
+            nomFichier={nomFichier('dossiers', toutesDates ? 'tout' : `${pDebut}_${pFin}`)}
+            lire={() => (toutesDates ? exportations.dossiers() : exportations.dossiers(pDebut, pFin))} />
         </Carte>
 
-        <Carte titre="Dossier d'un projet" feuilles={['Résumé', 'Missions', 'Véhicules', 'Tâches', 'Pièces jointes']}
-          description="Tout le dossier d'un projet : résumé, missions, véhicules et conducteurs désignés, tâches Odoo, noms des pièces jointes.">
-          <label className="champ">Projet
-            <select value={projetId ?? ''} onChange={(e) => setProjetId(e.target.value ? Number(e.target.value) : null)}>
-              <option value="">{projets.chargement && !projets.donnees ? 'Chargement…' : 'Choisir un projet'}</option>
-              {choixProjets.map((p) => (
-                <option key={p.id} value={p.id ?? ''}>{p.nom}{p.client ? ` (${p.client})` : ''}{p.simule ? ', simulé' : ''}</option>
+        <Carte titre="Dossier d'intervention" feuilles={['Résumé', 'Interventions', 'Véhicules', 'Tâches', 'Pièces jointes']}
+          description="Tout le dossier d'une commande : résumé, interventions, véhicules et conducteurs désignés, tâches Odoo, noms des pièces jointes.">
+          <label className="champ">Dossier
+            <select value={cle ?? ''} onChange={(e) => setCle(e.target.value || null)}>
+              <option value="">{dossiers.chargement && !dossiers.donnees ? 'Chargement…' : 'Choisir un dossier'}</option>
+              {choixDossiers.map((d) => (
+                <option key={d.cle} value={d.cle}>{d.type === 'commande' ? d.nom : `${d.nom} (sans commande)`}
+                  {d.client ? ` · ${d.client}` : ''}{d.simule ? ', simulé' : ''}</option>
               ))}
             </select>
           </label>
-          {projet && <p className="ex-detail">{projet.services} mission{projet.services > 1 ? 's' : ''}
-            {projet.prochaine_intervention ? `, prochaine le ${jj(projet.prochaine_intervention)}` : ''}</p>}
-          <BoutonExport libelle="Télécharger le dossier" desactive={!projet}
-            nomFichier={nomFichier('dossier', projet?.nom ?? '')}
-            lire={() => exportations.dossier(projetId!)} />
+          {dossier && <p className="ex-detail">{dossier.services} intervention{dossier.services > 1 ? 's' : ''}
+            {dossier.prochaine_intervention ? `, prochaine le ${jj(dossier.prochaine_intervention)}` : ''}</p>}
+          <BoutonExport libelle="Télécharger le dossier" desactive={!dossier}
+            nomFichier={nomFichier('dossier', dossier?.nom ?? '')}
+            lire={() => exportations.dossier(dossier!.type, dossier!.id)} />
         </Carte>
 
         <Carte titre="Planification" feuilles={['Grille', 'Affectations', 'Charge', 'À planifier']}
