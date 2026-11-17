@@ -1235,11 +1235,8 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
   color: var(--encre-2); }
 .dp-argent h4 span { font-weight: 600; color: var(--encre); }
 .dp-argent .sf-note { margin-top: 10px; }
-.dp-livraisons, .dp-trajets { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
-.dp-trajets { margin: 0; }
-.dp-trajets li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dotted var(--bordure); }
-.dp-trajets small, .dp-livraisons small { display: block; font-size: 12px; color: var(--encre-3); }
-.dp-trajets li span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.dp-livraisons { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.dp-livraisons small { display: block; font-size: 12px; color: var(--encre-3); }
 /* mission : alertes (à régler dans la planification, ou dans Odoo), liens d'action */
 .dp-alertes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .dp-alertes li { position: relative; padding: 6px 12px 6px 32px; border-radius: 8px; background: var(--alerte-doux); color: var(--alerte);
@@ -1530,15 +1527,65 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 }
 @container (max-width: 720px) { .dp-deplacement .rs-bandeau { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 480px) { .dp-deplacement .rs-bandeau { grid-template-columns: minmax(0, 1fr); } }
-/* mode de déplacement donné par le véhicule affecté (rien à choisir) */
-.rs-vehicule-mode { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
-.rs-vehicule-mode small { display: block; font-size: 12px; color: var(--encre-3); }
-.rs-vehicule-icone { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%;
-  background: var(--accent); color: #fff; }
-.rs-vehicule-icone .rs-icone { width: 18px; height: 18px; }
+/* sous le bandeau : trajets de l'équipe et mode de déplacement côte à côte, calcul à la demande */
+.dp-dep-grille { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@container (max-width: 760px) { .dp-dep-grille { grid-template-columns: minmax(0, 1fr); } }
+.dp-dep-bloc { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dp-deplacement h4 { margin: 0; font-size: 13px; font-weight: 650; color: var(--encre-2); }
+.dp-dep-vide { margin: 0; padding: 14px 16px; border: 1px dashed var(--bordure-forte); border-radius: 12px; color: var(--encre-3);
+  font-size: 13px; }
+
+/* un trajet = un rail de l'agence (carré ambre, comme sur la carte) au site (anneau bleu), km aller sur le rail */
+.dp-trajets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dp-trajet { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--bordure);
+  border-radius: 14px; background: linear-gradient(180deg, #fbfcfe 0%, #f6f8fc 100%); }
+.dp-trajet p { margin: 0; }
+.dp-trajet-qui { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.dp-trajet-qui i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #2a4bb8; color: #fff;
+  font-style: normal; font-size: 10px; font-weight: 700; }
+.dp-trajet-qui span { margin-left: auto; font-size: 12px; color: var(--encre-3); }
+.dp-trajet-route { display: grid; grid-template-columns: auto minmax(70px, 1fr) auto; align-items: center; gap: 10px; font-size: 13px;
+  font-weight: 600; }
+.dp-trajet-de, .dp-trajet-vers { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.dp-trajet-de i { width: 12px; height: 12px; border-radius: 3px; background: #b45309; box-shadow: 0 0 0 3px #fde9d4; }
+.dp-trajet-vers i { width: 13px; height: 13px; border-radius: 50%; border: 3px solid var(--accent); background: #fff;
+  box-shadow: 0 0 0 3px var(--accent-doux); }
+.dp-trajet-rail { position: relative; height: 24px; display: grid; place-items: center; }
+.dp-trajet-rail::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 3px dotted #b45309; opacity: .75; }
+.dp-trajet-rail b { position: relative; padding: 2px 9px; border: 1px solid #f1d2b3; border-radius: 999px; background: #fff;
+  color: #9a3412; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dp-trajet-total { font-size: 12.5px; color: var(--encre-3); font-variant-numeric: tabular-nums; }
+.dp-trajet-total strong { color: var(--encre); font-weight: 650; }
+
+/* véhicule affecté : carte à la couleur de son énergie (électrique vert d'eau, thermique ambre), émissions au km */
+.rs-vehicule-carte { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px 14px;
+  padding: 14px 16px; border-radius: 14px; border: 1px solid var(--bordure); background: var(--surface); }
+.rs-vehicule-carte.electrique { border-color: #b7e2d6; background: linear-gradient(135deg, #effaf6 0%, #ffffff 70%); }
+.rs-vehicule-carte.thermique { border-color: #f1d9bd; background: linear-gradient(135deg, #fdf4ea 0%, #ffffff 70%); }
+.rs-vehicule-icone { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; color: #fff; }
+.electrique .rs-vehicule-icone { background: #0f766e; }
+.thermique .rs-vehicule-icone { background: #b45309; }
+.rs-vehicule-icone .rs-icone { width: 22px; height: 22px; }
+.rs-vehicule-corps { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rs-vehicule-corps p { margin: 0; }
+.rs-vehicule-titre { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 14px; }
+.rs-vehicule-titre span { color: var(--encre-2); }
+.rs-vehicule-energie { font-size: 12.5px; color: var(--encre-3); }
+.rs-vehicule-carte .fl-plaque { position: static; grid-column: 2; justify-self: start; height: 22px; font-size: 11.5px; line-height: 20px; }
+.rs-vehicule-facteur { grid-column: 3; grid-row: 1 / span 2; margin: 0; display: flex; flex-direction: column; align-items: flex-end;
+  line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rs-vehicule-facteur strong { font-size: 22px; font-weight: 750; letter-spacing: -.01em; }
+.electrique .rs-vehicule-facteur strong { color: #0f766e; }
+.thermique .rs-vehicule-facteur strong { color: #9a3412; }
+.rs-vehicule-facteur small { font-size: 11.5px; color: var(--encre-3); }
+.rs-vehicule-icone { grid-row: 1 / span 2; }
 .rs-choix .muet a { font-weight: 600; }
-.dp-deplacement h4 { margin: 0; display: flex; align-items: baseline; gap: 10px; }
-.dp-deplacement h4 span { font-weight: 400; color: var(--encre-3); }
+
+/* calcul détaillé, replié */
+.rs-calcul { border: 1px solid var(--bordure); border-radius: 12px; background: #f7f8fa; }
+.rs-calcul summary { padding: 10px 14px; cursor: pointer; color: var(--accent); font-size: 13px; font-weight: 650; }
+.rs-calcul ul { margin: 0; padding: 0 14px 12px 28px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px;
+  color: var(--encre-2); font-variant-numeric: tabular-nums; }
 
 .rs-service { display: flex; align-items: center; gap: 18px; }
 .rs-conso { display: flex; flex-direction: column; gap: 12px; }

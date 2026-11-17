@@ -3,6 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useEcriture } from './Ecriture';
+import { Plaque } from './Vehicule';
 import { co2, MODES, NOTES, rse, SOURCES, type BilanRse, type MethodeRse, type ModeTransport, type NoteRse,
          type ProfilVehicule, type RseMission } from '../rse';
 
@@ -149,11 +150,22 @@ export function ChoixMode({ serviceId, r, onChange, lienVehicule, modele }: {
   const v = r.source === 'planification' ? r.vehicule : null;
   const changer = lienVehicule && <Link to={lienVehicule}>{v ? 'Changer de véhicule' : 'Affecter un véhicule'}</Link>;
   if (v) {
+    // carte du véhicule, couleur de son énergie : mode, modèle et plaque, carburant et consommation, émissions au km
+    const electrique = r.mode === 'car_electric';
     return (
       <div className="rs-choix rs-par-vehicule">
-        <p className="rs-vehicule-mode"><span className="rs-vehicule-icone"><IconeMode mode={r.mode} /></span>
-          <span><strong>{r.mode_libelle}</strong>{modele && <> · {modele}</>}{v.plaque && <> · {v.plaque}</>}
-            <small>{v.carburant}, {nombre(v.consommation, 2)} {v.unite}</small></span></p>
+        <div className={`rs-vehicule-carte ${electrique ? 'electrique' : 'thermique'}`}>
+          <span className="rs-vehicule-icone"><IconeMode mode={r.mode} /></span>
+          <div className="rs-vehicule-corps">
+            <p className="rs-vehicule-titre"><strong>{r.mode_libelle}</strong>{modele && <span>{modele}</span>}</p>
+            <p className="rs-vehicule-energie">{v.carburant} · {nombre(v.consommation, 2)} {v.unite}
+              {v.source_consommation === 'constructeur' && <small> (constructeur × usage réel)</small>}
+              {v.source_consommation === 'defaut' && <small> (moyenne, à saisir)</small>}</p>
+          </div>
+          {v.plaque && <Plaque plaque={v.plaque} />}
+          <p className="rs-vehicule-facteur"><strong>{nombre(v.kg_co2e_par_km * 1000, 0)}</strong>
+            <small>g CO2e/km</small></p>
+        </div>
         <p className="muet">Le mode suit le véhicule affecté.{changer && <> {changer}</>}</p>
       </div>
     );

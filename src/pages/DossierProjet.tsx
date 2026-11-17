@@ -16,10 +16,10 @@ import { BoutonExport } from '../composants/BoutonExport';
 import DescriptionOdoo from '../composants/DescriptionOdoo';
 import { useEcriture } from '../composants/Ecriture';
 import { ListePieces, usePieces, type Pieces } from '../composants/Pieces';
-import { BandeauRse, BilanMission, ChoixMode, DetailRse, IconeMode, PastilleNote } from '../composants/Rse';
+import { BandeauRse, BilanMission, ChoixMode, IconeMode, PastilleNote } from '../composants/Rse';
 import { Barre, BadgeEtat } from '../composants/Statistiques';
 import { Plaque } from '../composants/Vehicule';
-import { dossiers, type Dossier, type Itineraire, type ServiceDossier } from '../dossiers';
+import { dossiers, type AgenceDepart, type Dossier, type Itineraire, type ServiceDossier } from '../dossiers';
 import { exportations, nomFichier } from '../exports';
 import { co2 } from '../rse';
 import { alertesFiche, lienPlanification, statutOdooNotable } from '../servicesSurSite';
@@ -478,7 +478,7 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
           <button type="button" className="dp-deplier" aria-expanded={ouvert} onClick={onBasculer}>
             {ouvert ? 'Masquer le détail' : 'Voir le détail'}</button>
         </div>
-        {ouvert && <Carnet s={s} ecrire={ecrire} onModifie={onModifie} />}
+        {ouvert && <Carnet s={s} agences={d.agences} ecrire={ecrire} onModifie={onModifie} />}
       </article>
     </li>
   );
@@ -493,7 +493,9 @@ const ONGLETS_CARNET: { cle: OngletCarnet; libelle: string }[] = [
   { cle: 'materiel', libelle: 'Matériel' }, { cle: 'rse', libelle: 'Déplacement et RSE' },
 ];
 
-function Carnet({ s, ecrire, onModifie }: { s: ServiceDossier; ecrire: Ecrire; onModifie: () => void }) {
+function Carnet({ s, agences, ecrire, onModifie }: {
+  s: ServiceDossier; agences: AgenceDepart[]; ecrire: Ecrire; onModifie: () => void;
+}) {
   const [onglet, setOnglet] = useState<OngletCarnet>('description');
   const [vus, setVus] = useState<Set<OngletCarnet>>(() => new Set(['description']));
   const id = (o: OngletCarnet) => `dp-${s.id}-${o}`;
@@ -523,7 +525,7 @@ function Carnet({ s, ecrire, onModifie }: { s: ServiceDossier; ecrire: Ecrire; o
       {panneau('sous_taches', <SousTaches s={s} />)}
       {panneau('argent', <Argent s={s} />)}
       {panneau('materiel', <Materiel s={s} />)}
-      {panneau('rse', <Deplacement s={s} onModifie={onModifie} />)}
+      {panneau('rse', <Deplacement s={s} agences={agences} onModifie={onModifie} />)}
     </div>
   );
 }
@@ -637,25 +639,53 @@ function Materiel({ s }: { s: ServiceDossier }) {
   </>);
 }
 
-/** Score RSE de la mission (même bandeau que le dossier), trajets des techniciens depuis leur agence, mode de
- *  déplacement (celui du véhicule affecté ; il se change avec le véhicule, dans la planification) et calcul. */
-function Deplacement({ s, onModifie }: { s: ServiceDossier; onModifie: () => void }) {
-  const p = s.planification;
+/** Score RSE de la mission (même bandeau que le dossier), puis d'où il vient : trajets de l'équipe sur un rail
+ *  agence → site (mêmes repères que la carte), mode de déplacement (celui du véhicule affecté ; il se change avec le
+ *  véhicule, dans la planification), alertes, et le calcul détaillé à la demande. */
+function Deplacement({ s, agences, onModifie }: { s: ServiceDossier; agences: AgenceDepart[]; onModifie: () => void }) {
+  const p = s.planification, r = s.rse;
   const lienVehicule = planifiable(s) ? lienPlanification(s.id, p.debut, s.prevu.debut, null) : undefined;
+  const vers = villeDe(s.site.adresse) ?? 'Site';
   return (
     <div className="dp-deplacement">
-      <BilanMission r={s.rse} />
-      {p.techniciens.length > 0 && <ul className="dp-trajets">{p.techniciens.map((x) => {
-        const tr = p.trajet.par_technicien.find((y) => y.matricule === x.matricule);
-        return (
-          <li key={x.matricule}><span>{x.nom}<small>{x.jours} jour{x.jours > 1 ? 's' : ''}</small></span>
-            <span>{tr?.km != null ? <>{nombre(tr.km)} km<small>{heures(tr.heures_route)} de route{tr.grand_deplacement ? ', grand déplacement' : ''}</small></>
-              : <small>{tr?.cause ?? 'trajet inconnu'}</small>}</span></li>
-        );
-      })}</ul>}
-      <ChoixMode serviceId={s.id} r={s.rse} onChange={onModifie} lienVehicule={lienVehicule}
-        modele={p.vehicule?.modele ?? null} />
-      <DetailRse r={s.rse} />
+      <BilanMission r={r} />
+      <div className="dp-dep-grille">
+        <section className="dp-dep-bloc" aria-labelledby={`dp-trajets-${s.id}`}>
+          <h4 id={`dp-trajets-${s.id}`}>Trajets de l'équipe</h4>
+          {p.techniciens.length ? <ul className="dp-trajets">{p.techniciens.map((x) => {
+            const tr = p.trajet.par_technicien.find((y) => y.matricule === x.matricule);
+            const depuis = agences.find((a) => a.code === x.agence)?.nom ?? x.agence ?? 'Agence';
+            const ar = tr?.km != null && tr.km_aller ? Math.max(1, Math.round(tr.km / (2 * tr.km_aller))) : null;
+            return (
+              <li key={x.matricule} className="dp-trajet">
+                <p className="dp-trajet-qui"><i aria-hidden="true">{initiales(x.nom)}</i><strong>{x.nom}</strong>
+                  <span>{x.jours} jour{x.jours > 1 ? 's' : ''} sur site</span></p>
+                {tr?.km != null ? <>
+                  <p className="dp-trajet-route" aria-label={`De ${depuis} à ${vers} : ${nombre(tr.km_aller ?? 0)} km`}>
+                    <span className="dp-trajet-de"><i aria-hidden="true" />{depuis}</span>
+                    <span className="dp-trajet-rail" aria-hidden="true"><b>{nombre(tr.km_aller ?? 0)} km</b></span>
+                    <span className="dp-trajet-vers"><i aria-hidden="true" />{vers}</span></p>
+                  <p className="dp-trajet-total">{ar && <>{ar} aller{ar > 1 ? 's' : ''}-retour{ar > 1 ? 's' : ''}
+                    {tr.grand_deplacement ? ' (grand déplacement, nuits sur place)' : ar > 1 ? ', un par jour' : ''} · </>}
+                    <strong>{nombre(tr.km)} km</strong> · {heures(tr.heures_route)} de route</p></>
+                  : <p className="dp-trajet-total muet">{tr?.cause ?? 'Trajet inconnu'}</p>}
+              </li>
+            );
+          })}</ul> : <p className="dp-dep-vide">Équipe à planifier : pas encore de trajet.</p>}
+        </section>
+        <section className="dp-dep-bloc" aria-labelledby={`dp-mode-${s.id}`}>
+          <h4 id={`dp-mode-${s.id}`}>Mode de déplacement</h4>
+          <ChoixMode serviceId={s.id} r={r} onChange={onModifie} lienVehicule={lienVehicule}
+            modele={p.vehicule?.modele ?? null} />
+        </section>
+      </div>
+      {r.alertes.map((a) => <p key={a} className="rs-alerte">{a}</p>)}
+      {r.detail.length > 0 && (
+        <details className="rs-calcul">
+          <summary>Voir le calcul</summary>
+          <ul>{r.detail.map((l, i) => <li key={i}>{l}</li>)}</ul>
+        </details>
+      )}
     </div>
   );
 }
