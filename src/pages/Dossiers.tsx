@@ -5,7 +5,7 @@
 // planification s'ouvre depuis le dossier).
 // Seule liste des services sur site (l'ancienne page « Services sur site » est remplacée) : filtres par statut.
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
 import { EtatChargement, initiales, useDonnees } from '../composants';
 import { BoutonExport } from '../composants/BoutonExport';
@@ -218,7 +218,8 @@ function Synthese({ projets }: { projets: Projet[] }) {
 
 export default function Dossiers() {
   const [simules, setSimules] = useState(true);
-  const [texte, setTexte] = useState('');
+  const [params] = useSearchParams();
+  const [texte, setTexte] = useState(() => params.get('q') ?? '');     // recherche lancée depuis l'accueil
   const [filtre, setFiltre] = useState<Filtre>('tous');
   const liste = useDonnees(() => stats.dossiers(simules), [simules]);
   const planifies = useDonnees(() => planif.services(undefined, undefined, true), []);   // statut, alertes, liens

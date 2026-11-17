@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
+import Accueil from './pages/Accueil';
 import CarteLive from './pages/CarteLive';
 import DossierProjet from './pages/DossierProjet';
 import Dossiers from './pages/Dossiers';
@@ -17,6 +18,7 @@ import Reglages from './pages/Reglages';
 import Vehicules from './pages/Vehicules';
 
 const LIENS = [
+  { vers: '/', libelle: 'Accueil' },
   { vers: '/carte', libelle: 'Carte live' },
   { vers: '/statistiques', libelle: 'Statistiques' },
   { vers: '/dossiers', libelle: "Dossiers d'intervention" },
@@ -50,7 +52,7 @@ export default function App() {
         </div>
         <div className="nav" id="menu-principal">
           {LIENS.map((l) => (
-            <NavLink key={l.vers} to={l.vers} className={({ isActive }) => (isActive ? 'actif' : '')}
+            <NavLink key={l.vers} to={l.vers} end={l.vers === '/'} className={({ isActive }) => (isActive ? 'actif' : '')}
               onClick={() => setMenuOuvert(false)}>{l.libelle}</NavLink>
           ))}
         </div>
@@ -66,7 +68,8 @@ export default function App() {
       </nav>
       <main className="principal">
         <Routes>
-          <Route path="/" element={<Navigate to="/carte" replace />} />
+          {/* accueil du dispatcher : brief de l'assistant, à traiter, aujourd'hui, prochain jour ouvré */}
+          <Route path="/" element={<Accueil />} />
           <Route path="/carte" element={<CarteLive />} />
           <Route path="/statistiques" element={<Statistiques />} />
           <Route path="/statistiques/services/:id" element={<FicheService />} />
