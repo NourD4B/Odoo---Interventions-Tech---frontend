@@ -1,29 +1,30 @@
 // Dossier d'intervention (une commande client et ses services sur site, ou un service sans commande), tout au même
-// endroit. Tête bleu nuit : client, commande, avancement, prochaine intervention, équipe et véhicules. Corps : les
-// missions dans l'ordre des dates (une carte par service sur site, avec ce que montre Odoo : étape, modèle de feuille
-// de travail, assignés, jalon, étiquettes, activité suivante, temps et avancement ; dans le détail, les onglets du
-// formulaire Odoo « Description », « Feuilles de temps », « Sous-tâches », puis rapport, argent, matériel et
-// déplacement). Colonne de droite : carte des sites et des agences de départ, départs, véhicules, commandes et pièces.
-// Mêmes libellés et mêmes calculs qu'Odoo : chaque bloc correspond à un champ ou un widget du formulaire Odoo (voir le
+// endroit, chaque information une seule fois. Tête bleu nuit : client, commande, avancement (plusieurs services) et
+// carte des sites et des agences de départ. Corps : les missions dans l'ordre des dates, une carte par service sur
+// site avec ce que montre la liste Odoo (étape, feuille de travail, assignés, jalon, étiquettes, activité suivante),
+// les alertes et le lien vers sa fiche dans la Planification ; son détail est un carnet comme celui d'Odoo :
+// Description, Feuilles de temps, Sous-tâches, Argent (coûts estimés, commandes et factures), Matériel, Déplacement
+// et RSE. Mêmes libellés et mêmes calculs qu'Odoo : chaque bloc correspond à un champ ou un widget d'Odoo (voir le
 // plan, « intégration dans Odoo »). Lecture seule ; description et pièces lues dans Odoo à l'affichage, journalisées.
 import L from 'leaflet';
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet';
 import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
-import { Avertissements, EtatChargement, initiales, useDonnees } from '../composants';
+import { Avertissements, Badge, EtatChargement, initiales, useDonnees } from '../composants';
 import { BoutonExport } from '../composants/BoutonExport';
 import DescriptionOdoo from '../composants/DescriptionOdoo';
 import { useEcriture } from '../composants/Ecriture';
 import { ListePieces, usePieces, type Pieces } from '../composants/Pieces';
 import { BandeauRse, ChoixMode, DetailRse, IconeMode, PastilleNote } from '../composants/Rse';
-import { BadgeEtat } from '../composants/Statistiques';
+import { Barre, BadgeEtat } from '../composants/Statistiques';
 import { Plaque } from '../composants/Vehicule';
 import { dossiers, type Dossier, type Itineraire, type ServiceDossier } from '../dossiers';
 import { exportations, nomFichier } from '../exports';
 import { co2 } from '../rse';
-import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, nombre, titreDossier, type ActiviteOdoo,
-  type EtatService, type TypeDossier } from '../statistiques';
+import { alertesFiche, lienPlanification } from '../servicesSurSite';
+import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, LIBELLES_PAIEMENT, nombre, titreDossier,
+  type ActiviteOdoo, type EtatService, type TypeDossier } from '../statistiques';
 
 type Ecrire = <T>(action: () => Promise<T>) => Promise<T | undefined>;
 
@@ -37,6 +38,8 @@ const ETATS_TACHE: Record<string, string> = {
   '01_in_progress': 'en cours', '02_changes_requested': 'modifications demandées', '03_approved': 'approuvée',
   '04_waiting_normal': 'en attente', '1_done': 'terminée', '1_canceled': 'annulée',
 };
+/** Statut de planification d'un service planifié (proposé par le solveur, verrouillé, publié aux techniciens). */
+const STATUTS_PLANIF: Record<string, string> = { propose: 'Proposé', verrouille: 'Verrouillé', publie: 'Publié' };
 
 const date = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`);
 const debutDe = (s: ServiceDossier) => (s.planification.debut ?? s.prevu.debut)?.slice(0, 10) ?? null;
@@ -55,8 +58,6 @@ export function villeDe(adresse: string | null) {
   return v ? v.trim().toLowerCase().replace(/(^|[\s-])\p{L}/gu, (c) => c.toUpperCase()) : null;
 }
 const echapper = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-/** « 2026-11-17T15:00:00+01:00 » -> « mar. 17 nov., 15:00 » (heure de Paris, déjà dans la chaîne). */
-const jourHeure = (iso: string) => `${jourCourt(iso)}${iso.length > 10 ? `, ${iso.slice(11, 16)}` : ''}`;
 /** Échéance d'une activité, comme Odoo : « aujourd'hui », « demain », « dans 3 jours », « 2 jours de retard ». */
 function quand(echeance: string | null, auj: string): string {
   if (!echeance) return 'sans échéance';
@@ -66,6 +67,8 @@ function quand(echeance: string | null, auj: string): string {
   if (n === -1) return 'hier';
   return n > 1 ? `dans ${n} jours` : `${-n} jours de retard`;
 }
+/** Visible dans la Planification : ni archivé, ni terminé sans y avoir été planifié. */
+const planifiable = (s: ServiceDossier) => !s.archive_odoo && !((s.etat === 'fait' || s.etat === 'facture') && !s.planification.debut);
 
 // ---------- carte : sites, agences de départ, trajets ----------
 
@@ -115,7 +118,7 @@ function Cadrage({ points }: { points: Point[] }) {
   useEffect(() => {
     if (!points.length) return;
     const limites = points.length === 1 ? L.latLng(points[0]).toBounds(6000) : L.latLngBounds(points);
-    map.fitBounds(limites, { padding: [36, 36], maxZoom: 13 });
+    map.fitBounds(limites, { padding: [32, 32], maxZoom: 13 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cle, map]);
   return null;
@@ -183,7 +186,7 @@ function Carte({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite:
   );
 }
 
-// ---------- tête du dossier ----------
+// ---------- tête du dossier : identité, avancement, carte ----------
 
 /** Plusieurs services : anneau des services par état (terminés sur le total). */
 function Anneau({ d }: { d: Dossier }) {
@@ -218,95 +221,40 @@ function Anneau({ d }: { d: Dossier }) {
   );
 }
 
-/** Un seul service : avancement d'Odoo (« En cours » : temps passé sur temps alloué, sous-tâches comprises). */
-function AnneauOdoo({ s }: { s: ServiceDossier }) {
-  const t = s.odoo?.temps;
-  const pct = t?.progression ?? 0;
-  const R = 30, C = 2 * Math.PI * R;
-  return (
-    <div className="dp-anneau">
-      <svg viewBox="0 0 76 76" width="76" height="76" role="img" aria-label={`En cours : ${pct} %`}>
-        <circle cx="38" cy="38" r={R} className="dp-anneau-fond" />
-        {pct > 0 && <circle cx="38" cy="38" r={R} className={`dp-seg ${pct > 100 ? 'e-en_retard' : 'e-planifie'}`}
-          transform="rotate(-90 38 38)" strokeDasharray={`${(C * Math.min(100, pct)) / 100} ${C}`} />}
-        <text x="38" y="43" textAnchor="middle" className="dp-anneau-pct">{nombre(pct)} %</text>
-      </svg>
-      <div>
-        <p className="dp-anneau-titre">En cours</p>
-        <ul className="dp-anneau-legende">
-          <li>{t ? `${heures(t.total)} passées sur ${heures(t.alloue)}` : `${heures(s.realise.heures_passees)} passées`}</li>
-          {t && <li>Temps restant : {heures(t.restant)}</li>}
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-/** Toute l'équipe du dossier (techniciens planifiés sur ses interventions) et ses véhicules. */
-function Equipe({ d }: { d: Dossier }) {
-  const techs = new Map<string, string>();
-  d.services.forEach((s) => s.planification.techniciens.forEach((t) => techs.set(t.matricule, t.nom)));
-  const noms = [...techs.values()].sort((a, b) => a.localeCompare(b));
-  return (
-    <div className="dp-ident-equipe">
-      <div>
-        <span className="dp-ident-label">{noms.length ? `Équipe, ${noms.length} technicien${noms.length > 1 ? 's' : ''}` : 'Équipe'}</span>
-        {noms.length ? <div className="dp-avatars">{noms.slice(0, 7).map((n) => <i key={n} title={n}>{initiales(n)}</i>)}
-          {noms.length > 7 && <i title={noms.slice(7).join(', ')}>+{noms.length - 7}</i>}</div>
-          : <span className="dp-tete-vide">à planifier</span>}
-      </div>
-      <div>
-        <span className="dp-ident-label">Véhicule{d.vehicules.length > 1 ? 's' : ''}</span>
-        {d.vehicules.length ? <div className="dp-ident-plaques">{d.vehicules.map((v) => (
-          <Link key={v.vehicle_id} to={`/vehicules/${v.vehicle_id}`} title="Fiche du véhicule">
-            {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}
-            {v.modele && <span className="dp-modele">{v.modele}</span>}</Link>))}
-        </div> : <span className="dp-tete-vide">aucun</span>}
-      </div>
-    </div>
-  );
-}
-
-function Tete({ d }: { d: Dossier }) {
+function Tete({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite: (s: Site) => void }) {
   const p = d.dossier, r = d.resume, c = p.commande;
-  const seul = d.services.length === 1 ? d.services[0] : null;
+  const plusieurs = d.services.length > 1;
+  const geo = useMemo(() => geographie(d), [d]);
   const faits: [string, ReactNode][] = [];
   if (p.type === 'commande') {
     faits.push(['Commande', p.nom]);
     if (c?.date) faits.push(['Date de commande', jourCourt(c.date)]);
     if (c && c.montant_ht !== null) faits.push(['Montant', `${euros(c.montant_ht)} HT`]);
     if (c?.type_service) faits.push(['Type de service', c.type_service]);
-    if (!seul) faits.push(['Services sur site', String(d.services.length)]);
   } else faits.push(['Commande', 'Non facturable (sans commande)']);
-  if (seul?.odoo?.etape) {
-    faits.push(['Étape', <>{seul.odoo.etape}{seul.odoo.etape_depuis && <small> depuis le {jj(seul.odoo.etape_depuis)}</small>}</>]);
-  }
-  if (seul?.prevu.debut) {
-    faits.push(['Date prévue', seul.prevu.fin && seul.prevu.fin.slice(0, 10) !== seul.prevu.debut.slice(0, 10)
-      ? `${jourHeure(seul.prevu.debut)} → ${jourHeure(seul.prevu.fin)}` : jourHeure(seul.prevu.debut)]);
-  }
   return (
     <header className="dp-tete">
-      <div className="dp-tete-haut">
-        <div className="dp-tete-titre">
-          <Link to="/dossiers" className="dp-retour">‹ Dossiers d'intervention</Link>
-          <p className="dp-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
-          <h1>{titreDossier(r)}</h1>
-          <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
-        </div>
+      <div className="dp-tete-infos">
+        <Link to="/dossiers" className="dp-retour">‹ Dossiers d'intervention</Link>
+        <p className="dp-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
+        <h1>{titreDossier(r)}</h1>
+        <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+        {plusieurs && <Anneau d={d} />}
         <div className="dp-actions">
           <BoutonExport className="dp-odoo" libelle="Exporter (.xlsx)" nomFichier={nomFichier('dossier', p.nom)}
             lire={() => exportations.dossier(p.type, p.id)} />
           {p.odoo_url && <a className="dp-odoo" href={p.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
         </div>
       </div>
-      <div className="dp-tete-bas">
-        {seul ? <AnneauOdoo s={seul} /> : <Anneau d={d} />}
-        <p className="dp-prochaine">{r.prochaine_intervention
-          ? <>Prochaine intervention<strong>{date(r.prochaine_intervention).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</strong></>
-          : <>Prochaine intervention<strong>aucune à venir</strong></>}</p>
-        <Equipe d={d} />
-      </div>
+      <figure className="dp-tete-carte" aria-label="Sites et agences de départ">
+        <Carte d={d} actif={actif} onSite={onSite} />
+        <figcaption className="dp-legende">
+          <span><i className="dp-leg-agence" />agence de départ</span>
+          <span><i className="dp-leg-site" />site</span>
+          <span><i className="dp-leg-trajet" />trajet</span>
+          {geo.sansPosition > 0 && <span>{geo.sansPosition} sans position</span>}
+        </figcaption>
+      </figure>
     </header>
   );
 }
@@ -367,19 +315,22 @@ function Activite({ a, auj }: { a: ActiviteOdoo; auj: string }) {
   );
 }
 
-/** Ce que montre la liste Odoo du service : étape, modèle de feuille de travail, assignés, jalon, étiquettes, activités. */
+/** Ce que montre la liste Odoo du service : étape, feuille de travail et son avancement, assignés, jalon, étiquettes,
+ *  activités, date de fin. */
 function LigneOdoo({ s, auj }: { s: ServiceDossier; auj: string }) {
-  const o = s.odoo;
-  if (!o) return null;
+  const o = s.odoo, f = s.realise.feuille;
+  const feuille = f.envoyee ? 'envoyée' : f.signee ? 'signée' : f.remplie ? 'remplie' : 'à remplir';
   return (
     <ul className="dp-odoo-ligne" aria-label="Dans Odoo">
-      {o.etape && <li className="dp-odoo-etape" title={o.etape_depuis ? `Dernière mise à jour de l'étape : ${jj(o.etape_depuis)}` : 'Étape'}>
+      {o?.etape && <li className="dp-odoo-etape" title={o.etape_depuis ? `Dernière mise à jour de l'étape : ${jj(o.etape_depuis)}` : 'Étape'}>
         <span>Étape</span><strong>{o.etape}</strong></li>}
-      {o.feuille_modele && <li title="Modèle de feuille de travail"><span>Feuille</span>{o.feuille_modele}</li>}
-      {o.assignes.length > 0 && <li title="Assignés dans Odoo"><span>Assignés</span>{o.assignes.join(', ')}</li>}
-      {o.jalon && <li title="Jalon"><span>Jalon</span>{o.jalon}</li>}
-      {o.etiquettes.map((e) => <li key={e} className="dp-odoo-etiquette">{e}</li>)}
-      {o.activites.map((a) => <Activite key={a.id} a={a} auj={auj} />)}
+      {f.modele_id !== null && <li title="Modèle de feuille de travail et son état">
+        <span>Feuille</span>{o?.feuille_modele ?? 'modèle Odoo'}<span className="dp-odoo-etat">{feuille}</span></li>}
+      {s.realise.fait && s.realise.fait_le && <li className="dp-odoo-fait">Terminé le {jj(s.realise.fait_le)}</li>}
+      {!!o?.assignes.length && <li title="Assignés dans Odoo"><span>Assignés</span>{o.assignes.join(', ')}</li>}
+      {o?.jalon && <li title="Jalon"><span>Jalon</span>{o.jalon}</li>}
+      {o?.etiquettes.map((e) => <li key={e} className="dp-odoo-etiquette">{e}</li>)}
+      {o?.activites.map((a) => <Activite key={a.id} a={a} auj={auj} />)}
     </ul>
   );
 }
@@ -394,9 +345,16 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
   const plaque = v ? v.plaque ?? veh?.plaque ?? null : null;
   const agence = (code: string | null) => d.agences.find((a) => a.code === code)?.nom ?? code;
   const marge = s.couts_estimes.marge_estimee;
-  const st = s.realise.sous_taches;
   const t = s.odoo?.temps;
+  // un seul service : son nom est déjà le titre du dossier, l'adresse du site prend sa place ; et le lien Odoo de la
+  // tête ouvre déjà la même tâche (dossier sans commande)
+  const seul = d.services.length === 1;
+  const odooIci = !!s.odoo_url && s.odoo_url !== d.dossier.odoo_url;
+  const nb = s.planification.nb_techniciens ?? 0;
   const auj = aujourdhui();
+  const alertes = alertesFiche(s);
+  const statut = s.planification.statut;
+  const lien = (onglet: 'reglages' | null) => lienPlanification(s.id, s.planification.debut, s.prevu.debut, onglet);
   return (
     <li id={`mission-${s.id}`} className={`dp-etape etat-${s.etat}${actif ? ' actif' : ''}${futur ? ' futur' : ''}`}
       onMouseEnter={() => onSurvol(s.id)} onMouseLeave={() => onSurvol(null)}>
@@ -404,19 +362,29 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
       <div className="dp-rail" aria-hidden="true"><span className="dp-point" /></div>
       <article className="dp-mission">
         <header>
-          <h3><Link to={`/statistiques/services/${s.id}`}>{s.nom}</Link>
-            {st.total > 0 && <span className="dp-sous-compte"> ({st.terminees}/{st.total} sous-tâche{st.total > 1 ? 's' : ''})</span>}</h3>
-          <div className="badges"><BadgeEtat etat={s.etat} />
+          {seul
+            ? <h3 className="dp-site-titre">{s.site.adresse ?? 'Adresse du site non renseignée'}</h3>
+            : <h3><Link to={`/statistiques/services/${s.id}`}>{s.nom}</Link></h3>}
+          <div className="badges">
+            {s.etat === 'planifie' && STATUTS_PLANIF[statut]
+              ? <Badge type={`planif-${statut}`}>{STATUTS_PLANIF[statut]}</Badge> : <BadgeEtat etat={s.etat} />}
             {s.priorite === 'urgente' && <span className="badge b-urgent">urgent</span>}</div>
         </header>
-        <p className="dp-site">{s.site.adresse ?? 'Adresse du site non renseignée'}</p>
+        {!seul && <p className="dp-site">{s.site.adresse ?? 'Adresse du site non renseignée'}</p>}
         <LigneOdoo s={s} auj={auj} />
+        {alertes.length > 0 && (
+          <ul className="dp-alertes">{alertes.map((x) => (
+            <li key={x.texte}>{x.texte}
+              {x.ou === 'ici' && planifiable(s) && <Link to={lien('reglages')}>Placer le site</Link>}
+              {x.ou === 'odoo' && <span className="muet"> (à corriger dans Odoo)</span>}</li>))}
+          </ul>
+        )}
         <div className="dp-equipe">
           {s.planification.techniciens.length ? s.planification.techniciens.map((x) => (
             <span key={x.matricule} className="dp-tech" title={`${x.nom} : ${x.jours} jour${x.jours > 1 ? 's' : ''}`}>
               <i aria-hidden="true">{initiales(x.nom)}</i>{x.nom}{x.agence && <small>{agence(x.agence)}</small>}</span>))
-            : <span className="dp-a-faire">Équipe à planifier</span>}
-          {v && <Link to={`/vehicules/${v.id}`} className="dp-vehicule" title="Fiche du véhicule">
+            : <span className="dp-a-faire">Équipe à planifier{nb > 0 && `, ${nb} technicien${nb > 1 ? 's' : ''} demandé${nb > 1 ? 's' : ''}`}</span>}
+          {v && <Link to={`/vehicules/${v.id}`} className="dp-vehicule" title="Fiche du véhicule : conducteurs et PV">
             {plaque ? <Plaque plaque={plaque} /> : <span className="dp-sans-plaque">véhicule {v.id}</span>}
             {(v.modele ?? veh?.modele) && <span className="dp-modele">{v.modele ?? veh?.modele}</span>}
             {mission?.conducteur && <small>conducteur : {mission.conducteur}</small>}</Link>}
@@ -424,147 +392,199 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
         <dl className="dp-mesures">
           <div><dt>Heures</dt><dd>{heures(s.realise.heures_passees)} <small>sur {heures(t?.alloue ?? s.prevu.heures)}</small>
             {t?.progression != null && <span className={`dp-barre${t.progression > 100 ? ' depasse' : ''}`}
-              title={`En cours : ${t.progression} % (Odoo)`} style={{ '--p': `${Math.min(100, t.progression)}%` } as CSSProperties}><i /></span>}
-            {t && <small className="dp-restant">{t.progression ?? 0} %, reste {heures(t.restant)}</small>}</dd></div>
+              title={`En cours : ${t.progression} % (Odoo)`} style={{ '--p': `${Math.min(100, t.progression)}%` } as CSSProperties}><i /></span>}</dd></div>
           <div><dt>Matériel livré</dt><dd>{s.materiel.pct_livre === null ? '—' : `${nombre(s.materiel.pct_livre)} %`}</dd></div>
           <div><dt>CA HT</dt><dd>{euros(s.argent.ca_ht)}</dd></div>
           <div><dt>Marge estimée</dt><dd className={marge < 0 ? 'negatif' : ''}>{euros(marge)}</dd></div>
           <div><dt>Score RSE</dt><dd className="dp-rse"><PastilleNote note={s.rse.note} />
             {s.rse.mode ? <span className="dp-rse-valeur"><IconeMode mode={s.rse.mode} />{co2(s.rse.kg_co2e)}</span>
-              : <button type="button" className="dp-lien" onClick={ouvert ? undefined : onBasculer}>mode à choisir</button>}</dd></div>
+              : <span className="dp-a-faire">mode à choisir</span>}</dd></div>
         </dl>
         <div className="dp-pied">
           {s.itineraires.map((it) => (
             <a key={it.agence.code} href={it.google} target="_blank" rel="noreferrer" className="dp-itineraire"
               title={`Itinéraire en voiture dans Google Maps (${it.techniciens.join(', ')})`}>
               Itinéraire depuis {it.agence.nom}<small>{[km(it.km), duree(it.heures)].filter(Boolean).join(', ')}</small></a>))}
+          {planifiable(s) && <Link to={lien(null)} className="dp-planifier">
+            {statut === 'publie' ? 'Voir dans la planification' : s.planification.debut ? 'Modifier la planification' : 'Planifier'}</Link>}
+          {odooIci && <a href={s.odoo_url!} target="_blank" rel="noreferrer" className="dp-planifier">Ouvrir dans Odoo ↗</a>}
           <button type="button" className="dp-deplier" aria-expanded={ouvert} onClick={onBasculer}>
             {ouvert ? 'Masquer le détail' : 'Voir le détail'}</button>
         </div>
-        {ouvert && <DetailMission s={s} ecrire={ecrire} onModifie={onModifie} />}
+        {ouvert && <Carnet s={s} ecrire={ecrire} onModifie={onModifie} />}
       </article>
     </li>
   );
 }
 
-type OngletOdoo = 'description' | 'temps' | 'sous_taches';
+type OngletCarnet = 'description' | 'temps' | 'sous_taches' | 'argent' | 'materiel' | 'rse';
+/** Onglets d'Odoo (Description, Feuilles de temps, Sous-tâches) puis ceux de l'application (pages ajoutées au même
+ *  carnet par un module Odoo). */
+const ONGLETS_CARNET: { cle: OngletCarnet; libelle: string }[] = [
+  { cle: 'description', libelle: 'Description' }, { cle: 'temps', libelle: 'Feuilles de temps' },
+  { cle: 'sous_taches', libelle: 'Sous-tâches' }, { cle: 'argent', libelle: 'Argent' },
+  { cle: 'materiel', libelle: 'Matériel' }, { cle: 'rse', libelle: 'Déplacement et RSE' },
+];
 
-/** Onglets du formulaire Odoo du service, dans le même ordre et sous les mêmes noms. */
-function CarnetOdoo({ s, ecrire }: { s: ServiceDossier; ecrire: Ecrire }) {
-  const [onglet, setOnglet] = useState<OngletOdoo>('description');
-  const [vus, setVus] = useState<Set<OngletOdoo>>(() => new Set(['description']));
-  const lignes = s.realise.feuilles_de_temps ?? [];
-  const st = s.realise.sous_taches;
-  const t = s.odoo?.temps;
-  const onglets: { cle: OngletOdoo; libelle: string; compte?: string }[] = [
-    { cle: 'description', libelle: 'Description' },
-    { cle: 'temps', libelle: 'Feuilles de temps', compte: lignes.length ? String(lignes.length) : undefined },
-    { cle: 'sous_taches', libelle: 'Sous-tâches', compte: st.total ? `${st.terminees}/${st.total}` : undefined },
-  ];
-  const id = (o: OngletOdoo) => `dp-${s.id}-${o}`;
-  const choisir = (o: OngletOdoo) => { setVus((v) => new Set(v).add(o)); setOnglet(o); };
+function Carnet({ s, ecrire, onModifie }: { s: ServiceDossier; ecrire: Ecrire; onModifie: () => void }) {
+  const [onglet, setOnglet] = useState<OngletCarnet>('description');
+  const [vus, setVus] = useState<Set<OngletCarnet>>(() => new Set(['description']));
+  const id = (o: OngletCarnet) => `dp-${s.id}-${o}`;
+  const choisir = (o: OngletCarnet) => { setVus((v) => new Set(v).add(o)); setOnglet(o); };
+  const panneau = (o: OngletCarnet, contenu: ReactNode) => (
+    <div role="tabpanel" id={id(o)} aria-labelledby={`${id(o)}-onglet`} className="dp-carnet-panneau" hidden={onglet !== o}>
+      {vus.has(o) && contenu}</div>
+  );
   return (
     <div className="dp-carnet">
-      <div className="dp-carnet-onglets" role="tablist" aria-label="Formulaire Odoo du service">
-        {onglets.map((o) => (
+      <div className="dp-carnet-onglets" role="tablist" aria-label="Détail du service">
+        {ONGLETS_CARNET.map((o, k) => (
           <button key={o.cle} type="button" role="tab" id={`${id(o.cle)}-onglet`} aria-controls={id(o.cle)}
             aria-selected={onglet === o.cle} tabIndex={onglet === o.cle ? 0 : -1} onClick={() => choisir(o.cle)}
+            className={k === 3 ? 'dp-carnet-app' : undefined}
             onKeyDown={(e) => {
-              const k = onglets.findIndex((x) => x.cle === onglet);
-              const n = e.key === 'ArrowRight' ? (k + 1) % onglets.length : e.key === 'ArrowLeft' ? (k + onglets.length - 1) % onglets.length : -1;
+              const n = e.key === 'ArrowRight' ? (k + 1) % ONGLETS_CARNET.length
+                : e.key === 'ArrowLeft' ? (k + ONGLETS_CARNET.length - 1) % ONGLETS_CARNET.length : -1;
               if (n < 0) return;
-              e.preventDefault(); choisir(onglets[n].cle); document.getElementById(`${id(onglets[n].cle)}-onglet`)?.focus();
-            }}>
-            {o.libelle}{o.compte && <span className="dp-carnet-compte">{o.compte}</span>}</button>
+              e.preventDefault(); choisir(ONGLETS_CARNET[n].cle);
+              document.getElementById(`${id(ONGLETS_CARNET[n].cle)}-onglet`)?.focus();
+            }}>{o.libelle}</button>
         ))}
       </div>
-      <div role="tabpanel" id={id('description')} aria-labelledby={`${id('description')}-onglet`} className="dp-carnet-panneau"
-           hidden={onglet !== 'description'}>
-        {vus.has('description') && <DescriptionOdoo id={s.id} simule={s.simule} ecrire={ecrire} titre={false} />}
-      </div>
-      <div role="tabpanel" id={id('temps')} aria-labelledby={`${id('temps')}-onglet`} className="dp-carnet-panneau"
-           hidden={onglet !== 'temps'}>
-        {lignes.length ? (
-          <table className="dp-table">
-            <thead><tr><th>Date</th><th>Employé</th><th>Sous-tâche</th><th className="n">Heures</th></tr></thead>
-            <tbody>{lignes.map((l) => (
-              <tr key={l.id}><td>{l.date ? jourCourt(l.date) : '—'}</td><td>{l.employe ?? '—'}</td><td>{l.sous_tache ?? '—'}</td>
-                <td className="n">{heures(l.heures)}</td></tr>))}
-            </tbody>
-          </table>
-        ) : <p className="dp-carnet-vide">Aucune feuille de temps : les heures apparaissent ici dès qu'elles sont saisies dans Odoo.</p>}
-        {t && <dl className="dp-temps-resume">
-          <div><dt>Temps alloué</dt><dd>{heures(t.alloue)}</dd></div>
-          <div><dt>Temps passé</dt><dd>{heures(t.passe)}</dd></div>
-          <div><dt>Heures consacrées aux sous-tâches</dt><dd>{heures(t.sous_taches)}</dd></div>
-          <div><dt>Total du temps passé</dt><dd>{heures(t.total)}</dd></div>
-          <div className={t.restant < 0 ? 'negatif' : ''}><dt>Temps restant</dt><dd>{heures(t.restant)}</dd></div>
-        </dl>}
-      </div>
-      <div role="tabpanel" id={id('sous_taches')} aria-labelledby={`${id('sous_taches')}-onglet`} className="dp-carnet-panneau"
-           hidden={onglet !== 'sous_taches'}>
-        {st.liste.length ? (
-          <table className="dp-table">
-            <thead><tr><th>Titre</th><th>Étape</th><th>Assignés</th><th className="n">Heures</th><th className="n">Échéance</th></tr></thead>
-            <tbody>{st.liste.map((x) => (
-              <tr key={x.id} className={x.terminee ? 'faite' : ''}>
-                <td><span className="dp-coche" aria-label={x.terminee ? 'terminée' : 'à faire'} />{x.nom}
-                  {x.statut && x.statut !== '01_in_progress' && ETATS_TACHE[x.statut] && <small> {ETATS_TACHE[x.statut]}</small>}</td>
-                <td>{x.etape ?? '—'}</td><td>{x.assignes?.length ? x.assignes.join(', ') : '—'}</td>
-                <td className="n">{heures(x.heures_passees ?? 0)}{x.heures_allouees ? ` / ${heures(x.heures_allouees)}` : ''}</td>
-                <td className="n">{x.echeance ? jj(x.echeance) : '—'}</td></tr>))}
-            </tbody>
-          </table>
-        ) : <p className="dp-carnet-vide">Pas de sous-tâche dans Odoo.</p>}
-      </div>
+      {panneau('description', <DescriptionOdoo id={s.id} simule={s.simule} ecrire={ecrire} titre={false} />)}
+      {panneau('temps', <FeuillesDeTemps s={s} />)}
+      {panneau('sous_taches', <SousTaches s={s} />)}
+      {panneau('argent', <Argent s={s} />)}
+      {panneau('materiel', <Materiel s={s} />)}
+      {panneau('rse', <Deplacement s={s} onModifie={onModifie} />)}
     </div>
   );
 }
 
-function DetailMission({ s, ecrire, onModifie }: { s: ServiceDossier; ecrire: Ecrire; onModifie: () => void }) {
-  const c = s.couts_estimes, f = s.realise.feuille;
+function FeuillesDeTemps({ s }: { s: ServiceDossier }) {
+  const lignes = s.realise.feuilles_de_temps ?? [];
+  const t = s.odoo?.temps;
+  return (<>
+    {lignes.length ? (
+      <table className="dp-table">
+        <thead><tr><th>Date</th><th>Employé</th><th>Sous-tâche</th><th className="n">Heures</th></tr></thead>
+        <tbody>{lignes.map((l) => (
+          <tr key={l.id}><td>{l.date ? jourCourt(l.date) : '—'}</td><td>{l.employe ?? '—'}</td><td>{l.sous_tache ?? '—'}</td>
+            <td className="n">{heures(l.heures)}</td></tr>))}
+        </tbody>
+      </table>
+    ) : <p className="dp-carnet-vide">Aucune feuille de temps : les heures apparaissent ici dès qu'elles sont saisies dans Odoo.</p>}
+    {t && <dl className="dp-temps-resume">
+      <div><dt>Temps alloué</dt><dd>{heures(t.alloue)}</dd></div>
+      <div><dt>Temps passé</dt><dd>{heures(t.passe)}</dd></div>
+      <div><dt>Heures consacrées aux sous-tâches</dt><dd>{heures(t.sous_taches)}</dd></div>
+      <div><dt>Total du temps passé</dt><dd>{heures(t.total)}</dd></div>
+      <div className={t.restant < 0 ? 'negatif' : ''}><dt>Temps restant</dt><dd>{heures(t.restant)}</dd></div>
+      <div><dt>En cours</dt><dd>{t.progression ?? 0} %</dd></div>
+    </dl>}
+  </>);
+}
+
+function SousTaches({ s }: { s: ServiceDossier }) {
+  const liste = s.realise.sous_taches.liste;
+  if (!liste.length) return <p className="dp-carnet-vide">Pas de sous-tâche dans Odoo.</p>;
   return (
-    <div className="dp-detail">
-      <CarnetOdoo s={s} ecrire={ecrire} />
+    <table className="dp-table">
+      <thead><tr><th>Titre</th><th>Étape</th><th>Assignés</th><th className="n">Heures</th><th className="n">Échéance</th></tr></thead>
+      <tbody>{liste.map((x) => (
+        <tr key={x.id} className={x.terminee ? 'faite' : ''}>
+          <td><span className="dp-coche" aria-label={x.terminee ? 'terminée' : 'à faire'} />{x.nom}
+            {x.statut && x.statut !== '01_in_progress' && ETATS_TACHE[x.statut] && <small> {ETATS_TACHE[x.statut]}</small>}</td>
+          <td>{x.etape ?? '—'}</td><td>{x.assignes?.length ? x.assignes.join(', ') : '—'}</td>
+          <td className="n">{heures(x.heures_passees ?? 0)}{x.heures_allouees ? ` / ${heures(x.heures_allouees)}` : ''}</td>
+          <td className="n">{x.echeance ? jj(x.echeance) : '—'}</td></tr>))}
+      </tbody>
+    </table>
+  );
+}
+
+/** Coûts estimés (barres) et facturation : commandes, factures et avoirs, totaux. CA et marge : sur la carte. */
+function Argent({ s }: { s: ServiceDossier }) {
+  const a = s.argent, c = s.couts_estimes;
+  const max = Math.max(c.travail, c.route, c.vehicule, a.cout_materiel, 1);
+  return (
+    <div className="dp-argent">
       <section>
-        <h4>Rapport d'intervention</h4>
-        <ul className="dp-lignes dp-rapport">
-          <li><span>Modèle</span><span>{s.odoo?.feuille_modele ?? (f.modele_id === null ? 'aucune' : 'modèle Odoo')}</span></li>
-          <li><span>État</span><span>{f.modele_id === null ? '—' : f.envoyee ? 'signée et envoyée' : f.signee ? 'signée'
-            : f.remplie ? 'remplie, non signée' : 'à remplir'}</span></li>
-          <li><span>Terminé le</span><span>{s.realise.fait_le ? jourCourt(s.realise.fait_le) : '—'}</span></li>
-        </ul>
-        {s.realise.par_employe.length > 0 && <ul className="dp-lignes dp-par-employe">{s.realise.par_employe.map((e, i) => (
-          <li key={i}><span>{e.nom ?? 'employé'}</span><span>{heures(e.heures)}</span></li>))}</ul>}
+        <h4>Coûts estimés <span>{euros(a.cout_materiel + c.total)}</span></h4>
+        <div className="sf-couts">
+          <span>Matériel</span><Barre valeur={a.cout_materiel} max={max} texte={euros(a.cout_materiel)} />
+          <span>Travail <small>{heures(c.heures_travail)}</small></span><Barre valeur={c.travail} max={max} texte={euros(c.travail)} />
+          <span>Route</span><Barre valeur={c.route} max={max} texte={euros(c.route)} />
+          <span>Véhicule</span><Barre valeur={c.vehicule} max={max} texte={euros(c.vehicule)} />
+        </div>
+        <p className="sf-note">Heures {c.base_heures === 'passees' ? 'passées' : 'prévues'} × {euros(c.cout_horaire_moyen, true)}/h
+          {c.cout_km !== null && <>, véhicule {euros(c.cout_km, true)}/km</>}. {c.hors ? `${c.hors.charAt(0).toUpperCase()}${c.hors.slice(1)} non comptés.` : ''}</p>
       </section>
       <section>
-        <h4>Argent</h4>
-        <ul className="dp-lignes">
-          <li><span>CA HT</span><span>{euros(s.argent.ca_ht)}</span></li>
-          <li><span>Matériel (coût)</span><span>− {euros(s.argent.cout_materiel)}</span></li>
-          <li><span>Travail, {heures(c.heures_travail)} à {euros(c.cout_horaire_moyen)}</span><span>− {euros(c.travail)}</span></li>
-          <li><span>Route</span><span>− {euros(c.route)}</span></li>
-          <li><span>Véhicule</span><span>− {euros(c.vehicule)}</span></li>
-          <li className="total"><span>Marge estimée</span><span className={c.marge_estimee < 0 ? 'negatif' : ''}>{euros(c.marge_estimee)}</span></li>
-        </ul>
-        <p className="muet">Facturation : {s.argent.statut_facturation_libelle ?? LIBELLES_FACTURATION[s.argent.statut_facturation ?? '']
-          ?? 'non renseignée'}{s.argent.factures.length > 0 && `, ${s.argent.factures.length} facture${s.argent.factures.length > 1 ? 's' : ''}`}</p>
+        <h4>Facturation <span>{a.statut_facturation_libelle ?? LIBELLES_FACTURATION[a.statut_facturation ?? ''] ?? 'non renseignée'}</span></h4>
+        {a.commandes.length > 0 && <table className="dp-table">
+          <thead><tr><th>Commande</th><th className="n">Montant HT</th><th className="n">Marge</th><th>Facturation</th></tr></thead>
+          <tbody>{a.commandes.map((x) => (
+            <tr key={x.id}><td><strong>{x.nom}</strong></td><td className="n">{euros(x.montant_ht, true)}</td>
+              <td className="n">{x.marge === null ? '—' : euros(x.marge, true)}</td>
+              <td>{LIBELLES_FACTURATION[x.facturation ?? ''] ?? x.facturation ?? '—'}</td></tr>))}</tbody>
+        </table>}
+        {a.factures.length > 0 && <table className="dp-table">
+          <thead><tr><th>Facture ou avoir</th><th>Date</th><th className="n">Montant HT</th><th>Paiement</th><th className="n">Reste à payer</th></tr></thead>
+          <tbody>{a.factures.map((x) => (
+            <tr key={x.id}><td><strong>{x.nom}</strong> <small>{x.type}</small></td><td>{x.date ? jourCourt(x.date) : '—'}</td>
+              <td className="n">{euros(x.montant_ht, true)}</td><td>{LIBELLES_PAIEMENT[x.paiement ?? ''] ?? x.paiement ?? '—'}</td>
+              <td className="n">{euros(x.reste_a_payer, true)}</td></tr>))}</tbody>
+        </table>}
+        {!a.commandes.length && <p className="dp-carnet-vide">Sans commande : rien à facturer dans Odoo.</p>}
+        {a.commandes.length > 0 && <dl className="dp-temps-resume">
+          <div><dt>Facturé HT</dt><dd>{euros(a.facture_ht, true)}</dd></div>
+          <div><dt>Reste à facturer</dt><dd>{euros(a.reste_a_facturer_ht, true)}</dd></div>
+          {a.factures.length > 0 && <div><dt>Net (factures − avoirs)</dt><dd>{euros(a.factures_net_ht, true)}</dd></div>}
+          <div><dt>Reste à payer</dt><dd>{euros(a.reste_a_payer, true)}</dd></div>
+          <div className={a.marge_materiel < 0 ? 'negatif' : ''}><dt>Marge matériel</dt><dd>{euros(a.marge_materiel, true)}</dd></div>
+        </dl>}
       </section>
-      <section>
-        <h4>Matériel</h4>
-        {s.materiel.lignes.length ? <ul className="dp-lignes">{s.materiel.lignes.map((l) => (
-          <li key={l.id}><span>{l.produit}</span><span>{nombre(l.livre)} / {nombre(l.quantite)} livré{l.quantite > 1 ? 's' : ''}</span></li>))}
-        </ul> : <p className="muet">Pas de matériel.</p>}
-        {s.materiel.livraisons.map((l) => (
-          <p key={l.nom} className="muet">{l.transporteur ? `${l.transporteur} ` : ''}{l.nom} : {LIBELLES_LIVRAISON[l.etat ?? ''] ?? l.etat ?? '—'}
-            {l.suivi && <>, suivi {l.suivi_url ? <a href={l.suivi_url} target="_blank" rel="noreferrer">{l.suivi}</a> : l.suivi}</>}</p>))}
-      </section>
-      <section className="dp-deplacement">
-        <h4>Déplacement et score RSE{s.rse.mode_libelle && <span>{s.rse.mode_libelle}, {co2(s.rse.kg_co2e)}</span>}</h4>
-        <ChoixMode serviceId={s.id} r={s.rse} onChange={onModifie} />
-        <DetailRse r={s.rse} />
-      </section>
-      <Link to={`/statistiques/services/${s.id}`} className="dp-fiche">Fiche complète du service</Link>
+    </div>
+  );
+}
+
+function Materiel({ s }: { s: ServiceDossier }) {
+  const m = s.materiel;
+  return (<>
+    {m.lignes.length ? <div className="defilement"><table className="dp-table">
+      <thead><tr><th>Produit</th><th className="n">Qté</th><th className="n">Livré</th><th className="n">Facturé</th>
+        <th className="n">Prix unit.</th><th className="n">Total HT</th><th className="n">Coût</th><th className="n">Marge</th></tr></thead>
+      <tbody>{m.lignes.map((l) => (
+        <tr key={l.id}><td>{l.produit}{l.commande && <small> {l.commande}</small>}</td><td className="n">{nombre(l.quantite)}</td>
+          <td className="n">{nombre(l.livre)}</td><td className="n">{nombre(l.facture)}</td><td className="n">{euros(l.prix_unitaire, true)}</td>
+          <td className="n">{euros(l.sous_total_ht, true)}</td><td className="n">{euros(l.cout_total, true)}</td>
+          <td className={`n${l.marge < 0 ? ' negatif' : ''}`}>{euros(l.marge, true)}</td></tr>))}</tbody>
+    </table></div> : <p className="dp-carnet-vide">Aucun matériel rattaché à ce service.</p>}
+    {m.livraisons.length > 0 && <ul className="dp-livraisons">{m.livraisons.map((x) => (
+      <li key={x.nom}><strong>{x.nom}</strong> {LIBELLES_LIVRAISON[x.etat ?? ''] ?? x.etat ?? '—'}
+        {x.faite ? `, le ${jj(x.faite)}` : x.prevue ? `, prévue le ${jj(x.prevue)}` : ''}
+        {x.transporteur && <> · {x.transporteur}</>}
+        {x.suivi && <> · suivi {x.suivi_url ? <a href={x.suivi_url} target="_blank" rel="noreferrer">{x.suivi}</a> : x.suivi}</>}</li>))}
+    </ul>}
+  </>);
+}
+
+/** Trajets des techniciens (depuis leur agence) et mode de déplacement, base du score RSE. */
+function Deplacement({ s, onModifie }: { s: ServiceDossier; onModifie: () => void }) {
+  const p = s.planification;
+  return (
+    <div className="dp-deplacement">
+      {p.techniciens.length > 0 && <ul className="dp-trajets">{p.techniciens.map((x) => {
+        const tr = p.trajet.par_technicien.find((y) => y.matricule === x.matricule);
+        return (
+          <li key={x.matricule}><span>{x.nom}<small>{x.jours} jour{x.jours > 1 ? 's' : ''}</small></span>
+            <span>{tr?.km != null ? <>{nombre(tr.km)} km<small>{heures(tr.heures_route)} de route{tr.grand_deplacement ? ', grand déplacement' : ''}</small></>
+              : <small>{tr?.cause ?? 'trajet inconnu'}</small>}</span></li>
+        );
+      })}</ul>}
+      <ChoixMode serviceId={s.id} r={s.rse} onChange={onModifie} />
+      <DetailRse r={s.rse} />
     </div>
   );
 }
@@ -597,98 +617,21 @@ function Missions({ d, actif, ouverts, basculer, ecrire, onSurvol, onModifie }: 
   );
 }
 
-// ---------- colonne de droite ----------
-
-function SitesEtDeparts({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite: (s: Site) => void }) {
-  const geo = useMemo(() => geographie(d), [d]);
-  return (
-    <section className="carte dp-bloc dp-bloc-carte">
-      <h2>Sites et agences de départ</h2>
-      <Carte d={d} actif={actif} onSite={onSite} />
-      <div className="dp-legende" aria-hidden="true">
-        <span><i className="dp-leg-agence" />agence</span>
-        <span><i className="dp-leg-site" />site (missions)</span>
-        <span><i className="dp-leg-trajet" />trajet</span>
-        {geo.sansPosition > 0 && <span>{geo.sansPosition} sans position</span>}
-      </div>
-    </section>
-  );
-}
-
-function Departs({ d }: { d: Dossier }) {
-  const parAgence = new Map<string, { nom: string; techniciens: Set<string>; trajets: Map<string, { ville: string | null; it: Itineraire }> }>();
-  for (const s of d.services) {
-    for (const it of s.itineraires) {
-      const a = parAgence.get(it.agence.code) ?? { nom: it.agence.nom, techniciens: new Set<string>(), trajets: new Map() };
-      it.techniciens.forEach((t) => a.techniciens.add(t));
-      const cle = s.site.adresse ?? String(s.id);
-      if (!a.trajets.has(cle)) a.trajets.set(cle, { ville: villeDe(s.site.adresse), it });
-      parAgence.set(it.agence.code, a);
-    }
-  }
-  const volOiseau = d.services.some((s) => s.itineraires.some((i) => i.source === 'vol_oiseau'));
-  return (
-    <section className="carte dp-bloc">
-      <h2>Départs</h2>
-      {parAgence.size === 0 && <p className="vide">Aucun technicien planifié : pas encore de départ.</p>}
-      {[...parAgence.entries()].map(([code, a]) => (
-        <div key={code} className="dp-depart">
-          <div className="dp-depart-tete"><span className="dp-carre" aria-hidden="true">{a.nom.slice(0, 1)}</span>
-            <div><strong>Agence {a.nom}</strong><small>{[...a.techniciens].join(', ')}</small></div></div>
-          <ul>{[...a.trajets.values()].map(({ ville, it }) => (
-            <li key={it.google}>
-              <span className="dp-vers">vers {ville ?? 'le site'}<small>{[km(it.km), duree(it.heures)].filter(Boolean).join(', ') || 'distance inconnue'}</small></span>
-              <a href={it.google} target="_blank" rel="noreferrer" className="btn btn-petit">Google Maps</a>
-            </li>))}</ul>
-        </div>
-      ))}
-      {parAgence.size > 0 && <p className="dp-note">{volOiseau
-        ? "Distances et durées estimées à vol d'oiseau ; l'itinéraire exact s'ouvre dans Google Maps."
-        : "Distances et durées estimées par la route ; l'itinéraire s'ouvre dans Google Maps."}</p>}
-    </section>
-  );
-}
-
-function Vehicules({ d }: { d: Dossier }) {
-  return (
-    <section className="carte dp-bloc">
-      <h2>Véhicules</h2>
-      {d.vehicules.length === 0 && <p className="vide">Aucun véhicule planifié sur ce dossier.</p>}
-      {d.vehicules.map((v) => (
-        <div key={v.vehicle_id} className="dp-veh">
-          <div className="dp-veh-tete">
-            <span className="dp-veh-id">
-              {v.plaque ? <Plaque plaque={v.plaque} /> : <span className="dp-sans-plaque">véhicule {v.vehicle_id}</span>}
-              <span className="dp-modele">{v.modele ?? 'Modèle non renseigné'}</span></span>
-            <Link to={`/vehicules/${v.vehicle_id}`} className="dp-veh-lien">Conducteurs et PV</Link>
-          </div>
-          <ul className="dp-veh-missions">{v.missions.map((m) => (
-            <li key={m.service_id}>
-              <span className="dp-veh-dates">{m.debut === m.fin ? jourCourt(m.debut) : `${jourCourt(m.debut)} au ${jourCourt(m.fin)}`}</span>
-              <span className="dp-veh-service">{m.service}{m.conducteur && <small>conducteur : {m.conducteur}</small>}</span>
-            </li>))}
-          </ul>
-        </div>
-      ))}
-    </section>
-  );
-}
-
+/** Pièces jointes des commandes du dossier (lues dans Odoo à l'ouverture, consultation journalisée). */
 function Documents({ d, pieces }: { d: Dossier; pieces: Pieces }) {
   const commandes = new Map(d.resume.commandes.map((c) => [c.id, c]));
   const ids = [...new Set([...d.resume.commandes.map((c) => c.id), ...d.documents.map((x) => x.commande_id)])];
   const pj = new Map(d.documents.map((x) => [x.commande_id, x]));
+  if (!ids.length) return null;
   return (
     <section className="carte dp-bloc">
-      <h2>Commandes et pièces jointes</h2>
+      <h2>Pièces jointes des commandes</h2>
       {!d.documents_disponibles && <p className="avertissement">Pièces jointes indisponibles : Odoo injoignable.</p>}
-      {ids.length === 0 && <p className="vide">Sans commande : non facturable dans Odoo.</p>}
       {ids.map((cid) => {
         const c = commandes.get(cid), x = pj.get(cid);
         return (
           <div key={cid} className="dp-commande">
-            <div className="dp-commande-tete"><strong>{c?.nom ?? x?.commande}</strong>
-              {c && <span>{euros(c.montant_ht)} HT<small>{LIBELLES_FACTURATION[c.facturation ?? ''] ?? c.facturation ?? ''}</small></span>}</div>
+            <div className="dp-commande-tete"><strong>{c?.nom ?? x?.commande}</strong></div>
             {x ? <ListePieces liste={x.pieces} pieces={pieces} />
               : d.documents_disponibles && <p className="fv-sans-piece">Aucune pièce jointe dans Odoo.</p>}
           </div>
@@ -731,20 +674,13 @@ export default function DossierProjet() {
   return (
     <div className="dp">
       <Avertissements liste={d.avertissements} />
-      <Tete d={d} />
+      <Tete d={d} actif={actif}
+        onSite={(s) => allerA([...s.services].sort((a, b) => (debutDe(a) ?? '9').localeCompare(debutDe(b) ?? '9'))[0].id)} />
       {plusieurs && <Equation d={d} />}
       {plusieurs && <BandeauRse b={d.resume.rse} />}
-      <div className="dp-corps">
-        <Missions d={d} actif={actif} ouverts={ouverts} basculer={basculer} ecrire={ecrire} onSurvol={setActif}
-          onModifie={charge.recharger} />
-        <aside className="dp-cote">
-          <SitesEtDeparts d={d} actif={actif}
-            onSite={(s) => allerA([...s.services].sort((a, b) => (debutDe(a) ?? '9').localeCompare(debutDe(b) ?? '9'))[0].id)} />
-          <Departs d={d} />
-          <Vehicules d={d} />
-          <Documents d={d} pieces={piecesCommandes} />
-        </aside>
-      </div>
+      <Missions d={d} actif={actif} ouverts={ouverts} basculer={basculer} ecrire={ecrire} onSurvol={setActif}
+        onModifie={charge.recharger} />
+      <Documents d={d} pieces={piecesCommandes} />
       {piecesCommandes.dialogue}
       {dialogue}
     </div>

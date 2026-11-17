@@ -1,15 +1,18 @@
 // Réglages de planification d'un service, absents d'Odoo : taille de l'équipe sur place, type de service, compétences
 // requises et, si le géocodage a échoué ou est approximatif, position du site. Onglet « Réglages » de la fiche du service
 // (Planification), seul endroit où ils se modifient ; tout le reste se modifie dans Odoo (Services sur site).
-import { useEffect, useState } from 'react';
+// Comme un formulaire Odoo, la fiche n'a qu'un bouton d'enregistrement : il appelle `enregistrer()` (référence).
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { CircleMarker, MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import {
   ErreurPlanif, erreursParChamp, LIBELLES_PRECISION, planif, type ReglagesPlanif, type Referentiels, type ServicePlanif,
 } from '../planification';
 
 const CENTRE_FRANCE: [number, number] = [46.6, 2.4];
-/** Identifiant du formulaire : le bouton « Enregistrer les réglages » du pied de la fiche le soumet (attribut form). */
-export const FORMULAIRE_REGLAGES = 'pf-formulaire-reglages';
+
+/** Enregistre les réglages modifiés : le service à jour (nouvelle version), ou null (erreur affichée dans l'onglet). */
+export interface ReglagesHandle { enregistrer: () => Promise<ServicePlanif | null> }
+export interface EtatReglages { modifie: boolean; envoi: boolean; nb: number }
 
 function ClicCarte({ actif, onClic }: { actif: boolean; onClic: (lat: number, lng: number) => void }) {
   useMapEvents({ click: (e) => { if (actif) onClic(Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))); } });
@@ -31,15 +34,14 @@ function memes(a: ReglagesPlanif, b: ReglagesPlanif): boolean {
 /** Site qui demande une action ici : sans position, ou placé au centre de la commune seulement. */
 export const siteARegler = (s: ServicePlanif) => s.site_lat === null || s.site_precision === 'commune';
 
-export default function ReglagesService({ service: s, refs, ecrire, corrigerPosition = false, onEtat, onEnregistre,
-  onConflit }: {
+const ReglagesService = forwardRef<ReglagesHandle, {
   service: ServicePlanif; refs: Referentiels;
   ecrire: <T>(action: () => Promise<T>) => Promise<T | undefined>;
   corrigerPosition?: boolean;                                   // ouvert par « Placer le site »
-  onEtat: (etat: { modifie: boolean; envoi: boolean }) => void;  // pour le bouton du pied de la fiche
-  onEnregistre: (r: ServicePlanif) => void;
+  onEtat: (etat: EtatReglages) => void;                         // pour le bouton et le compte d'équipe de la fiche
+  onSoumettre: () => void;                                      // Entrée dans un champ : enregistrer la fiche
   onConflit: () => void;
-}) {
+}>(function ReglagesService({ service: s, refs, ecrire, corrigerPosition = false, onEtat, onSoumettre, onConflit }, ref) {
   const publie = s.statut_planification === 'publie';
   const [r, setR] = useState<ReglagesPlanif>(() => reglagesDe(s));
   const [corriger, setCorriger] = useState(!publie && (corrigerPosition || s.site_lat === null));
@@ -57,7 +59,7 @@ export default function ReglagesService({ service: s, refs, ecrire, corrigerPosi
   const nb = Number.isFinite(r.nb_techniciens) ? r.nb_techniciens : 1;
   const modifie = !memes(r, reglagesDe(s));
 
-  useEffect(() => { onEtat({ modifie, envoi }); }, [modifie, envoi, onEtat]);
+  useEffect(() => { onEtat({ modifie, envoi, nb }); }, [modifie, envoi, nb, onEtat]);
 
   const choisirType = (id: number | null) => {
     const t = refs.types_service.find((x) => x.id === id);
@@ -67,35 +69,34 @@ export default function ReglagesService({ service: s, refs, ecrire, corrigerPosi
   const basculer = (code: string) => maj({ competences_requises: r.competences_requises.includes(code)
     ? r.competences_requises.filter((c) => c !== code) : [...r.competences_requises, code] });
 
-  const enregistrer = async () => {
+  const enregistrer = async (): Promise<ServicePlanif | null> => {
     setErreurs({}); setErreur(null);
     const locales: Record<string, string> = {};
     if (!Number.isInteger(r.nb_techniciens) || r.nb_techniciens < 1 || r.nb_techniciens > 10)
       locales.nb_techniciens = 'Entre 1 et 10 techniciens';
     if (corriger && position === null) locales.position = 'Cliquer sur la carte pour placer le site, ou annuler la correction';
-    if (Object.keys(locales).length) { setErreurs(locales); return; }
+    if (Object.keys(locales).length) { setErreurs(locales); return null; }
     const corps = { ...r, version: s.version, fenetre_debut: r.fenetre_debut || null, fenetre_fin: r.fenetre_fin || null,
       ...(positionModifiee ? {} : { site_lat: null, site_lng: null }) };       // null = position inchangée
     setEnvoi(true);
     try {
-      const fini = await ecrire(() => planif.modifierPlanification(s.id, corps));
-      if (fini) onEnregistre(fini);
+      return (await ecrire(() => planif.modifierPlanification(s.id, corps))) ?? null;
     } catch (e) {
       const parChamp = erreursParChamp(e);
       setErreurs(parChamp);
       setErreur({ conflit: e instanceof ErreurPlanif && e.statut === 409, texte: Object.keys(parChamp).length
         ? 'Corriger les champs signalés.' : e instanceof Error ? e.message : String(e) });
+      return null;
     } finally { setEnvoi(false); }
   };
+  useImperativeHandle(ref, () => ({ enregistrer }));
 
   const etatPosition = positionModifiee ? `Nouvelle position ${r.site_lat}, ${r.site_lng} : enregistrée comme saisie à la main`
     : s.site_lat === null ? "Adresse introuvable par le géocodage : placer le site sur la carte, ou corriger l'adresse dans Odoo"
     : `Géocodée depuis l'adresse Odoo, ${LIBELLES_PRECISION[s.site_precision ?? ''] ?? s.site_precision ?? 'précision inconnue'}`;
 
   return (
-    <form id={FORMULAIRE_REGLAGES} className="pf-reglages" noValidate onSubmit={(e) => { e.preventDefault(); void enregistrer(); }}>
-      {publie && <p className="pf-reglages-fige">Service publié : réglages figés. Pour les modifier, retirer d'abord la
-        publication (onglet « Affectation »).</p>}
+    <form className="pf-reglages" noValidate onSubmit={(e) => { e.preventDefault(); onSoumettre(); }}>
       {erreur && (
         <div className="erreur" role="alert">{erreur.texte}
           {erreur.conflit && <> <button type="button" className="btn btn-petit" onClick={onConflit}>Recharger</button></>}
@@ -174,4 +175,6 @@ export default function ReglagesService({ service: s, refs, ecrire, corrigerPosi
       </section>
     </form>
   );
-}
+});
+
+export default ReglagesService;

@@ -14,14 +14,12 @@ import Planification from './pages/Planification';
 import Reconciliation from './pages/Reconciliation';
 import Statistiques from './pages/Statistiques';
 import Reglages from './pages/Reglages';
-import Services from './pages/Services';
 import Vehicules from './pages/Vehicules';
 
 const LIENS = [
   { vers: '/carte', libelle: 'Carte live' },
   { vers: '/statistiques', libelle: 'Statistiques' },
   { vers: '/dossiers', libelle: "Dossiers d'intervention" },
-  { vers: '/services', libelle: 'Services sur site' },
   { vers: '/planification', libelle: 'Planification' },
   { vers: '/reglages', libelle: 'Réglages' },
   { vers: '/journal', libelle: 'Journal' },
@@ -78,7 +76,8 @@ export default function App() {
           <Route path="/dossiers" element={<Dossiers />} />
           <Route path="/dossiers/:type/:id" element={<DossierProjet />} />
           <Route path="/dossiers/:id" element={<Navigate to="/dossiers" replace />} />
-          <Route path="/services" element={<Services />} />
+          {/* services sur site : listés dans les dossiers d'intervention (ancienne page remplacée) */}
+          <Route path="/services" element={<Navigate to="/dossiers" replace />} />
           <Route path="/planification" element={<Planification />} />
           <Route path="/reglages" element={<Reglages />} />
           <Route path="/journal" element={<Journal />} />

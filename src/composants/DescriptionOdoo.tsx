@@ -1,12 +1,9 @@
-// Description d'un service sur site (onglet « Description » du formulaire Odoo) : lue dans Odoo à l'affichage, jamais
-// copiée dans la base de l'application (consultation journalisée, nom demandé si besoin). Mémoire de l'onglet du
-// navigateur seulement : une lecture par service et par visite, « Relire » pour la relire.
+// Description d'un service sur site (champ « Description » du formulaire Odoo) : lue dans Odoo à chaque affichage,
+// jamais copiée dans la base de l'application (consultation journalisée : le nom est demandé une fois s'il manque).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { auteur, planif } from '../planification';
+import { planif } from '../planification';
 
 type Ecrire = <T>(action: () => Promise<T>) => Promise<T | undefined>;
-
-const descriptionsLues = new Map<number, string | null>();
 
 /** Texte de la description : paragraphes et listes à puces (« • » en début de ligne, posé par le serveur). */
 function TexteDescription({ texte }: { texte: string }) {
@@ -29,7 +26,7 @@ export default function DescriptionOdoo({ id, simule, ecrire, titre = true }: {
   id: number; simule: boolean; ecrire: Ecrire;
   titre?: boolean;                       // false : dans un onglet « Description » (le titre est déjà l'onglet)
 }) {
-  const [texte, setTexte] = useState<string | null | undefined>(() => descriptionsLues.get(id));   // undefined : pas lue
+  const [texte, setTexte] = useState<string | null | undefined>(undefined);       // undefined : pas encore lue
   const [lecture, setLecture] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const demandee = useRef(false);
@@ -38,34 +35,27 @@ export default function DescriptionOdoo({ id, simule, ecrire, titre = true }: {
     setErreur(null);
     try {
       const r = await ecrire(() => planif.description(id));
-      if (r) { descriptionsLues.set(id, r.texte); setTexte(r.texte); }
-      else setErreur('Lecture annulée : chaque consultation est journalisée, le nom est donc demandé.');
+      if (r) setTexte(r.texte);
+      else setErreur('Nom non saisi : la description est lue dans Odoo et chaque consultation est journalisée.');
     } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setLecture(false); }
   }, [ecrire, id]);
-  useEffect(() => {                  // une seule lecture à l'affichage, si le nom est connu (sinon bouton : pas de surprise)
-    if (simule || demandee.current || descriptionsLues.has(id) || !auteur()) return;
+  useEffect(() => {                                    // une lecture dans Odoo à chaque affichage
+    if (simule || demandee.current) return;
     demandee.current = true;
     void lire();
-  }, [simule, id, lire]);
+  }, [simule, lire]);
 
   return (
-    <section className={`pf-description${titre ? '' : ' sans-titre'}`} aria-label="Description (Odoo)" aria-busy={lecture}>
-      <div className="pf-description-tete">
-        {titre && <h3>Description</h3>}
-        <span className="pf-aide">{simule ? 'service simulé' : 'lue dans Odoo, jamais copiée'}</span>
-        {!simule && texte !== undefined && !lecture && (
-          <button type="button" className="lien-bouton" onClick={() => void lire()}>Relire</button>)}
-      </div>
+    <section className={`pf-description${titre ? '' : ' sans-titre'}`} aria-label="Description" aria-busy={lecture}>
+      {titre && <h3 className="pf-description-titre">Description</h3>}
       {simule ? <p className="pf-description-vide">Service simulé : il n'existe pas dans Odoo, donc pas de description.</p>
-        : lecture ? <div className="pf-description-chargement"><span className="visuellement-cache">Lecture dans Odoo…</span>
-          <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div>
+        : lecture || texte === undefined && !erreur
+          ? <div className="pf-description-chargement"><span className="visuellement-cache">Lecture dans Odoo…</span>
+            <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div>
         : erreur ? <p className="pf-description-vide">{erreur}{' '}
           <button type="button" className="lien-bouton" onClick={() => void lire()}>Réessayer</button></p>
-        : texte === undefined ? <p className="pf-description-vide">
-          <button type="button" className="btn btn-petit" onClick={() => void lire()}>Lire la description</button>
-          {' '}Consultation journalisée : votre nom sera demandé une fois.</p>
         : texte === null ? <p className="pf-description-vide">Aucune description dans Odoo.</p>
-        : <TexteDescription texte={texte} />}
+        : <TexteDescription texte={texte!} />}
     </section>
   );
 }

@@ -105,7 +105,7 @@ export interface FicheService {
   odoo?: FormulaireOdoo;
   prevu: { debut: string | null; fin: string | null; fenetre: [string, string | null] | null; heures: number | null };
   planification: {
-    statut: string; jours: string[]; debut: string | null; fin: string | null;
+    statut: string; jours: string[]; debut: string | null; fin: string | null; nb_techniciens?: number;
     techniciens: { matricule: string; nom: string; agence: string | null; jours: number }[];
     vehicule: { id: number; plaque: string | null; modele?: string | null } | null;
     trajet: { par_technicien: { matricule: string; jours: number; km: number | null; heures_route: number | null;

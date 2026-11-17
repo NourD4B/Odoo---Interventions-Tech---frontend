@@ -1,8 +1,8 @@
 // Dossiers d'intervention en cartes : un dossier = une commande client et ses interventions sur site (une intervention
 // sans commande, « Non facturable » dans Odoo, est son propre dossier). Chaque carte résume le dossier (avancement,
-// prochaine intervention, équipe, véhicules avec marque et modèle, sites, argent, score RSE, retards) et ouvre le
-// dossier complet. Le module Projet d'Odoo n'entre pas en jeu.
-// La tête bleu nuit reprend le panneau d'identité du dossier : la carte et la page qu'elle ouvre se répondent.
+// équipe, véhicules, sites, argent, score RSE, retards) et liste ses services sur site, chacun avec sa date, son
+// statut de planification, ses alertes et le lien vers sa fiche dans la Planification ; elle ouvre le dossier complet.
+// Seule liste des services sur site (l'ancienne page « Services sur site » est remplacée) : filtres par statut.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { aujourdhui } from '../api';
@@ -11,7 +11,9 @@ import { BoutonExport } from '../composants/BoutonExport';
 import { PastilleNote } from '../composants/Rse';
 import { Plaque } from '../composants/Vehicule';
 import { exportations, nomFichier } from '../exports';
+import { LIBELLES_STATUT_PLANIF, planif, type ServicePlanif, type StatutPlanif } from '../planification';
 import { co2 } from '../rse';
+import { alertesPlanif, aReglerPlanif, lienPlanification, planifiable } from '../servicesSurSite';
 import { euros, heures, LIBELLES_ETAT, lienDossier, nombre, stats, titreDossier, type EtatService,
   type ResumeDossier } from '../statistiques';
 import { villeDe } from './DossierProjet';
@@ -28,6 +30,21 @@ function relatif(iso: string) {
   return n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n > 1 ? `dans ${n} jours` : `il y a ${-n} jour${n < -1 ? 's' : ''}`;
 }
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+// filtres par statut de planification (ceux de l'ancienne page Services sur site)
+type Filtre = 'tous' | StatutPlanif | 'a_regler' | 'archive';
+const FILTRES: { cle: Filtre; libelle: string }[] = [
+  { cle: 'tous', libelle: 'Tous' }, { cle: 'a_regler', libelle: 'À régler' },
+  { cle: 'a_planifier', libelle: LIBELLES_STATUT_PLANIF.a_planifier }, { cle: 'propose', libelle: LIBELLES_STATUT_PLANIF.propose },
+  { cle: 'verrouille', libelle: LIBELLES_STATUT_PLANIF.verrouille }, { cle: 'publie', libelle: LIBELLES_STATUT_PLANIF.publie },
+  { cle: 'archive', libelle: 'Archivés' },
+];
+const garde = (f: Filtre, s: ServicePlanif | undefined) => f === 'tous' || (!!s && (f === 'archive' ? !!s.archive_odoo
+  : !s.archive_odoo && (f === 'a_regler' ? aReglerPlanif(s) : s.statut_planification === f)));
+
+/** Jour à afficher pour un service : affecté, sinon prévu dans Odoo, sinon sa date limite. */
+const jourDe = (s: ServicePlanif | undefined) => s?.affectation?.debut ?? s?.planned_date_begin?.slice(0, 10)
+  ?? s?.date_deadline?.slice(0, 10) ?? null;
 
 /** Avancement en anneau : un segment par état, le pourcentage d'interventions faites ou facturées au centre. */
 function Anneau({ p }: { p: Projet }) {
@@ -53,29 +70,45 @@ function Anneau({ p }: { p: Projet }) {
   );
 }
 
-/** Date de la prochaine intervention en pavé de calendrier, comme sur la frise du dossier. */
-function Prochaine({ p }: { p: Projet }) {
-  const iso = p.prochaine_intervention;
-  if (!iso) {
-    return (
-      <div className="dc-prochaine vide">
-        <span className="dc-jour" aria-hidden="true"><b>–</b></span>
-        <p><span>Aucune intervention à venir</span>
-          <small>{p.par_etat.a_planifier ? `${pluriel(p.par_etat.a_planifier, 'intervention')} à planifier` : 'Rien à planifier'}</small></p>
-      </div>
-    );
-  }
-  const d = date(iso), n = ecart(iso);
+/** Services sur site du dossier, dans l'ordre des dates : jour, statut de planification, alertes, lien de planification.
+ *  Le prochain à venir est mis en avant ; hors du filtre choisi, un service est atténué. Un dossier d'un seul service
+ *  porte déjà son nom en titre : la ligne commence alors par le statut. */
+function ServicesDuDossier({ p, parId, filtre }: { p: Projet; parId: Map<number, ServicePlanif>; filtre: Filtre }) {
+  const auj = aujourdhui();
+  const seul = p.interventions.length === 1;
+  const lignes = p.interventions.map((i) => ({ i, s: parId.get(i.id) }))
+    .sort((a, b) => (jourDe(a.s) ?? '9999').localeCompare(jourDe(b.s) ?? '9999') || a.i.nom.localeCompare(b.i.nom));
+  const prochain = lignes.find(({ s }) => (jourDe(s) ?? '') >= auj && s && !s.archive_odoo)?.i.id;
   return (
-    <div className={`dc-prochaine${n <= 1 ? ' imminente' : ''}`}>
-      <span className="dc-jour" aria-hidden="true"><b>{d.getDate()}</b><small>{MOIS[d.getMonth()]}</small></span>
-      <p><span>Prochaine intervention <strong>{relatif(iso)}</strong>, {d.toLocaleDateString('fr-FR', { weekday: 'long' })}</span>
-        {p.prochaine_mission && <small>{p.prochaine_mission.nom}</small>}</p>
-    </div>
+    <ul className="dc-services" aria-label="Services sur site">
+      {lignes.map(({ i, s }) => {
+        const j = jourDe(s);
+        const alertes = s ? alertesPlanif(s) : [];
+        const statut = s ? (s.archive_odoo ? 'Archivé dans Odoo' : LIBELLES_STATUT_PLANIF[s.statut_planification]) : i.etat_libelle;
+        const precisions = [i.id === prochain && j ? relatif(j) : null, s?.priority === '1' ? 'urgent' : null]
+          .filter((x): x is string => !!x);
+        return (
+          <li key={i.id} className={`dc-service${i.id === prochain ? ' prochain' : ''}${garde(filtre, s) ? '' : ' hors-filtre'}`}>
+            <span className="dc-jour" aria-hidden="true">{j ? <><b>{date(j).getDate()}</b><small>{MOIS[date(j).getMonth()]}</small></>
+              : <b>–</b>}</span>
+            <span className="dc-service-nom">
+              {seul
+                ? <><strong>{statut}</strong>{precisions.length > 0 && <small>{precisions.join(', ')}</small>}</>
+                : <><strong>{i.nom}</strong><small>{[statut, ...precisions].join(', ')}</small></>}
+              {alertes.length > 0 && <small className="dc-service-alerte" title={alertes.map((x) => x.texte).join(' ; ')}>
+                {alertes[0].court}{alertes.length > 1 ? ` (+${alertes.length - 1})` : ''}</small>}</span>
+            {s && planifiable(s) && <Link className="dc-service-action" to={lienPlanification(s.id, s.affectation?.debut ?? null,
+              s.planned_date_begin ?? s.fenetre_debut, aReglerPlanif(s) ? 'reglages' : null)}>
+              {aReglerPlanif(s) ? 'Placer le site' : s.statut_planification === 'publie' ? 'Voir'
+                : s.affectation ? 'Modifier' : 'Planifier'}</Link>}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-function CarteDossier({ p }: { p: Projet }) {
+function CarteDossier({ p, parId, filtre }: { p: Projet; parId: Map<number, ServicePlanif>; filtre: Filtre }) {
   const retard = p.par_etat.en_retard;
   const termines = p.par_etat.fait + p.par_etat.facture;
   const equipe = p.equipe ?? [];
@@ -83,36 +116,31 @@ function CarteDossier({ p }: { p: Projet }) {
   const villes = [...new Set((p.sites ?? []).map(villeDe).filter((v): v is string => !!v))];
   return (
     <li>
-      <Link to={lienDossier(p)} className={`dc${retard ? ' en-retard' : ''}`}>
+      <article className={`dc${retard ? ' en-retard' : ''}`}>
         <header className="dc-tete">
           <div className="dc-titre">
             <p className="dc-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dc-simule">simulé</span>}</p>
-            <h2>{titreDossier(p)}</h2>
-            <p className="dc-commande">{p.type === 'commande'
-              ? <>Commande <strong>{p.nom}</strong>{p.commande?.montant_ht != null && <> · {euros(p.commande.montant_ht)} HT</>}</>
-              : 'Sans commande · non facturable'}</p>
-            <p className="dc-compte">{termines} sur {pluriel(p.services, 'intervention')} terminée{termines > 1 ? 's' : ''}</p>
-            <ul className="dc-legende">{ORDRE.filter((e) => p.par_etat[e]).map((e) => (
-              <li key={e} className={e === 'en_retard' ? 'retard' : undefined}><i className={`e-${e}`} aria-hidden="true" />
-                {p.par_etat[e]} {LIBELLES_ETAT[e].toLowerCase()}</li>))}
-            </ul>
+            <h2><Link to={lienDossier(p)} className="dc-lien">{titreDossier(p)}</Link></h2>
+            {/* le montant de la commande est le « CA HT » des chiffres plus bas : pas répété ici */}
+            <p className="dc-commande">{p.type === 'commande' ? <>Commande <strong>{p.nom}</strong></> : 'Sans commande, non facturable'}</p>
+            {/* avancement : utile à partir de deux services (pour un seul, son statut est dans sa ligne) */}
+            {p.services > 1 && <p className="dc-compte">{termines} sur {pluriel(p.services, 'intervention')} terminée{termines > 1 ? 's' : ''}</p>}
           </div>
-          <Anneau p={p} />
+          {p.services > 1 && <Anneau p={p} />}
         </header>
 
         <div className="dc-corps">
-          <Prochaine p={p} />
+          <ServicesDuDossier p={p} parId={parId} filtre={filtre} />
 
+          {/* équipe et véhicules : seulement s'ils sont planifiés (sinon le statut « À planifier » de la ligne le dit) */}
           <dl className="dc-faits">
-            <div><dt>Équipe</dt>
-              <dd>{equipe.length ? <span className="dc-equipe">{equipe.map((n) => (
-                <span key={n} className="dc-tech"><i aria-hidden="true">{initiales(n)}</i>{n}</span>))}</span>
-                : <span className="dc-manque">À planifier</span>}</dd></div>
-            <div><dt>{vehicules.length > 1 ? 'Véhicules' : 'Véhicule'}</dt>
-              <dd>{vehicules.length ? <span className="dc-vehicules">{vehicules.map((v) => (
+            {equipe.length > 0 && <div><dt>Équipe</dt>
+              <dd><span className="dc-equipe">{equipe.map((n) => (
+                <span key={n} className="dc-tech"><i aria-hidden="true">{initiales(n)}</i>{n}</span>))}</span></dd></div>}
+            {vehicules.length > 0 && <div><dt>{vehicules.length > 1 ? 'Véhicules' : 'Véhicule'}</dt>
+              <dd><span className="dc-vehicules">{vehicules.map((v) => (
                 <span key={v.id} className="dc-vehicule"><strong>{v.modele ?? 'Modèle non renseigné'}</strong>
-                  {v.plaque ? <Plaque plaque={v.plaque} /> : <small>véhicule n° {v.id}</small>}</span>))}</span>
-                : <span className="dc-manque">Aucun véhicule planifié</span>}</dd></div>
+                  {v.plaque ? <Plaque plaque={v.plaque} /> : <small>véhicule n° {v.id}</small>}</span>))}</span></dd></div>}
             <div><dt>{villes.length > 1 ? 'Sites' : 'Site'}</dt>
               <dd>{villes.length ? villes.join(', ') : <span className="dc-manque">Adresse non renseignée</span>}</dd></div>
           </dl>
@@ -128,13 +156,8 @@ function CarteDossier({ p }: { p: Projet }) {
                 {p.rse.kg_co2e === null ? 'à renseigner' : `${nombre(Math.round(p.rse.kg_co2e))} kg`}</small></dd></div>
           </dl>
         </div>
-
-        <footer className="dc-pied">
-          {retard > 0
-            ? <span className="dc-alerte">En retard : {p.en_retard.map((x) => x.nom).join(', ')}</span>
-            : <span className="dc-ok">{p.services === termines ? 'Toutes les interventions sont terminées' : 'Aucun retard'}</span>}
-        </footer>
-      </Link>
+        {/* pas de pied « En retard : … » : chaque ligne de service porte déjà son alerte, le liseré rouge signale le dossier */}
+      </article>
     </li>
   );
 }
@@ -188,25 +211,30 @@ function Synthese({ projets }: { projets: Projet[] }) {
 export default function Dossiers() {
   const [simules, setSimules] = useState(true);
   const [texte, setTexte] = useState('');
+  const [filtre, setFiltre] = useState<Filtre>('tous');
   const liste = useDonnees(() => stats.dossiers(simules), [simules]);
+  const planifies = useDonnees(() => planif.services(undefined, undefined, true), []);   // statut, alertes, liens
+  const parId = useMemo(() => new Map((planifies.donnees ?? []).map((s) => [s.id, s])), [planifies.donnees]);
   const tous = useMemo(() => liste.donnees ?? [], [liste.donnees]);
+  const services = useMemo(() => tous.flatMap((p) => p.interventions.map((i) => parId.get(i.id))), [tous, parId]);
   const projets = useMemo(() => {
     const q = plier(texte.trim());
     return tous
+      .filter((p) => filtre === 'tous' || p.interventions.some((i) => garde(filtre, parId.get(i.id))))
       .filter((p) => !q || plier([p.nom, p.client ?? '', ...p.interventions.map((i) => i.nom), ...(p.equipe ?? []),
         ...(p.sites ?? []),
         ...(p.vehicules ?? []).flatMap((v) => [v.modele ?? '', v.plaque ?? ''])].join(' ')).includes(q))
       .sort((a, b) => Number(b.par_etat.en_retard > 0) - Number(a.par_etat.en_retard > 0)
         || (a.prochaine_intervention ?? '9999').localeCompare(b.prochaine_intervention ?? '9999') || a.nom.localeCompare(b.nom));
-  }, [tous, texte]);
+  }, [tous, texte, filtre, parId]);
 
   return (
     <>
       <header className="dc-entete">
         <div>
           <h1>Dossiers d'intervention</h1>
-          <p className="sous-titre">Une commande client et ses interventions sur site, tout au même endroit : équipes,
-            véhicules, tâches, coûts, carte, itinéraires, PV et pièces jointes.</p>
+          <p className="sous-titre">Une commande client et ses services sur site, tout au même endroit. Les services se créent
+            et se modifient dans Odoo (Services sur site) ; ils se planifient et se règlent dans la Planification.</p>
         </div>
         <BoutonExport libelle="Exporter les dossiers" nomFichier={nomFichier('dossiers', 'tout')}
           lire={() => exportations.dossiers()} />
@@ -218,9 +246,9 @@ export default function Dossiers() {
             <path d="m13 13 4.5 4.5" /></svg>
           <span className="visuellement-cache">Rechercher</span>
           <input type="search" value={texte} onChange={(e) => setTexte(e.target.value)}
-            placeholder="Commande, intervention, client, technicien, véhicule" />
+            placeholder="Commande, service, client, technicien, véhicule" />
         </label>
-        {texte && tous.length > 0 && <span className="dc-resultats" aria-live="polite">
+        {(texte || filtre !== 'tous') && tous.length > 0 && <span className="dc-resultats" aria-live="polite">
           {projets.length} sur {pluriel(tous.length, 'dossier')}</span>}
         <label className="dc-bascule">
           <input type="checkbox" checked={simules} onChange={(e) => setSimules(e.target.checked)} />
@@ -228,12 +256,24 @@ export default function Dossiers() {
         </label>
       </div>
 
-      <EtatChargement chargement={liste.chargement && !liste.donnees} erreur={liste.erreur} />
-      {liste.donnees && tous.length > 0 && <Synthese projets={tous} />}
+      <div className="sv-onglets" role="radiogroup" aria-label="Statut de planification des services">
+        {FILTRES.filter((f) => f.cle !== 'archive' || services.some((s) => s?.archive_odoo)).map((f) => {
+          const n = services.filter((s) => s && garde(f.cle, s)).length;
+          return (
+            <button key={f.cle} type="button" role="radio" aria-checked={filtre === f.cle}
+                    className={`${filtre === f.cle ? 'actif' : ''}${f.cle === 'a_regler' && n > 0 ? ' a-regler' : ''}`}
+                    onClick={() => setFiltre(f.cle)}>
+              {f.libelle}<span className="compteur">{n}</span></button>
+          );
+        })}
+      </div>
+
+      <EtatChargement chargement={liste.chargement && !liste.donnees} erreur={liste.erreur ?? planifies.erreur} />
+      {liste.donnees && tous.length > 0 && filtre === 'tous' && !texte && <Synthese projets={tous} />}
       {liste.donnees && (
-        <ul className="dc-grille">{projets.map((p) => <CarteDossier key={p.cle} p={p} />)}</ul>
+        <ul className="dc-grille">{projets.map((p) => <CarteDossier key={p.cle} p={p} parId={parId} filtre={filtre} />)}</ul>
       )}
-      {liste.donnees && !projets.length && <p className="vide">{texte ? 'Aucun dossier ne correspond à la recherche.'
+      {liste.donnees && !projets.length && <p className="vide">{texte || filtre !== 'tous' ? 'Aucun dossier ne correspond aux filtres.'
         : 'Aucune intervention sur site. Les interventions se créent dans Odoo (Services sur site).'}</p>}
     </>
   );

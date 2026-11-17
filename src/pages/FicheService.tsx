@@ -31,7 +31,7 @@ export default function FicheService() {
   const id = Number(useParams().id);
   const f = useDonnees(() => stats.service(id), [id]);
   const d = f.donnees;
-  if (!d) return <><Link to="/services" className="muet">‹ Services sur site</Link><EtatChargement chargement={f.chargement} erreur={f.erreur} /></>;
+  if (!d) return <><Link to="/dossiers" className="muet">‹ Dossiers d'intervention</Link><EtatChargement chargement={f.chargement} erreur={f.erreur} /></>;
   const { planification: p, realise: r, materiel: m, argent: a, couts_estimes: c } = d;
   const maxHeures = Math.max(d.prevu.heures ?? 0, r.heures_passees ?? 0, 1);
   const maxCout = Math.max(c.travail, c.route, c.vehicule, a.cout_materiel, 1);
