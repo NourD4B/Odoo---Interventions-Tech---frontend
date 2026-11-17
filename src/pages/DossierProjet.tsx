@@ -705,8 +705,7 @@ function Missions({ d, actif, ouverts, basculer, ecrire, onSurvol, onModifie }: 
   );
   return (
     <section className="carte dp-missions">
-      <div className="dp-titre-bloc"><h2>Missions</h2>
-        <span className="muet">{d.services.length} service{d.services.length > 1 ? 's' : ''} sur site, dans l'ordre des dates</span></div>
+      <div className="dp-titre-bloc"><h2>Missions</h2></div>
       <ol className="dp-spine">
         {dates.map((s, i) => (
           <Fragment key={s.id}>{i === aVenir && repere}{ligne(s, aVenir !== -1 && i >= aVenir)}</Fragment>))}
