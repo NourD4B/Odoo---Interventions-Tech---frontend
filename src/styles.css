@@ -942,27 +942,47 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .dp { display: flex; flex-direction: column; gap: 20px; }
 .dp .fl-plaque { position: static; }
 
-.dp-heros { position: relative; height: 480px; border-radius: 16px; overflow: hidden; border: 1px solid var(--bordure);
+/* tête du dossier (bleu nuit) : identité et faits à gauche, actions à droite ; dessous, avancement, prochaine
+   intervention, équipe et véhicules, séparés par de fins filets */
+.dp-tete { display: flex; flex-direction: column; gap: 18px; padding: 22px 26px 20px; border-radius: 16px; background: #0f1d44;
+  color: #fff; box-shadow: 0 24px 48px -28px rgba(15, 29, 68, .7); }
+.dp-tete-haut { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px 28px; }
+.dp-tete-titre { flex: 1 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.dp-tete h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -.015em; text-wrap: balance; }
+.dp-tete .dp-ident-faits { display: flex; flex-wrap: wrap; gap: 8px 32px; margin-top: 4px; }
+.dp-tete .dp-ident-faits dd small { font-weight: 400; color: #9fb0dc; }
+.dp-tete .dp-actions { margin-top: 0; }
+.dp-tete-bas { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 0; padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, .12); }
+.dp-tete-bas > * { padding: 0 28px; }
+.dp-tete-bas > :first-child { padding-left: 0; }
+.dp-tete-bas > * + * { border-left: 1px solid rgba(255, 255, 255, .12); }
+.dp-tete .dp-anneau { padding: 0 28px 0 0; border: 0; }
+.dp-tete-vide { font-size: 13px; color: #9fb0dc; }
+.dp-tete .e-a_planifier { stroke: #8a94ad; background: #8a94ad; }
+.dp-tete .e-planifie { stroke: #7aa2ff; background: #7aa2ff; }
+.dp-tete .e-en_retard { stroke: #ff8a8a; background: #ff8a8a; }
+.dp-tete .e-fait { stroke: #4fd1b5; background: #4fd1b5; }
+.dp-tete .e-facture { stroke: #fff; background: #fff; }
+.dp-tete .dp-sans-plaque { border-color: rgba(255, 255, 255, .35); color: #fff; }
+
+/* carte des sites et des agences de départ (colonne de droite) */
+.dp-carte { position: relative; isolation: isolate; height: 300px; border-radius: 12px; overflow: hidden; border: 1px solid var(--bordure);
   background-color: #eef1f5; background-image: radial-gradient(circle, #d3d8e1 1px, transparent 1.3px); background-size: 18px 18px; }
-.dp-carte { position: absolute; inset: 0; isolation: isolate; }
-.dp-carte.leaflet-container { background: transparent; font: inherit; }
+.dp-carte.leaflet-container { background-color: #eef1f5; font: inherit; }
 .dp-carte .leaflet-tile-pane { filter: saturate(.5) contrast(.95) brightness(1.04); }
-.dp-carte-vide { display: flex; align-items: center; justify-content: flex-end; padding: 32px; color: var(--encre-3); font-size: 13px; }
+.dp-carte-vide { display: flex; align-items: center; justify-content: center; height: 120px; padding: 24px; text-align: center;
+  color: var(--encre-3); font-size: 13px; }
 .dp-marque-agence { display: flex; gap: 4px; }
 .dp-marque-agence span { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: #b45309;
   color: #fff; font-size: 11px; font-weight: 800; box-shadow: 0 0 0 3px #fff, 0 6px 12px rgba(124, 58, 6, .35); }
 .dp-marque-site span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #fff;
   color: var(--c); border: 3px solid var(--c); font-size: 13px; font-weight: 800; cursor: pointer;
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--c) 18%, transparent), 0 8px 16px rgba(15, 29, 68, .28); }
-
-.dp-identite { position: absolute; z-index: 2; top: 16px; left: 16px; bottom: 16px; width: 384px; overflow: auto;
-  padding: 20px 24px; border-radius: 14px; background: #0f1d44; color: #fff; display: flex; flex-direction: column; gap: 14px;
-  box-shadow: 0 24px 48px -20px rgba(15, 29, 68, .6); }
 .dp-retour { color: #a9b8e3; font-size: 13px; text-decoration: none; align-self: flex-start; }
 .dp-retour:hover, .dp-retour:focus-visible { color: #fff; }
 .dp-client { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #c7d4f7; }
 .dp-simule { padding: 1px 8px; border-radius: 999px; background: rgba(255, 255, 255, .12); color: #e7dcff; font-size: 11px; }
-.dp-identite h1 { margin: -6px 0 0; font-size: 26px; line-height: 1.15; letter-spacing: -.015em; text-wrap: balance; }
 .dp-ident-faits { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .dp-ident-faits dt { font-size: 12px; color: #9fb0dc; }
 .dp-ident-faits dd { margin: 0; font-size: 13px; font-weight: 600; }
@@ -974,11 +994,6 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .dp-anneau-titre { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
 .dp-anneau-legende { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #c7d4f7; }
 .dp-anneau-legende i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; }
-.dp-identite .e-a_planifier { stroke: #8a94ad; background: #8a94ad; }
-.dp-identite .e-planifie { stroke: #7aa2ff; background: #7aa2ff; }
-.dp-identite .e-en_retard { stroke: #ff8a8a; background: #ff8a8a; }
-.dp-identite .e-fait { stroke: #4fd1b5; background: #4fd1b5; }
-.dp-identite .e-facture { stroke: #fff; background: #fff; }
 .dp-ident-equipe { display: flex; flex-wrap: wrap; gap: 12px 28px; }
 .dp-ident-equipe > div { display: flex; flex-direction: column; gap: 6px; }
 .dp-ident-label { font-size: 12px; color: #9fb0dc; }
@@ -989,16 +1004,13 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .dp-ident-plaques a { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: #fff; }
 .dp-ident-plaques .dp-modele { font-size: 13px; font-weight: 600; color: #dbe3fb; }
 .dp-ident-plaques a:hover .dp-modele, .dp-ident-plaques a:focus-visible .dp-modele { text-decoration: underline; }
-.dp-identite .dp-sans-plaque { border-color: rgba(255, 255, 255, .35); color: #fff; }
 .dp-prochaine { margin: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #9fb0dc; }
 .dp-prochaine strong { font-size: 16px; color: #fff; }
 .dp-prochaine strong::first-letter { text-transform: uppercase; }
 .dp-odoo { margin-top: auto; align-self: flex-start; min-height: 40px; display: inline-flex; align-items: center; padding: 0 14px;
   border-radius: 8px; border: 1px solid rgba(255, 255, 255, .35); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; }
 .dp-odoo:hover, .dp-odoo:focus-visible { background: rgba(255, 255, 255, .1); }
-.dp-legende { position: absolute; z-index: 2; right: 12px; bottom: 26px; display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 7px 12px;
-  border-radius: 10px; border: 1px solid var(--bordure); background: rgba(255, 255, 255, .94); font-size: 12px; color: var(--encre-2);
-  pointer-events: none; }
+.dp-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--encre-2); }
 .dp-legende span { display: inline-flex; align-items: center; gap: 6px; }
 .dp-legende i { display: inline-block; }
 .dp-leg-agence { width: 10px; height: 10px; border-radius: 2px; background: #b45309; }
@@ -1094,10 +1106,6 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .dp-detail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 22px; padding-top: 12px; border-top: 1px solid #eef0f3; }
 .dp-detail h4 { margin: 0 0 8px; font-size: 13px; color: var(--encre-2); }
 .dp-detail p { margin: 6px 0 0; font-size: 13px; }
-.dp-coches { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-.dp-coches li::before { content: ''; display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
-  border: 1.5px solid var(--bordure-forte); border-radius: 4px; font-size: 10px; font-weight: 800; color: #fff; }
-.dp-coches li.faite::before { content: '✓'; border-color: var(--dispo); background: var(--dispo); }
 .dp-lignes { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .dp-lignes li { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px dotted var(--bordure); }
 .dp-lignes li span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -1137,24 +1145,65 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .dp-commande-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .dp-commande-tete span { text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dp-commande-tete small { display: block; font-size: 12px; font-weight: 400; color: var(--encre-3); }
-.dp-arbre, .dp-arbre ul { list-style: none; margin: 0; padding: 0; }
-.dp-arbre > li { padding: 8px 0; border-bottom: 1px solid #eef0f3; }
-.dp-arbre > li:last-child { border-bottom: 0; padding-bottom: 0; }
-.dp-arbre ul { margin: 6px 0 0 4px; padding-left: 14px; border-left: 2px solid var(--bordure); display: flex; flex-direction: column; gap: 6px; }
-.dp-tache { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 13px; }
-.dp-tache-nom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; }
-.dp-arbre ul .dp-tache-nom { font-weight: 500; }
-.dp-arbre li.service > .dp-tache .dp-tache-nom::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.dp-tache-meta { font-size: 12px; color: var(--encre-3); }
-.dp-tache-h { grid-column: 2; grid-row: 1; font-size: 12px; color: var(--encre-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* mission : ce que montre la liste Odoo (étape, feuille, assignés, jalon, étiquettes, activité suivante) */
+.dp-sous-compte { font-size: 13px; font-weight: 400; color: var(--encre-3); }
+.dp-odoo-ligne { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12.5px; }
+.dp-odoo-ligne li { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 10px; border: 1px solid var(--bordure);
+  border-radius: 999px; background: #fafbfc; color: var(--encre-2); }
+.dp-odoo-ligne li > span:first-child { color: var(--encre-3); }
+.dp-odoo-etape strong { font-weight: 600; color: var(--encre); }
+.dp-odoo-ligne .dp-odoo-etiquette { border-color: #d7def0; background: var(--accent-doux); color: var(--accent); font-weight: 600; }
+/* activité suivante : couleurs d'Odoo (prévue verte, aujourd'hui orange, en retard rouge) */
+.dp-odoo-ligne .dp-activite { font-weight: 500; }
+.dp-activite strong { font-weight: 650; }
+.dp-odoo-ligne .dp-activite.prevue { border-color: #bfe3d8; background: var(--dispo-doux); color: #115e59; }
+.dp-odoo-ligne .dp-activite.aujourdhui { border-color: #f3d38f; background: var(--alerte-doux); color: var(--alerte); }
+.dp-odoo-ligne .dp-activite.en_retard { border-color: #f5c2c2; background: var(--erreur-doux); color: var(--erreur); }
+/* « En cours » d'Odoo : barre d'avancement sous les heures */
+.dp-barre { display: block; max-width: 150px; height: 5px; margin: 7px 0 4px; border-radius: 3px; background: #eceef2; overflow: hidden; }
+.dp-barre i { display: block; width: var(--p); height: 100%; border-radius: 3px; background: var(--accent); }
+.dp-barre.depasse i { background: var(--erreur); }
+.dp-mesures .dp-restant { display: block; }
+/* onglets du formulaire Odoo (Description, Feuilles de temps, Sous-tâches), à la manière du carnet d'Odoo */
+.dp-carnet { grid-column: 1 / -1; border: 1px solid var(--bordure); border-radius: 12px; overflow: hidden; background: var(--surface); }
+.dp-carnet-onglets { display: flex; gap: 2px; padding: 6px 8px 0; background: #f6f7f9; border-bottom: 1px solid var(--bordure); }
+.dp-carnet-onglets button { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; margin-bottom: -1px; padding: 0 14px;
+  border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: none; font: inherit; font-size: 13px;
+  font-weight: 600; color: var(--encre-3); cursor: pointer; }
+.dp-carnet-onglets button:hover { color: var(--encre); }
+.dp-carnet-onglets button[aria-selected="true"] { border-color: var(--bordure); background: var(--surface); color: var(--encre);
+  box-shadow: inset 0 2px 0 var(--accent); }
+.dp-carnet-onglets button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.dp-carnet-compte { padding: 0 7px; border-radius: 999px; background: var(--neutre-doux); font-size: 11.5px; color: var(--encre-2); }
+.dp-carnet-panneau { padding: 14px 16px 16px; }
+.dp-carnet-panneau[hidden] { display: none; }
+.dp-carnet .pf-description { padding: 0; border: 0; background: none; }
+.dp-carnet p.dp-carnet-vide { margin: 0; font-size: 13px; color: var(--encre-3); }
+.dp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dp-table th { padding: 0 8px 6px; border-bottom: 1px solid var(--bordure); text-align: left; font-size: 12px; font-weight: 600;
+  color: var(--encre-3); }
+.dp-table td { padding: 7px 8px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+.dp-table th:first-child, .dp-table td:first-child { padding-left: 0; }
+.dp-table .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dp-table small { color: var(--encre-3); }
+.dp-table tr.faite td { color: var(--encre-3); }
+.dp-coche { display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
+  border: 1.5px solid var(--bordure-forte); border-radius: 4px; font-size: 10px; font-weight: 800; color: #fff; }
+.dp-table tr.faite .dp-coche { border-color: var(--dispo); background: var(--dispo); }
+.dp-table tr.faite .dp-coche::after { content: "✓"; }
+.dp-temps-resume { margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 8px 28px; padding-top: 10px; border-top: 1px dashed var(--bordure-forte); }
+.dp-temps-resume div { display: flex; flex-direction: column; gap: 2px; }
+.dp-temps-resume dt { font-size: 12px; color: var(--encre-3); }
+.dp-temps-resume dd { margin: 0; font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.dp-temps-resume .negatif dd { color: var(--erreur); }
+.dp-detail .dp-par-employe { margin-top: 8px; }
+.dp-lignes.dp-rapport li span:last-child { white-space: normal; text-align: right; overflow-wrap: anywhere; }
+.dp-bloc-carte { gap: 10px; }
 .dp-lien { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-align: left; cursor: pointer; }
 .dp-lien:hover, .dp-lien:focus-visible { text-decoration: underline; }
 @media (max-width: 1240px) { .dp-corps { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 900px) {
-  .dp-heros { height: auto; display: flex; flex-direction: column; }
-  .dp-carte { position: relative; height: 320px; }
-  .dp-identite { position: static; width: auto; border-radius: 0; }
-  .dp-legende { bottom: auto; top: 12px; }
+  .dp-tete-bas > * { padding: 0 16px; }
   .dp-mesures, .dp-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

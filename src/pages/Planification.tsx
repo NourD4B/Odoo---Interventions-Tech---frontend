@@ -16,6 +16,7 @@ import { IconeTelechargement } from '../composants/BoutonExport';
 import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import { enregistrerFichier, exportations, nomFichier } from '../exports';
 import CartePlanif, { type AgencePlanif, type SitePlanif } from '../composants/CartePlanif';
+import DescriptionOdoo from '../composants/DescriptionOdoo';
 import MenuVehicule from '../composants/MenuVehicule';
 import ReglagesService, { FORMULAIRE_REGLAGES, siteARegler } from '../composants/ReglagesService';
 import { nomVehicule, Plaque } from '../composants/Vehicule';
@@ -172,70 +173,6 @@ function LivraisonsAttente({ liste }: { liste: LivraisonAttente[] }) {
       </ul>
       <small>Vérifier l'arrivée avant de publier : le planning ne bloque pas.</small>
     </div>
-  );
-}
-
-type Ecrire = <T>(action: () => Promise<T>) => Promise<T | undefined>;
-
-/** Descriptions déjà lues pendant la visite (mémoire de l'onglet du navigateur seulement : jamais enregistrées). */
-const descriptionsLues = new Map<number, string | null>();
-
-/** Texte de la description : paragraphes et listes à puces (« • » en début de ligne, posé par le serveur). */
-function TexteDescription({ texte }: { texte: string }) {
-  const blocs: ({ p: string } | { ul: string[] })[] = [];
-  for (const ligne of texte.split('\n')) {
-    const dernier = blocs[blocs.length - 1];
-    if (!ligne.startsWith('• ')) blocs.push({ p: ligne });
-    else if (dernier && 'ul' in dernier) dernier.ul.push(ligne.slice(2));
-    else blocs.push({ ul: [ligne.slice(2)] });
-  }
-  return (
-    <div className="pf-description-texte">
-      {blocs.map((b, i) => ('ul' in b
-        ? <ul key={i}>{b.ul.map((x, j) => <li key={j}>{x}</li>)}</ul> : <p key={i}>{b.p}</p>))}
-    </div>
-  );
-}
-
-/** Description du service : lue dans Odoo à l'ouverture de l'onglet « Service » (consultation journalisée, nom demandé
- *  si besoin), jamais copiée dans la base de l'application. */
-function DescriptionOdoo({ s, ecrire }: { s: ServicePlanif; ecrire: Ecrire }) {
-  const [texte, setTexte] = useState<string | null | undefined>(() => descriptionsLues.get(s.id));   // undefined : pas lue
-  const [lecture, setLecture] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
-  const demandee = useRef(false);
-  const lire = useCallback(async () => {
-    setLecture(true);
-    setErreur(null);
-    try {
-      const r = await ecrire(() => planif.description(s.id));
-      if (r) { descriptionsLues.set(s.id, r.texte); setTexte(r.texte); }
-      else setErreur('Lecture annulée : chaque consultation est journalisée, le nom est donc demandé.');
-    } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setLecture(false); }
-  }, [ecrire, s.id]);
-  useEffect(() => {                                    // une seule lecture à l'ouverture de l'onglet
-    if (s.simule || demandee.current || descriptionsLues.has(s.id)) return;
-    demandee.current = true;
-    void lire();
-  }, [s.simule, s.id, lire]);
-
-  return (
-    <section className="pf-description" aria-labelledby="pf-titre-description" aria-busy={lecture}>
-      <div className="pf-description-tete">
-        <h3 id="pf-titre-description">Description</h3>
-        <span className="pf-aide">{s.simule ? 'service simulé' : 'lue dans Odoo, jamais copiée'}</span>
-        {!s.simule && texte !== undefined && !lecture && (
-          <button type="button" className="lien-bouton" onClick={() => void lire()}>Relire</button>)}
-      </div>
-      {s.simule ? <p className="pf-description-vide">Service simulé : il n'existe pas dans Odoo, donc pas de description.</p>
-        : lecture ? <div className="pf-description-chargement"><span className="visuellement-cache">Lecture dans Odoo…</span>
-          <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div>
-        : erreur ? <p className="pf-description-vide">{erreur}{' '}
-          <button type="button" className="lien-bouton" onClick={() => void lire()}>Réessayer</button></p>
-        : texte === undefined ? null
-        : texte === null ? <p className="pf-description-vide">Aucune description dans Odoo.</p>
-        : <TexteDescription texte={texte} />}
-    </section>
   );
 }
 
@@ -494,7 +431,7 @@ function DialogueService({ s, onglet, onOnglet, brouillon, techniciens, agences,
           {monte('service') && (
             <div role="tabpanel" id="pf-panneau-service" aria-labelledby="pf-onglet-service" className="pf-panneau"
                  hidden={onglet !== 'service'}>
-              <DescriptionOdoo s={s} ecrire={ecrire} />
+              <DescriptionOdoo id={s.id} simule={s.simule} ecrire={ecrire} />
               <dl className="sv-d-faits pf-faits">
                 <div><dt>Date prévue</dt><dd>{contrainteDate(s) ?? 'Libre'}</dd></div>
                 <div><dt>Temps alloué</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens > 1

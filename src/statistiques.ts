@@ -77,12 +77,32 @@ export interface ResumeDossier extends Argent, RefDossier {
   sites?: string[];
 }
 
+/** Sous-tâche d'un service (onglet « Sous-tâches » d'Odoo). */
+export interface SousTache {
+  id: number; nom: string; terminee: boolean; etape?: string | null; statut?: string | null; assignes?: string[];
+  heures_allouees?: number; heures_passees?: number; echeance?: string | null;
+}
+/** Ligne de l'onglet « Feuilles de temps » d'Odoo (ni description ni montant). */
+export interface FeuilleDeTemps { id: number; date: string | null; employe: string | null; heures: number; sous_tache: string | null }
+/** « Activité suivante » de la liste Odoo ; état calculé comme Odoo. */
+export interface ActiviteOdoo {
+  id: number; type: string | null; echeance: string | null; assigne: string | null;
+  etat: 'en_retard' | 'aujourdhui' | 'prevue';
+}
+/** Champs de la liste et du formulaire Odoo du service (mêmes noms, mêmes calculs qu'Odoo). */
+export interface FormulaireOdoo {
+  etape: string | null; etape_depuis: string | null; statut: string | null; jalon: string | null;
+  assignes: string[]; etiquettes: string[]; feuille_modele: string | null; activites: ActiviteOdoo[];
+  temps: { alloue: number; passe: number; sous_taches: number; total: number; restant: number; progression: number | null };
+}
+
 export interface FicheService {
   id: number; nom: string; simule: boolean; archive_odoo: boolean; odoo_url: string | null;
   dossier: RefDossier;
   client: string | null; societe: string | null; telephone: string | null;
   site: { adresse: string | null; lat: number | null; lng: number | null; precision: string | null };
   type_service: string | null; priorite: 'normale' | 'urgente'; etat: EtatService; etat_libelle: string;
+  odoo?: FormulaireOdoo;
   prevu: { debut: string | null; fin: string | null; fenetre: [string, string | null] | null; heures: number | null };
   planification: {
     statut: string; jours: string[]; debut: string | null; fin: string | null;
@@ -96,8 +116,9 @@ export interface FicheService {
     fait: boolean; fait_le: string | null; heures_passees: number | null;
     par_employe: { employee_id: number | null; nom: string | null; matricule: string | null; heures: number }[];
     depassement_h: number | null;
-    sous_taches: { total: number; terminees: number; liste: { id: number; nom: string; terminee: boolean }[] };
+    sous_taches: { total: number; terminees: number; liste: SousTache[] };
     feuille: { modele_id: number | null; remplie: boolean; signee: boolean; envoyee: boolean };
+    feuilles_de_temps?: FeuilleDeTemps[];                 // onglet « Feuilles de temps » d'Odoo, ligne à ligne
   };
   materiel: {
     lignes: { id: number; commande: string | null; produit: string; type: string | null; quantite: number; livre: number;
