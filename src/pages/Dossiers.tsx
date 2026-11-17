@@ -14,7 +14,8 @@ import { Plaque } from '../composants/Vehicule';
 import { exportations, nomFichier } from '../exports';
 import { LIBELLES_STATUT_PLANIF, planif, type ServicePlanif, type StatutPlanif } from '../planification';
 import { co2 } from '../rse';
-import { alertesPlanif, aReglerPlanif } from '../servicesSurSite';
+import { BadgeEtat } from '../composants/Statistiques';
+import { alertesPlanif, aReglerPlanif, statutOdooNotable } from '../servicesSurSite';
 import { euros, heures, LIBELLES_ETAT, lienDossier, nombre, stats, titreDossier, type EtatService,
   type ResumeDossier } from '../statistiques';
 import { villeDe } from './DossierProjet';
@@ -89,6 +90,8 @@ function ServicesDuDossier({ p, parId, filtre }: { p: Projet; parId: Map<number,
         // « urgent » : pastille en haut à gauche de la carte ; sur la ligne seulement s'il y a plusieurs services
         const precisions = [i.id === prochain && j ? relatif(j) : null, !seul && s?.priority === '1' ? 'urgent' : null]
           .filter((x): x is string => !!x);
+        const montrerEtat = i.etat !== 'archive' && plier(LIBELLES_ETAT[i.etat]) !== plier(statut);
+        const odoo = statutOdooNotable(s?.statut_odoo);
         return (
           <li key={i.id} className={`dc-service${i.id === prochain ? ' prochain' : ''}${garde(filtre, s) ? '' : ' hors-filtre'}`}>
             <span className="dc-jour" aria-hidden="true">{j ? <><b>{date(j).getDate()}</b><small>{MOIS[date(j).getMonth()]}</small></>
@@ -99,6 +102,11 @@ function ServicesDuDossier({ p, parId, filtre }: { p: Projet; parId: Map<number,
                 : <><strong>{i.nom}</strong><small>{[statut, ...precisions].join(', ')}</small></>}
               {alertes.length > 0 && <small className="dc-service-alerte" title={alertes.map((x) => x.texte).join(' ; ')}>
                 {alertes[0].court}{alertes.length > 1 ? ` (+${alertes.length - 1})` : ''}</small>}</span>
+            {/* état du service (à planifier, planifié, en retard, fait, facturé) et statut Odoo s'il dit plus
+                (approuvé, en attente, changements demandés) ; rien qui répète la ligne */}
+            {(montrerEtat || odoo) && <span className="dc-statut">
+              {montrerEtat && <BadgeEtat etat={i.etat} />}
+              {odoo && <span className="badge b-odoo" title="Statut dans Odoo">{odoo}</span>}</span>}
           </li>
         );
       })}

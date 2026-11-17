@@ -41,7 +41,11 @@ export interface ServicePlanif extends ReglagesPlanif {
   archive_odoo?: boolean;            // archivée dans Odoo, gardée en historique (commande) : jamais planifiée
   // formulaire Services sur site, tel que saisi dans Odoo (affichage)
   etape_odoo?: string | null;        // étape (Nouveau, Planifié, En cours, Fait…)
+  statut_odoo?: string | null;       // statut de la tâche (01_in_progress, 03_approved, 04_waiting_normal…)
   cloture_odoo?: boolean;            // « Marquer comme terminé » ou annulé
+  nb_sous_taches?: number;           // Odoo n'écrit « incl. … sur des sous-tâches » que s'il y en a
+  heures_sous_taches?: number;       // « Temps alloué … (incl. 04:00 sur des sous-tâches) »
+  progression?: number | null;       // « (35 %) » : heures passées (tâche et sous-tâches) ÷ temps alloué
   feuille_modele?: string | null;    // « Modèle de feuille de travail »
   assignes_odoo?: string[];          // « Assignés » (utilisateurs Odoo, souvent la personne qui a créé le service)
   etiquettes?: string[];             // « Étiquettes »

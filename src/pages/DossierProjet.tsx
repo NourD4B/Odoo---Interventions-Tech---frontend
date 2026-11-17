@@ -22,7 +22,7 @@ import { Plaque } from '../composants/Vehicule';
 import { dossiers, type Dossier, type Itineraire, type ServiceDossier } from '../dossiers';
 import { exportations, nomFichier } from '../exports';
 import { co2 } from '../rse';
-import { alertesFiche, lienPlanification } from '../servicesSurSite';
+import { alertesFiche, lienPlanification, statutOdooNotable } from '../servicesSurSite';
 import { euros, heures, LIBELLES_ETAT, LIBELLES_FACTURATION, LIBELLES_LIVRAISON, LIBELLES_PAIEMENT, nombre, titreDossier,
   type ActiviteOdoo, type EtatService, type TypeDossier } from '../statistiques';
 
@@ -373,7 +373,9 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
           </div>
           <div className="badges">
             {s.etat === 'planifie' && STATUTS_PLANIF[statut]
-              ? <Badge type={`planif-${statut}`}>{STATUTS_PLANIF[statut]}</Badge> : <BadgeEtat etat={s.etat} />}</div>
+              ? <Badge type={`planif-${statut}`}>{STATUTS_PLANIF[statut]}</Badge> : <BadgeEtat etat={s.etat} />}
+            {statutOdooNotable(s.odoo?.statut) && <span className="badge b-odoo" title="Statut dans Odoo">
+              {statutOdooNotable(s.odoo?.statut)}</span>}</div>
         </header>
         {!seul && <p className="dp-site">{s.site.adresse ?? 'Adresse du site non renseignée'}</p>}
         <LigneOdoo s={s} auj={auj} />

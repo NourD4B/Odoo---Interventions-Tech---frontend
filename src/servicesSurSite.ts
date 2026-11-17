@@ -54,3 +54,28 @@ export const aReglerPlanif = (s: ServicePlanif) => s.statut_planification !== 'p
 
 /** Visible dans la Planification : ni archivé, ni terminé dans Odoo sans y avoir été planifié. */
 export const planifiable = (s: ServicePlanif) => !s.archive_odoo && !(s.cloture_odoo && !s.affectation);
+
+/** Statut de la tâche dans Odoo (`project.task.state`), libellés d'Odoo en français. */
+export const STATUTS_ODOO: Record<string, string> = {
+  '01_in_progress': 'En cours', '02_changes_requested': 'Changements demandés', '03_approved': 'Approuvé',
+  '04_waiting_normal': 'En attente', '1_done': 'Fait', '1_canceled': 'Annulé',
+};
+/** Statut Odoo à montrer à côté de l'état du service : validé, en attente ou changements demandés (« en cours »,
+ *  « fait » et « annulé » sont déjà dits par l'état du service). */
+export const statutOdooNotable = (statut: string | null | undefined): string | null =>
+  statut && ['02_changes_requested', '03_approved', '04_waiting_normal'].includes(statut) ? STATUTS_ODOO[statut] : null;
+
+/** Liens d'Odoo pour le « Numéro de contact » : appeler, SMS, WhatsApp. Numéro français sans indicatif (0…) : +33. */
+export function liensTelephone(numero: string): { appeler: string; sms: string; whatsapp: string } | null {
+  let chiffres = numero.replace(/[^\d+]/g, '');
+  if (chiffres.startsWith('00')) chiffres = `+${chiffres.slice(2)}`;
+  else if (/^0\d{9}$/.test(chiffres)) chiffres = `+33${chiffres.slice(1)}`;
+  const international = chiffres.replace(/\D/g, '');
+  if (international.length < 6) return null;
+  return { appeler: `tel:${chiffres}`, sms: `sms:${chiffres}`, whatsapp: `https://wa.me/${international}` };
+}
+
+/** « Voir l'itinéraire » (comme Odoo) : Google Maps, en voiture, de là où l'on est jusqu'à l'adresse du site
+ *  (public et sans clé ; l'adresse n'est envoyée qu'au clic). */
+export const lienItineraire = (adresse: string) =>
+  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(adresse)}&travelmode=driving`;

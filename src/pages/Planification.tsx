@@ -17,6 +17,8 @@ import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import { enregistrerFichier, exportations, nomFichier } from '../exports';
 import CartePlanif, { type AgencePlanif, type SitePlanif } from '../composants/CartePlanif';
 import DescriptionOdoo from '../composants/DescriptionOdoo';
+import FormulaireOdoo, { LigneFormulaire } from '../composants/FormulaireOdoo';
+import { statutOdooNotable } from '../servicesSurSite';
 import MenuVehicule from '../composants/MenuVehicule';
 import ReglagesService, { siteARegler, type EtatReglages, type ReglagesHandle } from '../composants/ReglagesService';
 import { nomVehicule, Plaque } from '../composants/Vehicule';
@@ -318,13 +320,15 @@ function DialogueService({ s, onglet, onOnglet, brouillon, techniciens, agences,
                 <span className={`pf-etat etat-${etat}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
                   verrouille: 'Verrouillé', publie: 'Publié' }[etat]}</span>
                 {s.etape_odoo && <span className="pf-etat odoo" title="Étape dans Odoo">{s.etape_odoo}</span>}
+                {statutOdooNotable(s.statut_odoo) && <span className="pf-etat odoo" title="Statut dans Odoo">
+                  {statutOdooNotable(s.statut_odoo)}</span>}
                 {s.under_warranty && <span className="pf-etat">Sous garantie</span>}
                 {(s.etiquettes ?? []).map((e) => <span key={e} className="pf-etat etiquette">{e}</span>)}
               </div>
               <ul className="pf-reperes" aria-label="En bref">
-                <Repere icone="date" titre="Date prévue dans Odoo">{contrainteDate(s) ?? 'Date libre'}</Repere>
+                {/* date planifiée et temps alloué : dans les détails (Affectation) ; ici, ce qu'on en tire */}
                 {s.allocated_hours
-                  ? <Repere icone="duree" titre="Temps alloué dans Odoo">{nombreH(s.allocated_hours)}, {dureeService(s)} j sur site</Repere>
+                  ? <Repere icone="duree" titre="Temps alloué ÷ techniciens ÷ 8 h">{dureeService(s)} j sur site</Repere>
                   : <Repere icone="duree" alerte titre="Compté 1 jour ; à corriger dans Odoo">0 h dans Odoo, compté 1 j</Repere>}
                 <Repere icone="equipe" titre="Techniciens sur place (Réglages)">{nbVoulu} technicien{nbVoulu > 1 ? 's' : ''}
                   {s.vehicule_requis === 'utilitaire' ? ', utilitaire' : ''}</Repere>
@@ -350,16 +354,11 @@ function DialogueService({ s, onglet, onOnglet, brouillon, techniciens, agences,
             {alertes.length > 0 && (
               <ul className="pf-alertes">{alertes.map((x) => <li key={x.texte}>{x.texte} {x.action}</li>)}</ul>
             )}
-            <dl className="sv-d-faits pf-faits">
-              <div><dt>Commande</dt><dd>{s.commande_nom ?? 'Non facturable'}
-                {s.article_commande && <small>{s.article_commande}</small>}</dd></div>
-              {s.feuille_modele && <div><dt>Feuille de travail</dt><dd>{s.feuille_modele}</dd></div>}
-              {!!s.assignes_odoo?.length && <div><dt>Assignés dans Odoo</dt><dd>{s.assignes_odoo.join(', ')}</dd></div>}
-              {s.partner_phone && <div><dt>Contact</dt><dd>{s.partner_phone}</dd></div>}
-              {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
-              {s.cloture_odoo && <div><dt>Dans Odoo</dt><dd>Terminé ou annulé</dd></div>}
-              <div className="pf-large"><dt>Site</dt><dd>{s.site_adresse ?? 'Adresse non renseignée'}</dd></div>
-            </dl>
+            {/* détails comme le formulaire Odoo (mêmes champs, même ordre, mêmes actions), puis ce que règle l'application */}
+            <FormulaireOdoo s={s} suite={<>
+              {competences && <LigneFormulaire libelle="Compétences requises">{competences}</LigneFormulaire>}
+              {s.cloture_odoo && <LigneFormulaire libelle="Dans Odoo">Terminé ou annulé</LigneFormulaire>}
+            </>} />
             <DescriptionOdoo id={s.id} simule={s.simule} ecrire={ecrire} />
             <LivraisonsAttente liste={s.livraisons_attente ?? []} />
 
