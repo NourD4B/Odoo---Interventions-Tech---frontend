@@ -944,37 +944,54 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 
 /* tête du dossier (bleu nuit) : identité et faits à gauche, actions à droite ; dessous, avancement, prochaine
    intervention, équipe et véhicules, séparés par de fins filets */
-/* tête en deux moitiés : identité à gauche, carte à droite, à fond perdu (haut, bas et droite de la tête), fondue
-   dans le bleu nuit côté texte ; légende posée sur la carte */
-.dp-tete { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 300px; overflow: hidden;
-  border-radius: 18px; background: #0f1d44; color: #fff; box-shadow: 0 24px 48px -28px rgba(15, 29, 68, .7); }
-.dp-tete-infos { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 26px 32px 26px 32px; }
-.dp-tete h1 { margin: 0; font-size: 30px; line-height: 1.12; letter-spacing: -.018em; text-wrap: balance; }
-.dp-tete .dp-ident-faits { display: flex; flex-wrap: wrap; gap: 8px 32px; margin-top: 6px; }
-.dp-tete .dp-anneau { margin-top: 10px; padding: 14px 0 0; border: 0; border-top: 1px solid rgba(255, 255, 255, .12); }
-.dp-tete .dp-actions { margin-top: auto; padding-top: 18px; }
-.dp-urgent { align-self: flex-start; padding: 1px 10px; border: 1px solid #ff8a8a; border-radius: 999px;
-  background: rgba(255, 138, 138, .14); color: #ffc2c2; font-size: 12px; font-weight: 650; }
-.dp-tete-carte { position: relative; margin: 0; min-width: 0; min-height: 300px; }
+/* tête : la carte occupe toute la tête ; l'identité flotte dessus dans un panneau bleu nuit dépoli, à gauche (le
+   cadrage laisse sa largeur libre, les repères restent à côté) ; légende et zoom posés sur la carte. Téléphone :
+   panneau au-dessus, carte dessous. */
+.dp-tete { position: relative; display: flex; align-items: stretch; min-height: 310px; overflow: hidden; border-radius: 18px;
+  background: #0f1d44; color: #fff; box-shadow: 0 24px 48px -28px rgba(15, 29, 68, .7); }
+.dp-tete-carte { position: absolute; inset: 0; margin: 0; }
 .dp-tete-carte .dp-carte { position: absolute; inset: 0; height: auto; border: 0; border-radius: 0; z-index: 0; }
-.dp-tete-carte::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 88px; z-index: 1; pointer-events: none;
-  background: linear-gradient(90deg, #0f1d44 0%, rgba(15, 29, 68, .6) 38%, rgba(15, 29, 68, 0) 100%); }
-.dp-tete-carte .dp-carte .leaflet-tile-pane { filter: saturate(.45) contrast(.94) brightness(1.03); }
-.dp-tete-carte .dp-carte-vide { display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, .04);
-  color: #9fb0dc; }
-.dp-tete-carte .leaflet-control-zoom { margin: 14px 14px 0 0; border: 0; border-radius: 10px; overflow: hidden;
+.dp-tete-carte::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 62%; z-index: 1; pointer-events: none;
+  background: linear-gradient(90deg, rgba(15, 29, 68, .55) 0%, rgba(15, 29, 68, .25) 55%, rgba(15, 29, 68, 0) 100%); }
+.dp-tete-carte .dp-carte .leaflet-tile-pane { filter: saturate(.5) contrast(.95) brightness(1.02); }
+.dp-tete-carte .dp-carte-vide { display: flex; align-items: center; justify-content: flex-end; padding: 0 48px;
+  background: radial-gradient(circle at 75% 40%, #1d3170 0%, #0f1d44 70%); color: #9fb0dc; }
+.dp-tete-carte .leaflet-control-zoom { margin: 16px 16px 0 0; border: 0; border-radius: 10px; overflow: hidden;
   box-shadow: 0 6px 18px -8px rgba(15, 29, 68, .6); }
 .dp-tete-carte .leaflet-control-zoom a { width: 30px; height: 30px; line-height: 30px; color: #0f1d44; }
 .dp-tete-carte .leaflet-control-attribution { border-top-left-radius: 8px; background: rgba(255, 255, 255, .78); font-size: 10.5px; }
-.dp-tete .dp-legende { position: absolute; left: 56px; bottom: 14px; z-index: 2; padding: 6px 12px; border-radius: 999px;
+.dp-tete .dp-legende { position: absolute; right: 16px; bottom: 30px; z-index: 2; padding: 6px 12px; border-radius: 999px;
   background: rgba(15, 29, 68, .82); color: #dbe3fb; backdrop-filter: blur(6px); box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .5); }
 .dp-tete .dp-leg-site { background: #0f1d44; border-color: #7aa2ff; }
+
+.dp-tete-panneau { position: relative; z-index: 2; flex: none; margin: 18px; width: min(540px, 46%);
+  display: flex; flex-direction: column; gap: 8px; padding: 22px 26px; border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 16px; background: rgba(13, 24, 58, .86); backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25); box-shadow: 0 26px 50px -26px rgba(3, 8, 26, .8); }
+.dp-tete h1 { margin: 0; font-size: 30px; line-height: 1.12; letter-spacing: -.018em; text-wrap: balance; }
+.dp-tete .dp-client { flex-wrap: wrap; }
+.dp-urgent { padding: 1px 10px; border: 1px solid #ff8a8a; border-radius: 999px; background: rgba(255, 138, 138, .14);
+  color: #ffc2c2; font-size: 12px; font-weight: 650; }
+/* type de service de la commande : étiquette sous le titre */
+.dp-type-service { align-self: flex-start; margin: 2px 0 0; padding: 2px 10px; border-radius: 6px; background: rgba(122, 162, 255, .16);
+  color: #c9d8ff; font-size: 12px; font-weight: 650; letter-spacing: .02em; }
+/* faits de la commande : bandeau segmenté */
+.dp-tete .dp-ident-faits { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 0; margin-top: 10px;
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; background: rgba(255, 255, 255, .04); overflow: hidden; }
+.dp-tete .dp-ident-faits > div { min-width: 0; padding: 10px 14px; border-left: 1px solid rgba(255, 255, 255, .1); }
+.dp-tete .dp-ident-faits > div:first-child { border-left: 0; }
+.dp-tete .dp-ident-faits dt { font-size: 11.5px; color: #9fb0dc; }
+.dp-tete .dp-ident-faits dd { margin: 3px 0 0; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.dp-tete .dp-anneau { margin-top: 10px; padding: 14px 0 0; border: 0; border-top: 1px solid rgba(255, 255, 255, .12); }
+.dp-tete .dp-actions { margin-top: auto; padding-top: 18px; }
 @media (max-width: 1000px) {
-  .dp-tete { grid-template-columns: minmax(0, 1fr); }
-  .dp-tete-carte { min-height: 240px; }
+  .dp-tete { flex-direction: column; min-height: 0; }
+  .dp-tete-panneau { margin: 0; width: auto; order: 1; border: 0; border-radius: 0; background: #0f1d44;
+    backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+  .dp-tete-carte { position: relative; order: 2; height: 240px; }
   .dp-tete-carte::before { inset: 0 0 auto 0; width: auto; height: 56px;
     background: linear-gradient(180deg, #0f1d44 0%, rgba(15, 29, 68, 0) 100%); }
-  .dp-tete .dp-legende { left: 12px; right: auto; }
+  .dp-tete .dp-legende { left: 12px; right: auto; bottom: 26px; }
 }
 .dp-tete .e-a_planifier { stroke: #8a94ad; background: #8a94ad; }
 .dp-tete .e-planifie { stroke: #7aa2ff; background: #7aa2ff; }
@@ -1178,6 +1195,28 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .dp-odoo-ligne .dp-activite.prevue { border-color: #bfe3d8; background: var(--dispo-doux); color: #115e59; }
 .dp-odoo-ligne .dp-activite.aujourdhui { border-color: #f3d38f; background: var(--alerte-doux); color: var(--alerte); }
 .dp-odoo-ligne .dp-activite.en_retard { border-color: #f5c2c2; background: var(--erreur-doux); color: var(--erreur); }
+/* activité : la pastille s'ouvre (comme dans Odoo) sur son détail */
+.dp-odoo-ligne .dp-activite { position: relative; padding: 0; }
+.dp-activite-bouton { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 10px; border: 0;
+  border-radius: inherit; background: none; color: inherit; font: inherit; cursor: pointer; }
+.dp-activite-bouton:hover strong, .dp-activite.ouverte .dp-activite-bouton strong { text-decoration: underline; text-underline-offset: 2px; }
+.dp-activite-bouton:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dp-activite-detail { position: absolute; z-index: 30; top: calc(100% + 8px); left: 0; width: 310px; display: flex;
+  flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--bordure); border-radius: 12px;
+  background: var(--surface); color: var(--encre); font-size: 13px; font-weight: 400; line-height: 1.4;
+  box-shadow: 0 18px 40px -16px rgba(15, 29, 68, .45); }
+.dp-ad-tete { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.dp-ad-etat { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 650; }
+.dp-ad-etat.prevue { background: var(--dispo-doux); color: #115e59; }
+.dp-ad-etat.aujourdhui { background: var(--alerte-doux); color: var(--alerte); }
+.dp-ad-etat.en_retard { background: var(--erreur-doux); color: var(--erreur); }
+.dp-activite-detail dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.dp-activite-detail dl > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; }
+.dp-activite-detail dt { color: var(--encre-3); }
+.dp-activite-detail dd { margin: 0; }
+.dp-activite-detail dd small { display: block; color: var(--encre-3); }
+.dp-ad-lien { align-self: flex-start; color: var(--accent); font-weight: 650; }
+.dp-activite-detail .muet { margin: 0; font-size: 12px; }
 /* « En cours » d'Odoo : barre d'avancement sous les heures */
 .dp-barre { display: block; max-width: 150px; height: 5px; margin: 7px 0 4px; border-radius: 3px; background: #eceef2; overflow: hidden; }
 .dp-barre i { display: block; width: var(--p); height: 100%; border-radius: 3px; background: var(--accent); }

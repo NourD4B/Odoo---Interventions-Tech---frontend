@@ -7,7 +7,7 @@
 // et RSE. Mêmes libellés et mêmes calculs qu'Odoo : chaque bloc correspond à un champ ou un widget d'Odoo (voir le
 // plan, « intégration dans Odoo »). Lecture seule ; description et pièces lues dans Odoo à l'affichage, journalisées.
 import L from 'leaflet';
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet';
 import { Link, useParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
@@ -112,15 +112,18 @@ function geographie(d: Dossier) {
   return { sites: [...sites.values()], trajets: [...trajets.values()], sansPosition };
 }
 
-function Cadrage({ points }: { points: Point[] }) {
+/** Cadre la carte sur les sites et les agences ; `gauche` : largeur (px) couverte par le panneau de la tête, laissée
+ *  libre pour que les repères restent visibles à côté de lui. */
+function Cadrage({ points, gauche }: { points: Point[]; gauche: number }) {
   const map = useMap();
   const cle = points.map((p) => p.join(',')).join(';');
   useEffect(() => {
     if (!points.length) return;
+    map.invalidateSize();
     const limites = points.length === 1 ? L.latLng(points[0]).toBounds(6000) : L.latLngBounds(points);
-    map.fitBounds(limites, { padding: [32, 32], maxZoom: 13 });
+    map.fitBounds(limites, { paddingTopLeft: [gauche + 40, 44], paddingBottomRight: [60, 56], maxZoom: 13 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cle, map]);
+  }, [cle, map, gauche]);
   return null;
 }
 
@@ -145,7 +148,9 @@ const iconeSite = (site: Site) => L.divIcon({
   html: `<span style="--c:${COULEURS[site.etat]}">${site.services.length}</span>`, iconSize: [34, 34], iconAnchor: [17, 17],
 });
 
-function Carte({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite: (s: Site) => void }) {
+function Carte({ d, actif, onSite, gauche = 0 }: {
+  d: Dossier; actif: number | null; onSite: (s: Site) => void; gauche?: number;
+}) {
   const { sites, trajets } = useMemo(() => geographie(d), [d]);
   const points = [...sites.map((s) => s.position), ...trajets.map((t) => t.depart)];
   const agences = regrouperAgences(trajets);
@@ -155,7 +160,7 @@ function Carte({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite:
       <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19}
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
       <ZoomControl position="topright" />
-      <Cadrage points={points} />
+      <Cadrage points={points} gauche={gauche} />
       {trajets.map((t) => {
         const allume = actif !== null && t.services.includes(actif);
         return (
@@ -225,21 +230,47 @@ function Tete({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite: 
   const p = d.dossier, r = d.resume, c = p.commande;
   const plusieurs = d.services.length > 1;
   const geo = useMemo(() => geographie(d), [d]);
+  // commande : un bandeau de faits (numéro, date, montant) ; le type de service en étiquette sous le titre
   const faits: [string, ReactNode][] = [];
   if (p.type === 'commande') {
     faits.push(['Commande', p.nom]);
-    if (c?.date) faits.push(['Date de commande', jourCourt(c.date)]);
-    if (c && c.montant_ht !== null) faits.push(['Montant', `${euros(c.montant_ht)} HT`]);
-    if (c?.type_service) faits.push(['Type de service', c.type_service]);
+    if (c?.date) faits.push(['Commandé le', jourCourt(c.date)]);
+    if (c && c.montant_ht !== null) faits.push(['Montant HT', euros(c.montant_ht)]);
   }                                                   // sans commande : rien (pas de « non facturable »)
   const urgent = d.services.some((s) => s.priorite === 'urgente' && !s.archive_odoo);
+  // la carte occupe toute la tête ; le panneau d'identité flotte dessus, à gauche (en dessous sur téléphone) : sa
+  // largeur est laissée libre au cadrage pour que les repères restent visibles
+  const panneau = useRef<HTMLDivElement>(null);
+  const [gauche, setGauche] = useState(0);
+  useEffect(() => {
+    const el = panneau.current;
+    if (!el) return;
+    const mesurer = () => {
+      const flotte = window.matchMedia('(min-width: 1001px)').matches;      // même seuil que la feuille de style
+      setGauche(flotte ? Math.round(el.getBoundingClientRect().right - el.parentElement!.getBoundingClientRect().left) : 0);
+    };
+    mesurer();
+    const ro = new ResizeObserver(mesurer);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <header className="dp-tete">
-      <div className="dp-tete-infos">
+      <figure className="dp-tete-carte" aria-label="Sites et agences de départ">
+        <Carte d={d} actif={actif} onSite={onSite} gauche={gauche} />
+        <figcaption className="dp-legende">
+          <span><i className="dp-leg-agence" />agence de départ</span>
+          <span><i className="dp-leg-site" />site</span>
+          <span><i className="dp-leg-trajet" />trajet</span>
+          {geo.sansPosition > 0 && <span>{geo.sansPosition} sans position</span>}
+        </figcaption>
+      </figure>
+      <div className="dp-tete-panneau" ref={panneau}>
         <Link to="/dossiers" className="dp-retour">‹ Dossiers d'intervention</Link>
-        {urgent && <span className="dp-urgent">Urgent</span>}
-        <p className="dp-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
+        <p className="dp-client">{urgent && <span className="dp-urgent">Urgent</span>}
+          {p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
         <h1>{titreDossier(r)}</h1>
+        {c?.type_service && <p className="dp-type-service" title="Type de service (commande)">{c.type_service}</p>}
         {faits.length > 0 && <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
         {plusieurs && <Anneau d={d} />}
         <div className="dp-actions">
@@ -248,15 +279,6 @@ function Tete({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite: 
           {p.odoo_url && <a className="dp-odoo" href={p.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
         </div>
       </div>
-      <figure className="dp-tete-carte" aria-label="Sites et agences de départ">
-        <Carte d={d} actif={actif} onSite={onSite} />
-        <figcaption className="dp-legende">
-          <span><i className="dp-leg-agence" />agence de départ</span>
-          <span><i className="dp-leg-site" />site</span>
-          <span><i className="dp-leg-trajet" />trajet</span>
-          {geo.sansPosition > 0 && <span>{geo.sansPosition} sans position</span>}
-        </figcaption>
-      </figure>
     </header>
   );
 }
@@ -306,13 +328,53 @@ function DateMission({ s }: { s: ServiceDossier }) {
   );
 }
 
-/** « Activité suivante » de la liste Odoo : type, échéance relative, assigné ; couleur d'Odoo (retard, jour, prévue). */
-function Activite({ a, auj }: { a: ActiviteOdoo; auj: string }) {
+const ETATS_ACTIVITE: Record<ActiviteOdoo['etat'], string> = { en_retard: 'En retard', aujourdhui: "Aujourd'hui", prevue: 'Prévue' };
+const IconeActivite = () => (
+  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"
+    strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M5 6.5h6M5 9.5h4" /></svg>
+);
+
+/** « Activité suivante » de la liste Odoo : type, échéance relative, assigné ; couleur d'Odoo (retard, jour, prévue).
+ *  Un clic l'ouvre, comme dans Odoo : type, échéance, assignée à, état, et le lien vers l'activité dans Odoo, où se
+ *  lisent son résumé et sa note (jamais copiés ici) et où elle se marque faite. */
+function Activite({ a, auj, odooUrl }: { a: ActiviteOdoo; auj: string; odooUrl: string | null }) {
+  const [ouvert, setOuvert] = useState(false);
+  const boite = useRef<HTMLLIElement>(null);
+  const bouton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!ouvert) return;
+    const dehors = (e: MouseEvent) => { if (!boite.current?.contains(e.target as Node)) setOuvert(false); };
+    const echap = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { setOuvert(false); bouton.current?.focus(); } };
+    document.addEventListener('mousedown', dehors);
+    document.addEventListener('keydown', echap);
+    return () => { document.removeEventListener('mousedown', dehors); document.removeEventListener('keydown', echap); };
+  }, [ouvert]);
+  const base = odooUrl?.split('/web#')[0];
+  const id = `activite-${a.id}`;
+  const echeance = a.echeance ? new Date(`${a.echeance}T12:00:00`).toLocaleDateString('fr-FR',
+    { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : null;
   return (
-    <li className={`dp-activite ${a.etat}`} title={`Activité suivante (Odoo)${a.echeance ? `, échéance le ${jj(a.echeance)}` : ''}`}>
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"
-        strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2.5" width="12" height="11" rx="2" /><path d="M5 6.5h6M5 9.5h4" /></svg>
-      <strong>{a.type ?? 'Activité'}</strong><span>{quand(a.echeance, auj)}</span>{a.assigne && <span>· {a.assigne}</span>}
+    <li ref={boite} className={`dp-activite ${a.etat}${ouvert ? ' ouverte' : ''}`}>
+      <button ref={bouton} type="button" className="dp-activite-bouton" aria-expanded={ouvert} aria-controls={id}
+        onClick={() => setOuvert((o) => !o)}>
+        <IconeActivite /><strong>{a.type ?? 'Activité'}</strong><span>{quand(a.echeance, auj)}</span>
+        {a.assigne && <span>· {a.assigne}</span>}</button>
+      {ouvert && (
+        <div id={id} role="dialog" aria-label={`Activité ${a.type ?? ''}`} className="dp-activite-detail">
+          <p className="dp-ad-tete"><IconeActivite /><strong>{a.type ?? 'Activité'}</strong>
+            <span className={`dp-ad-etat ${a.etat}`}>{ETATS_ACTIVITE[a.etat]}</span></p>
+          <dl>
+            <div><dt>Échéance</dt><dd>{echeance ? <>{echeance}<small>{quand(a.echeance, auj)}</small></> : 'Sans échéance'}</dd></div>
+            <div><dt>Assignée à</dt><dd>{a.assigne ?? 'Personne'}</dd></div>
+          </dl>
+          {base ? <>
+            <a className="dp-ad-lien" href={`${base}/web#id=${a.id}&model=mail.activity&view_type=form`} target="_blank"
+              rel="noreferrer">Ouvrir l'activité dans Odoo ↗</a>
+            <p className="muet">Résumé, note et « Marquer comme fait » : dans Odoo (ou sur la{' '}
+              <a href={odooUrl!} target="_blank" rel="noreferrer">tâche</a>, fil de discussion).</p></>
+            : <p className="muet">Service simulé : l'activité n'existe pas dans Odoo.</p>}
+        </div>
+      )}
     </li>
   );
 }
@@ -332,7 +394,7 @@ function LigneOdoo({ s, auj }: { s: ServiceDossier; auj: string }) {
       {!!o?.assignes.length && <li title="Assignés dans Odoo"><span>Assignés</span>{o.assignes.join(', ')}</li>}
       {o?.jalon && <li title="Jalon"><span>Jalon</span>{o.jalon}</li>}
       {o?.etiquettes.map((e) => <li key={e} className="dp-odoo-etiquette">{e}</li>)}
-      {o?.activites.map((a) => <Activite key={a.id} a={a} auj={auj} />)}
+      {o?.activites.map((a) => <Activite key={a.id} a={a} auj={auj} odooUrl={s.odoo_url} />)}
     </ul>
   );
 }
@@ -412,8 +474,6 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
             <a key={it.agence.code} href={it.google} target="_blank" rel="noreferrer" className="dp-itineraire"
               title={`Itinéraire en voiture dans Google Maps (${it.techniciens.join(', ')})`}>
               Itinéraire depuis {it.agence.nom}<small>{[km(it.km), duree(it.heures)].filter(Boolean).join(', ')}</small></a>))}
-          {planifiable(s) && <Link to={lien(null)} className="dp-planifier">
-            {statut === 'publie' ? 'Voir dans la planification' : s.planification.debut ? 'Modifier la planification' : 'Planifier'}</Link>}
           {odooIci && <a href={s.odoo_url!} target="_blank" rel="noreferrer" className="dp-planifier">Ouvrir dans Odoo ↗</a>}
           <button type="button" className="dp-deplier" aria-expanded={ouvert} onClick={onBasculer}>
             {ouvert ? 'Masquer le détail' : 'Voir le détail'}</button>
