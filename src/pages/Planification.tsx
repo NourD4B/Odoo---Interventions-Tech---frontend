@@ -2,8 +2,11 @@
 // Semaine : techniciens × jours, services en barres ; glisser un service sur un technicien et un jour pour
 // l'affecter (ses jours libres s'allument), le glisser dans « À planifier » pour retirer l'affectation, survoler
 // pour le détail, cliquer pour ouvrir sa fiche (équipe, dates, véhicule, verrou). Le solveur propose, le
-// dispatcher décide. Mois : 4 semaines en cases (PlanMois). Adresse : ?vue=mois&semaine=AAAA-MM-JJ.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent,
+// dispatcher décide. Mois : 4 semaines en cases (PlanMois). Adresse : ?vue=mois&semaine=AAAA-MM-JJ ; la fiche d'un
+// service s'ouvre aussi par ?service=<id>&onglet=reglages (lien de la page Services sur site).
+// La fiche d'un service centralise tout ce qui se modifie ici : affectation (équipe, dates, véhicule, verrou) et
+// réglages de planification (techniciens sur place, type, compétences, position du site) ; le reste se modifie dans Odoo.
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent,
   type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { aujourdhui } from '../api';
@@ -14,8 +17,10 @@ import { InfoBulle, placeInfoBulle } from '../composants/InfoBulle';
 import { enregistrerFichier, exportations, nomFichier } from '../exports';
 import CartePlanif, { type AgencePlanif, type SitePlanif } from '../composants/CartePlanif';
 import MenuVehicule from '../composants/MenuVehicule';
+import ReglagesService, { FORMULAIRE_REGLAGES, siteARegler } from '../composants/ReglagesService';
 import { nomVehicule, Plaque } from '../composants/Vehicule';
 import { meteo, temps, type Meteo } from '../meteo';
+import { villeDe } from './DossierProjet';
 import PlanMois from './PlanMois';
 import {
   ErreurPlanif, planif, type AffectationProposee, type CorpsAffectation, type LivraisonAttente, type Proposition,
@@ -62,6 +67,16 @@ function jourLong(s: string) {
 const dureeService = (s: ServicePlanif) => Math.max(1, Math.ceil(s.allocated_hours / Math.max(1, s.nb_techniciens) / 8));
 const nombreH = (h: number) => `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(h)} h`;
 const client = (s: ServicePlanif) => s.partner_name ?? 'Client non renseigné';
+/** Deux flèches en cercle ; tournent pendant la synchronisation (immobiles si l'animation est réduite). */
+function IconeSynchro() {
+  return (
+    <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16.2 8.3A6.5 6.5 0 0 0 4.4 6.6" /><path d="M3.8 11.7a6.5 6.5 0 0 0 11.8 1.7" />
+      <path d="M4.2 3.2v3.6h3.6" /><path d="M15.8 16.8v-3.6h-3.6" />
+    </svg>
+  );
+}
 /** « à l'instant », « il y a 3 min », « il y a 2 h » (heure de fin du dernier cycle de synchronisation, UTC). */
 function depuisQuand(iso: string, maintenant: Date): string {
   const min = Math.max(0, Math.round((maintenant.getTime() - new Date(iso).getTime()) / 60_000));
@@ -69,6 +84,11 @@ function depuisQuand(iso: string, maintenant: Date): string {
 }
 /** État affiché ; « brouillon » = équipe en cours de composition (jamais renvoyé par l'API). */
 const etatDe = (s: ServicePlanif): string => s.affectation?.etat ?? 'a_planifier';
+/** Empreinte de l'affectation : la fiche ouverte repart de zéro quand elle change (pas pour un réglage enregistré). */
+const cleAffectation = (s: ServicePlanif): string => {
+  const a = s.affectation;
+  return a ? [a.etat, a.debut, a.fin, a.vehicle_id, ...a.matricules].join('|') : 'libre';
+};
 const absentSur = (t: TechnicienPlanif, du: string, au: string) => t.absences.some((a) => a.du <= au && a.au >= du);
 
 /** « Date prévue » saisie à la création dans Odoo Field Service : plage du planned_date_begin au date_deadline.
@@ -155,41 +175,99 @@ function LivraisonsAttente({ liste }: { liste: LivraisonAttente[] }) {
   );
 }
 
-/** Onglet « Description » du service : lu dans Odoo à la demande, jamais copié (lecture journalisée, nom demandé). */
-function DescriptionOdoo({ s }: { s: ServicePlanif }) {
-  const { ecrire, dialogue } = useEcriture();
-  const [texte, setTexte] = useState<string | null | undefined>(undefined);       // undefined : pas encore lue
-  const [lecture, setLecture] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
-  if (s.simule) return null;
-  const lire = async () => {
-    setLecture(true);
-    setErreur(null);
-    try {
-      const r = await ecrire(() => planif.description(s.id));
-      if (r) setTexte(r.texte);
-    } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setLecture(false); }
-  };
+type Ecrire = <T>(action: () => Promise<T>) => Promise<T | undefined>;
+
+/** Descriptions déjà lues pendant la visite (mémoire de l'onglet du navigateur seulement : jamais enregistrées). */
+const descriptionsLues = new Map<number, string | null>();
+
+/** Texte de la description : paragraphes et listes à puces (« • » en début de ligne, posé par le serveur). */
+function TexteDescription({ texte }: { texte: string }) {
+  const blocs: ({ p: string } | { ul: string[] })[] = [];
+  for (const ligne of texte.split('\n')) {
+    const dernier = blocs[blocs.length - 1];
+    if (!ligne.startsWith('• ')) blocs.push({ p: ligne });
+    else if (dernier && 'ul' in dernier) dernier.ul.push(ligne.slice(2));
+    else blocs.push({ ul: [ligne.slice(2)] });
+  }
   return (
-    <div className="pf-description">
-      {texte === undefined
-        ? <button type="button" className="btn btn-petit" onClick={() => void lire()} disabled={lecture}>
-          {lecture ? 'Lecture dans Odoo…' : 'Lire la description (Odoo)'}</button>
-        : <><p className="pf-raisons-titre">Description (Odoo)</p>
-          <p className="pf-description-texte">{texte ?? 'Aucune description dans Odoo.'}</p></>}
-      {erreur && <p className="erreur">{erreur}</p>}
-      {dialogue}
+    <div className="pf-description-texte">
+      {blocs.map((b, i) => ('ul' in b
+        ? <ul key={i}>{b.ul.map((x, j) => <li key={j}>{x}</li>)}</ul> : <p key={i}>{b.p}</p>))}
     </div>
   );
 }
 
-function DialogueService({ s, brouillon, techniciens, agences, propose, cause, refs, enregistrer, retirer, depublier,
-  onFermer }: {
-  s: ServicePlanif; brouillon: Brouillon | null; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
+/** Description du service : lue dans Odoo à l'ouverture de l'onglet « Service » (consultation journalisée, nom demandé
+ *  si besoin), jamais copiée dans la base de l'application. */
+function DescriptionOdoo({ s, ecrire }: { s: ServicePlanif; ecrire: Ecrire }) {
+  const [texte, setTexte] = useState<string | null | undefined>(() => descriptionsLues.get(s.id));   // undefined : pas lue
+  const [lecture, setLecture] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const demandee = useRef(false);
+  const lire = useCallback(async () => {
+    setLecture(true);
+    setErreur(null);
+    try {
+      const r = await ecrire(() => planif.description(s.id));
+      if (r) { descriptionsLues.set(s.id, r.texte); setTexte(r.texte); }
+      else setErreur('Lecture annulée : chaque consultation est journalisée, le nom est donc demandé.');
+    } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); } finally { setLecture(false); }
+  }, [ecrire, s.id]);
+  useEffect(() => {                                    // une seule lecture à l'ouverture de l'onglet
+    if (s.simule || demandee.current || descriptionsLues.has(s.id)) return;
+    demandee.current = true;
+    void lire();
+  }, [s.simule, s.id, lire]);
+
+  return (
+    <section className="pf-description" aria-labelledby="pf-titre-description" aria-busy={lecture}>
+      <div className="pf-description-tete">
+        <h3 id="pf-titre-description">Description</h3>
+        <span className="pf-aide">{s.simule ? 'service simulé' : 'lue dans Odoo, jamais copiée'}</span>
+        {!s.simule && texte !== undefined && !lecture && (
+          <button type="button" className="lien-bouton" onClick={() => void lire()}>Relire</button>)}
+      </div>
+      {s.simule ? <p className="pf-description-vide">Service simulé : il n'existe pas dans Odoo, donc pas de description.</p>
+        : lecture ? <div className="pf-description-chargement"><span className="visuellement-cache">Lecture dans Odoo…</span>
+          <i aria-hidden="true" /><i aria-hidden="true" /><i aria-hidden="true" /></div>
+        : erreur ? <p className="pf-description-vide">{erreur}{' '}
+          <button type="button" className="lien-bouton" onClick={() => void lire()}>Réessayer</button></p>
+        : texte === undefined ? null
+        : texte === null ? <p className="pf-description-vide">Aucune description dans Odoo.</p>
+        : <TexteDescription texte={texte} />}
+    </section>
+  );
+}
+
+type Onglet = 'affectation' | 'service' | 'reglages';
+const ONGLETS: { cle: Onglet; libelle: string }[] = [
+  { cle: 'affectation', libelle: 'Affectation' }, { cle: 'service', libelle: 'Service' }, { cle: 'reglages', libelle: 'Réglages' },
+];
+const lireOnglet = (x: string | null): Onglet => (x === 'service' || x === 'reglages' ? x : 'affectation');
+
+const ICONES = {
+  date: <><rect x="3" y="4.5" width="14" height="12.5" rx="2" /><path d="M3 8.5h14M7 2.5v4M13 2.5v4" /></>,
+  duree: <><circle cx="10" cy="10" r="7" /><path d="M10 6v4l2.5 2" /></>,
+  equipe: <><circle cx="7.5" cy="7" r="2.5" /><path d="M3 16c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4" /><circle cx="14" cy="7.5" r="2" />
+    <path d="M13.6 12.1c1.8.2 3 1.4 3.4 3.4" /></>,
+  lieu: <><path d="M10 17.5s5.5-5 5.5-9.5a5.5 5.5 0 0 0-11 0c0 4.5 5.5 9.5 5.5 9.5z" /><circle cx="10" cy="8" r="2" /></>,
+};
+function Repere({ icone, children }: { icone: keyof typeof ICONES; children: ReactNode }) {
+  return (
+    <li><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6"
+      strokeLinecap="round" strokeLinejoin="round">{ICONES[icone]}</svg>{children}</li>
+  );
+}
+
+function DialogueService({ s, onglet, onOnglet, brouillon, techniciens, agences, propose, cause, refs, enregistrer, retirer,
+  depublier, onReglages, onFermer }: {
+  s: ServicePlanif; onglet: Onglet; onOnglet: (o: Onglet) => void;
+  brouillon: Brouillon | null; techniciens: TechnicienPlanif[]; agences: Map<string, string>;
   propose: AffectationProposee | undefined; cause: string | undefined; refs: Referentiels | null;
   enregistrer: (s: ServicePlanif, corps: Omit<CorpsAffectation, 'version' | 'motif'>, motif?: string | null) => Promise<boolean>;
   retirer: (s: ServicePlanif) => Promise<boolean>;
   depublier: (s: ServicePlanif, motif: string | null) => Promise<boolean>;
+  onReglages: () => void;                                      // réglages enregistrés, ou conflit : recharger
   onFermer: () => void;
 }) {
   const a = s.affectation;
@@ -203,7 +281,15 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
   const [verrou, setVerrou] = useState(a?.etat === 'verrouille');
   const [note, setNote] = useState(a?.motif_derogation ?? '');      // motif facultatif (dérogation), journalisé
   const [envoi, setEnvoi] = useState(false);
+  // onglets déjà ouverts : gardés montés (réglages en cours, description déjà lue), seulement masqués
+  const [vus, setVus] = useState<Set<Onglet>>(() => new Set([onglet]));
+  const [placer, setPlacer] = useState(false);                     // « Placer le site » : réglages en mode correction
+  const [reglages, setReglages] = useState({ modifie: false, envoi: false });
+  const [reglagesOk, setReglagesOk] = useState(false);
+  const { ecrire, dialogue } = useEcriture();
   const fermer = useRef<HTMLButtonElement>(null);
+  const corps = useRef<HTMLDivElement>(null);
+  const occupe = envoi || reglages.envoi;
   const fin = plusOuvres(debut, Math.max(1, jours) - 1);
   const basculer = (m: string) => setEquipe((x) => (x.includes(m) ? x.filter((y) => y !== m) : [...x, m]));
   const parAgence = useMemo(() => {
@@ -213,187 +299,275 @@ function DialogueService({ s, brouillon, techniciens, agences, propose, cause, r
   }, [techniciens]);
   const competences = refs?.competences_actives && s.competences_requises.length
     ? s.competences_requises.map((c) => refs.competences.find((x) => x.code === c)?.libelle ?? c).join(', ') : null;
+  const surEtatReglages = useCallback((e: { modifie: boolean; envoi: boolean }) =>
+    setReglages((x) => (x.modifie === e.modifie && x.envoi === e.envoi ? x : e)), []);
 
+  useEffect(() => { fermer.current?.focus(); }, []);                // une fois, à l'ouverture
   useEffect(() => {
-    fermer.current?.focus();
-    const touche = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !envoi) onFermer(); };
+    const touche = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !occupe) onFermer(); };
     window.addEventListener('keydown', touche);
     return () => window.removeEventListener('keydown', touche);
-  }, [envoi, onFermer]);
+  }, [occupe, onFermer]);
 
+  const changerOnglet = (o: Onglet) => {
+    setVus((v) => (v.has(o) ? v : new Set(v).add(o)));
+    onOnglet(o);
+    corps.current?.scrollTo({ top: 0 });
+  };
+  /** Flèches gauche / droite, Début, Fin : d'un onglet à l'autre (motif « onglets » de l'ARIA). */
+  const toucheOnglets = (e: KeyboardEvent<HTMLDivElement>) => {
+    const k = ONGLETS.findIndex((o) => o.cle === onglet);
+    const cible = ({ ArrowRight: (k + 1) % ONGLETS.length, ArrowLeft: (k + ONGLETS.length - 1) % ONGLETS.length,
+      Home: 0, End: ONGLETS.length - 1 } as Record<string, number>)[e.key];
+    if (cible === undefined) return;
+    e.preventDefault();
+    changerOnglet(ONGLETS[cible].cle);
+    document.getElementById(`pf-onglet-${ONGLETS[cible].cle}`)?.focus();
+  };
   const agir = async (action: () => Promise<boolean>) => {
     setEnvoi(true);
     try { if (await action()) onFermer(); } finally { setEnvoi(false); }
   };
+  const placerSite = () => { setPlacer(true); changerOnglet('reglages'); };
 
   const etat = etatDe(s);
   const premier = a ? new Date(`${a.debut}T12:00:00`) : null;
+  const ville = villeDe(s.site_adresse);
+  const signalReglages = !publie && siteARegler(s);
+  const monte = (o: Onglet) => o === onglet || vus.has(o);
+  const alertes: { texte: string; action?: ReactNode }[] = [];
+  if (!publie && s.site_lat === null) {
+    alertes.push({ texte: 'Site sans position : trajet, véhicule et coût ne peuvent pas être calculés.',
+      action: <button type="button" className="lien-bouton" onClick={placerSite}>Placer le site</button> });
+  } else if (!publie && s.site_precision === 'commune') {
+    alertes.push({ texte: 'Position approximative (centre de la commune).',
+      action: <button type="button" className="lien-bouton" onClick={placerSite}>Préciser</button> });
+  }
+  if (!s.allocated_hours) alertes.push({ texte: 'Temps alloué à 0 h dans Odoo : compté 1 jour, à corriger dans Odoo.' });
+
   return (
     <div className="voile pl-voile" role="dialog" aria-modal="true" aria-labelledby="pl-titre-fiche"
-         onMouseDown={(e) => { if (e.target === e.currentTarget && !envoi) onFermer(); }}>
+         onMouseDown={(e) => { if (e.target === e.currentTarget && !occupe) onFermer(); }}>
       <div className={`pl-fiche pf etat-${etat}`}>
-        <header className="pf-tete">
-          <div className="pf-titre">
-            <p>{client(s)}{s.simule && <span className="dc-simule">simulé</span>}</p>
-            <h2 id="pl-titre-fiche">{s.name}</h2>
-            <div className="pf-badges">
-              <span className={`pf-etat etat-${etat}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
-                verrouille: 'Verrouillé', publie: 'Publié' }[etat]}</span>
-              {s.priority === '1' && <span className="pf-etat urgent">Urgent</span>}
-              {s.etape_odoo && <span className="pf-etat odoo" title="Étape dans Odoo">{s.etape_odoo}</span>}
-              {s.under_warranty && <span className="pf-etat">Sous garantie</span>}
-              {(s.etiquettes ?? []).map((e) => <span key={e} className="pf-etat etiquette">{e}</span>)}
+        <div className="pf-entete">
+          <header className="pf-tete">
+            <div className="pf-titre">
+              <p>{client(s)}{s.simule && <span className="dc-simule">simulé</span>}</p>
+              <h2 id="pl-titre-fiche">{s.name}</h2>
+              <div className="pf-badges">
+                <span className={`pf-etat etat-${etat}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
+                  verrouille: 'Verrouillé', publie: 'Publié' }[etat]}</span>
+                {s.priority === '1' && <span className="pf-etat urgent">Urgent</span>}
+                {s.etape_odoo && <span className="pf-etat odoo" title="Étape dans Odoo">{s.etape_odoo}</span>}
+                {s.under_warranty && <span className="pf-etat">Sous garantie</span>}
+                {(s.etiquettes ?? []).map((e) => <span key={e} className="pf-etat etiquette">{e}</span>)}
+              </div>
+              <ul className="pf-reperes" aria-label="En bref">
+                <Repere icone="date">{contrainteDate(s) ?? 'Date libre'}</Repere>
+                <Repere icone="duree">{s.allocated_hours
+                  ? `${nombreH(s.allocated_hours)}, ${dureeService(s)} j sur site` : '0 h dans Odoo'}</Repere>
+                <Repere icone="equipe">{s.nb_techniciens} technicien{s.nb_techniciens > 1 ? 's' : ''}
+                  {s.vehicule_requis === 'utilitaire' ? ', utilitaire' : ''}</Repere>
+                {ville && <Repere icone="lieu">{ville}</Repere>}
+              </ul>
             </div>
+            <button ref={fermer} type="button" className="sv-fermer" aria-label="Fermer" onClick={onFermer} disabled={occupe}>
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
+          </header>
+          <div className="pf-onglets" role="tablist" aria-label="Fiche du service" onKeyDown={toucheOnglets}>
+            {ONGLETS.map((o) => (
+              <button key={o.cle} type="button" role="tab" id={`pf-onglet-${o.cle}`} aria-controls={`pf-panneau-${o.cle}`}
+                aria-selected={onglet === o.cle} tabIndex={onglet === o.cle ? 0 : -1} onClick={() => changerOnglet(o.cle)}>
+                {o.libelle}
+                {o.cle === 'reglages' && signalReglages && <i className="pf-signal" title="Position du site à régler" />}
+              </button>
+            ))}
           </div>
-          <button ref={fermer} type="button" className="sv-fermer" aria-label="Fermer" onClick={onFermer} disabled={envoi}>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
-        </header>
+        </div>
 
-        <div className="pf-corps">
-          <dl className="sv-d-faits">
-            <div><dt>Date prévue</dt><dd>{contrainteDate(s) ?? 'Libre'}</dd></div>
-            <div><dt>Durée</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens > 1
-              ? `${s.nb_techniciens} techniciens, ${nombreH(s.allocated_hours / s.nb_techniciens)} chacun`
-              : '1 technicien'}, soit {dureeService(s)} jour{dureeService(s) > 1 ? 's' : ''} sur site
-              {s.vehicule_requis === 'utilitaire' ? ', utilitaire requis' : ''}</small>
-              {!s.allocated_hours && <small className="precision-faible">Temps alloué à 0 h dans Odoo : compté 1 jour</small>}</dd></div>
-            <div><dt>Commande</dt><dd>{s.commande_nom ?? 'Non facturable'}
-              {s.article_commande && <small>{s.article_commande}</small>}</dd></div>
-            {s.feuille_modele && <div><dt>Feuille de travail</dt><dd>{s.feuille_modele}</dd></div>}
-            {!!s.assignes_odoo?.length && <div><dt>Assignés dans Odoo</dt><dd>{s.assignes_odoo.join(', ')}</dd></div>}
-            {s.partner_phone && <div><dt>Contact</dt><dd>{s.partner_phone}</dd></div>}
-            {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
-            <div className="pf-large"><dt>Site</dt><dd>{s.site_adresse ?? 'Adresse non renseignée'}
-              {s.site_lat === null && <small className="precision-faible">Sans position : à placer dans les réglages du service</small>}</dd></div>
-          </dl>
-          <LivraisonsAttente liste={s.livraisons_attente ?? []} />
-          <DescriptionOdoo s={s} />
+        <div className="pf-corps" ref={corps}>
+          <div role="tabpanel" id="pf-panneau-affectation" aria-labelledby="pf-onglet-affectation" className="pf-panneau"
+               hidden={onglet !== 'affectation'}>
+            {alertes.length > 0 && (
+              <ul className="pf-alertes">{alertes.map((x) => <li key={x.texte}>{x.texte} {x.action}</li>)}</ul>
+            )}
+            <LivraisonsAttente liste={s.livraisons_attente ?? []} />
 
-          {(propose || a?.motif_derogation || cause) && (
-            <div className="pf-raisons">
-              {cause && <p className="pf-cause">Non planifié par le solveur : {cause}</p>}
-              {propose && <>
-                <p className="pf-raisons-titre">Proposition du solveur</p>
-                <p>{propose.raison_techniciens}</p>
-                <p>{propose.vehicle_id != null && <strong>{nomVehicule({ modele: propose.vehicule_modele, plaque: propose.vehicule, id: propose.vehicle_id })}. </strong>}
-                  {propose.raison_vehicule}
-                  {propose.km_aller_retour != null && `, ${Math.round(propose.km_aller_retour)} km aller-retour`}
-                  {propose.cout_estime != null && `, environ ${Math.round(propose.cout_estime)} € (hors hôtel et repas)`}</p>
-                {!publie && !a && (
-                  <button type="button" className="btn btn-petit" onClick={() => {
-                    setEquipe(propose.matricules); setDebut(propose.debut);
-                    setJours(ouvresApres(propose.debut, propose.fin) + 1); setVehicule(propose.vehicle_id);
-                  }}>Reprendre la proposition ({propose.equipe.join(', ')}, {jj(propose.debut)}
-                    {propose.fin !== propose.debut ? ` au ${jj(propose.fin)}` : ''})</button>
-                )}</>}
-              {a?.motif_derogation && <p className="pf-cause">Dérogation : {a.motif_derogation}</p>}
+            {(propose || a?.motif_derogation || cause) && (
+              <div className="pf-raisons">
+                {cause && <p className="pf-cause">Non planifié par le solveur : {cause}</p>}
+                {propose && <>
+                  <p className="pf-raisons-titre">Proposition du solveur</p>
+                  <p>{propose.raison_techniciens}</p>
+                  <p>{propose.vehicle_id != null && <strong>{nomVehicule({ modele: propose.vehicule_modele, plaque: propose.vehicule, id: propose.vehicle_id })}. </strong>}
+                    {propose.raison_vehicule}
+                    {propose.km_aller_retour != null && `, ${Math.round(propose.km_aller_retour)} km aller-retour`}
+                    {propose.cout_estime != null && `, environ ${Math.round(propose.cout_estime)} € (hors hôtel et repas)`}</p>
+                  {!publie && !a && (
+                    <button type="button" className="btn btn-petit" onClick={() => {
+                      setEquipe(propose.matricules); setDebut(propose.debut);
+                      setJours(ouvresApres(propose.debut, propose.fin) + 1); setVehicule(propose.vehicle_id);
+                    }}>Reprendre la proposition ({propose.equipe.join(', ')}, {jj(propose.debut)}
+                      {propose.fin !== propose.debut ? ` au ${jj(propose.fin)}` : ''})</button>
+                  )}</>}
+                {a?.motif_derogation && <p className="pf-cause">Dérogation : {a.motif_derogation}</p>}
+              </div>
+            )}
+
+            {publie ? (<>
+              <section className="pf-publiee" aria-labelledby="pf-titre-publiee">
+                <div className="pf-jour" aria-hidden="true">
+                  {premier && <><b>{premier.getDate()}</b><span>{MOIS_COURT[premier.getMonth()]}</span>
+                    <small>{premier.toLocaleDateString('fr-FR', { weekday: 'short' })}</small></>}
+                </div>
+                <div className="pf-publiee-corps">
+                  <h3 id="pf-titre-publiee">Affectation publiée</h3>
+                  <p className="pf-dates">{a && datesAffectation(a.debut, a.fin)}</p>
+                  {a && a.equipe.length > 0 && <div className="sv-equipe">{a.equipe.map((n) => (
+                    <span key={n} className="dc-tech"><i aria-hidden="true">{initiales(n)}</i>{n}</span>))}</div>}
+                  <p className="pf-vehicule">{a?.vehicle_id != null
+                    ? <><strong>{a.modele ?? 'Véhicule'}</strong>{a.plaque && <Plaque plaque={a.plaque} />}</>
+                    : <span className="muet">Sans véhicule</span>}</p>
+                </div>
+              </section>
+              {motif === null ? (
+                <p className="pf-note">Publiée, donc figée. Pour la modifier ou la retirer, retirez d'abord la publication : elle
+                  repasse « verrouillée », avec la même équipe, les mêmes dates et le même véhicule.</p>
+              ) : (
+                <label className="pf-motif">Pourquoi retirer la publication ? <small>Facultatif, enregistré dans le journal</small>
+                  <textarea autoFocus rows={2} maxLength={500} value={motif} onChange={(e) => setMotif(e.target.value)}
+                    placeholder="Ex. : le client a déplacé le rendez-vous" />
+                </label>
+              )}
+            </>) : (<>
+              <section className="pf-section" aria-labelledby="pl-equipe">
+                <div className="pf-section-tete">
+                  <h3 id="pl-equipe">Équipe</h3>
+                  <span className={equipe.length === s.nb_techniciens ? 'pf-compte ok' : 'pf-compte'}>
+                    {equipe.length} sur {s.nb_techniciens}</span>
+                  <button type="button" className="lien-bouton pf-taille" onClick={() => changerOnglet('reglages')}>
+                    Changer la taille de l'équipe</button>
+                </div>
+                {parAgence.map(([code, techs]) => (
+                  <div key={code} className="pl-groupe-techs">
+                    <span className="pl-groupe-nom">{agences.get(code) ?? code}</span>
+                    <div className="pl-choix-techs">
+                      {techs.map((t) => <ChoixTechnicien key={t.matricule} t={t} choisi={equipe.includes(t.matricule)}
+                        absent={absentSur(t, debut, fin)} onBasculer={() => basculer(t.matricule)} />)}
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <section className="pf-section" aria-labelledby="pl-dates">
+                <div className="pf-section-tete"><h3 id="pl-dates">Dates</h3>
+                  <span className="pf-aide">jusqu'au <strong>{jourLong(fin)}</strong></span></div>
+                <div className="pf-dates">
+                  <label>Premier jour<input type="date" value={debut} onChange={(e) => e.target.value && setDebut(e.target.value)} /></label>
+                  <label>Jours ouvrés<input type="number" min={1} max={20} value={jours}
+                    onChange={(e) => setJours(Math.max(1, Number(e.target.value) || 1))} /></label>
+                </div>
+              </section>
+
+              <section className="pf-section" aria-labelledby="pl-vehicule">
+                <div className="pf-section-tete"><h3 id="pl-vehicule">Véhicule</h3>
+                  <span className="pf-aide">les conformes d'abord</span></div>
+                <MenuVehicule serviceId={s.id} matricules={equipe} debut={debut} fin={fin} actuel={vehicule}
+                  onChoisir={(v) => setVehicule(v?.vehicle_id ?? null)} />
+              </section>
+
+              <section className="pf-section" aria-labelledby="pl-motif">
+                <div className="pf-section-tete"><h3 id="pl-motif">Motif</h3>
+                  <span className="pf-aide">facultatif, enregistré dans le journal (utile si une règle est enfreinte)</span></div>
+                <textarea className="pf-texte" aria-labelledby="pl-motif" rows={2} maxLength={500} value={note}
+                  onChange={(e) => setNote(e.target.value)} placeholder="Ex. : congé annulé par téléphone" />
+              </section>
+
+              <label className="pf-verrou">
+                <input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />
+                <span className="pl-piste" aria-hidden="true" />
+                <span><strong>Verrouiller</strong><small>Le solveur ne changera plus cette affectation</small></span>
+              </label>
+            </>)}
+          </div>
+
+          {monte('service') && (
+            <div role="tabpanel" id="pf-panneau-service" aria-labelledby="pf-onglet-service" className="pf-panneau"
+                 hidden={onglet !== 'service'}>
+              <DescriptionOdoo s={s} ecrire={ecrire} />
+              <dl className="sv-d-faits pf-faits">
+                <div><dt>Date prévue</dt><dd>{contrainteDate(s) ?? 'Libre'}</dd></div>
+                <div><dt>Temps alloué</dt><dd>{nombreH(s.allocated_hours)}<small>{s.nb_techniciens > 1
+                  ? `${s.nb_techniciens} techniciens, ${nombreH(s.allocated_hours / s.nb_techniciens)} chacun`
+                  : '1 technicien'}, soit {dureeService(s)} jour{dureeService(s) > 1 ? 's' : ''} sur site
+                  {s.vehicule_requis === 'utilitaire' ? ', utilitaire requis' : ''}</small></dd></div>
+                <div><dt>Commande</dt><dd>{s.commande_nom ?? 'Non facturable'}
+                  {s.article_commande && <small>{s.article_commande}</small>}</dd></div>
+                {s.feuille_modele && <div><dt>Feuille de travail</dt><dd>{s.feuille_modele}</dd></div>}
+                {!!s.assignes_odoo?.length && <div><dt>Assignés dans Odoo</dt><dd>{s.assignes_odoo.join(', ')}</dd></div>}
+                {s.partner_phone && <div><dt>Contact</dt><dd>{s.partner_phone}</dd></div>}
+                {competences && <div><dt>Compétences</dt><dd>{competences}</dd></div>}
+                {s.cloture_odoo && <div><dt>Dans Odoo</dt><dd>Terminé ou annulé</dd></div>}
+                <div className="pf-large"><dt>Site</dt><dd>{s.site_adresse ?? 'Adresse non renseignée'}
+                  {s.site_lat === null && <small className="precision-faible">Sans position : à placer dans « Réglages »</small>}</dd></div>
+              </dl>
             </div>
           )}
 
-          {publie ? (<>
-            <section className="pf-publiee" aria-labelledby="pf-titre-publiee">
-              <div className="pf-jour" aria-hidden="true">
-                {premier && <><b>{premier.getDate()}</b><span>{MOIS_COURT[premier.getMonth()]}</span>
-                  <small>{premier.toLocaleDateString('fr-FR', { weekday: 'short' })}</small></>}
-              </div>
-              <div className="pf-publiee-corps">
-                <h3 id="pf-titre-publiee">Affectation publiée</h3>
-                <p className="pf-dates">{a && datesAffectation(a.debut, a.fin)}</p>
-                {a && a.equipe.length > 0 && <div className="sv-equipe">{a.equipe.map((n) => (
-                  <span key={n} className="dc-tech"><i aria-hidden="true">{initiales(n)}</i>{n}</span>))}</div>}
-                <p className="pf-vehicule">{a?.vehicle_id != null
-                  ? <><strong>{a.modele ?? 'Véhicule'}</strong>{a.plaque && <Plaque plaque={a.plaque} />}</>
-                  : <span className="muet">Sans véhicule</span>}</p>
-              </div>
-            </section>
-            {motif === null ? (
-              <p className="pf-note">Publiée, donc figée. Pour la modifier ou la retirer, retirez d'abord la publication : elle
-                repasse « verrouillée », avec la même équipe, les mêmes dates et le même véhicule.</p>
-            ) : (
-              <label className="pf-motif">Pourquoi retirer la publication ? <small>Facultatif, enregistré dans le journal</small>
-                <textarea autoFocus rows={2} maxLength={500} value={motif} onChange={(e) => setMotif(e.target.value)}
-                  placeholder="Ex. : le client a déplacé le rendez-vous" />
-              </label>
-            )}
-          </>) : (<>
-            <section className="pf-section" aria-labelledby="pl-equipe">
-              <div className="pf-section-tete">
-                <h3 id="pl-equipe">Équipe</h3>
-                <span className={equipe.length === s.nb_techniciens ? 'pf-compte ok' : 'pf-compte'}>
-                  {equipe.length} sur {s.nb_techniciens}</span>
-              </div>
-              {parAgence.map(([code, techs]) => (
-                <div key={code} className="pl-groupe-techs">
-                  <span className="pl-groupe-nom">{agences.get(code) ?? code}</span>
-                  <div className="pl-choix-techs">
-                    {techs.map((t) => <ChoixTechnicien key={t.matricule} t={t} choisi={equipe.includes(t.matricule)}
-                      absent={absentSur(t, debut, fin)} onBasculer={() => basculer(t.matricule)} />)}
-                  </div>
-                </div>
-              ))}
-            </section>
-
-            <section className="pf-section" aria-labelledby="pl-dates">
-              <div className="pf-section-tete"><h3 id="pl-dates">Dates</h3>
-                <span className="pf-aide">jusqu'au <strong>{jourLong(fin)}</strong></span></div>
-              <div className="pf-dates">
-                <label>Premier jour<input type="date" value={debut} onChange={(e) => e.target.value && setDebut(e.target.value)} /></label>
-                <label>Jours ouvrés<input type="number" min={1} max={20} value={jours}
-                  onChange={(e) => setJours(Math.max(1, Number(e.target.value) || 1))} /></label>
-              </div>
-            </section>
-
-            <section className="pf-section" aria-labelledby="pl-vehicule">
-              <div className="pf-section-tete"><h3 id="pl-vehicule">Véhicule</h3>
-                <span className="pf-aide">les conformes d'abord</span></div>
-              <MenuVehicule serviceId={s.id} matricules={equipe} debut={debut} fin={fin} actuel={vehicule}
-                onChoisir={(v) => setVehicule(v?.vehicle_id ?? null)} />
-            </section>
-
-            <section className="pf-section" aria-labelledby="pl-motif">
-              <div className="pf-section-tete"><h3 id="pl-motif">Motif</h3>
-                <span className="pf-aide">facultatif, enregistré dans le journal (utile si une règle est enfreinte)</span></div>
-              <textarea className="pf-texte" aria-labelledby="pl-motif" rows={2} maxLength={500} value={note}
-                onChange={(e) => setNote(e.target.value)} placeholder="Ex. : congé annulé par téléphone" />
-            </section>
-
-            <label className="pf-verrou">
-              <input type="checkbox" checked={verrou} onChange={(e) => setVerrou(e.target.checked)} />
-              <span className="pl-piste" aria-hidden="true" />
-              <span><strong>Verrouiller</strong><small>Le solveur ne changera plus cette affectation</small></span>
-            </label>
-          </>)}
+          {monte('reglages') && (
+            <div role="tabpanel" id="pf-panneau-reglages" aria-labelledby="pf-onglet-reglages" className="pf-panneau"
+                 hidden={onglet !== 'reglages'}>
+              {refs ? (
+                <ReglagesService key={`${s.id}-${s.version}-${placer}`} service={s} refs={refs} ecrire={ecrire}
+                  corrigerPosition={placer} onEtat={surEtatReglages} onConflit={onReglages}
+                  onEnregistre={() => { setReglagesOk(true); setPlacer(false); onReglages(); }} />
+              ) : <p className="muet">Chargement des réglages…</p>}
+            </div>
+          )}
         </div>
 
         <footer className="sv-d-pied pf-pied">
           <div className="pf-liens">
             <Link to={`/statistiques/services/${s.id}`}>Fiche du service</Link>
-            <Link to={`/services?regler=${s.id}`}>Réglages du service</Link>
             {s.odoo_url && <a href={s.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
           </div>
           <div className="sv-d-boutons">
-            {!publie && a && (
-              <button type="button" className="btn pl-btn-retirer" disabled={envoi} onClick={() => void agir(() => retirer(s))}>
-                Retirer l'affectation</button>
-            )}
-            {publie && motif === null && (
-              <button type="button" className="btn pl-btn-retirer" onClick={() => setMotif('')}>Retirer la publication</button>
-            )}
-            {publie && motif !== null && (
-              <button type="button" className="btn btn-primaire" disabled={envoi}
-                onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim() || null); } finally { setEnvoi(false); } }}>
-                {envoi ? 'Retrait…' : 'Confirmer le retrait'}</button>
-            )}
-            <button type="button" className="btn" onClick={onFermer} disabled={envoi}>{publie ? 'Fermer' : 'Annuler'}</button>
-            {!publie && (
-              <button type="button" className="btn btn-primaire" disabled={!equipe.length || envoi}
-                onClick={() => void agir(() => enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou },
-                  note.trim() || null))}>
-                {envoi ? 'Enregistrement…' : a ? 'Enregistrer' : 'Affecter'}</button>
-            )}
+            {onglet === 'affectation' && (<>
+              {!publie && a && (
+                <button type="button" className="btn pl-btn-retirer" disabled={occupe} onClick={() => void agir(() => retirer(s))}>
+                  Retirer l'affectation</button>
+              )}
+              {publie && motif === null && (
+                <button type="button" className="btn pl-btn-retirer" onClick={() => setMotif('')}>Retirer la publication</button>
+              )}
+              {publie && motif !== null && (
+                <button type="button" className="btn btn-primaire" disabled={occupe}
+                  onClick={async () => { setEnvoi(true); try { await depublier(s, motif.trim() || null); } finally { setEnvoi(false); } }}>
+                  {envoi ? 'Retrait…' : 'Confirmer le retrait'}</button>
+              )}
+              <button type="button" className="btn" onClick={onFermer} disabled={occupe}>{publie ? 'Fermer' : 'Annuler'}</button>
+              {!publie && (
+                <button type="button" className="btn btn-primaire" disabled={!equipe.length || occupe}
+                  onClick={() => void agir(() => enregistrer(s, { matricules: equipe, vehicle_id: vehicule, debut, fin, verrouiller: verrou },
+                    note.trim() || null))}>
+                  {envoi ? 'Enregistrement…' : a ? 'Enregistrer' : 'Affecter'}</button>
+              )}
+            </>)}
+            {onglet === 'service' && <button type="button" className="btn" onClick={onFermer} disabled={occupe}>Fermer</button>}
+            {onglet === 'reglages' && (<>
+              {reglagesOk && !reglages.modifie && <span className="pf-enregistre" role="status">Réglages enregistrés</span>}
+              <button type="button" className="btn" onClick={onFermer} disabled={occupe}>
+                {reglages.modifie ? 'Annuler' : 'Fermer'}</button>
+              {!publie && (
+                <button type="submit" form={FORMULAIRE_REGLAGES} className="btn btn-primaire"
+                  disabled={!reglages.modifie || occupe}>
+                  {reglages.envoi ? 'Enregistrement…' : 'Enregistrer les réglages'}</button>
+              )}
+            </>)}
           </div>
         </footer>
       </div>
+      {dialogue}
     </div>
   );
 }
@@ -467,6 +641,7 @@ export default function Planification() {
   const refs = useDonnees(() => planif.referentiels(), []);
   const [proposition, setProposition] = useState<Proposition | null>(null);
   const [ouvert, setOuvert] = useState<number | null>(null);
+  const [onglet, setOnglet] = useState<Onglet>('affectation');      // onglet de la fiche ouverte
   const [message, setMessage] = useState<{ type: 'erreur' | 'ok'; texte: string } | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [enfreintes, setEnfreintes] = useState<{ client: string; regles: string[] } | null>(null);   // dernière dérogation
@@ -556,6 +731,20 @@ export default function Planification() {
   useEffect(() => {                                                                  // affecté (fiche, autre écran)
     if (brouillon && parId.get(brouillon.serviceId)?.affectation) setBrouillon(null);
   }, [brouillon, parId]);
+  // ?service=<id>&onglet=reglages (page Services sur site) : ouvre la fiche du service une fois la semaine chargée
+  const aOuvrir = Number(params.get('service')) || null;
+  const ongletDemande = params.get('onglet');
+  useEffect(() => {
+    if (aOuvrir === null || !services.donnees) return;
+    if (parId.has(aOuvrir)) { setOnglet(lireOnglet(ongletDemande)); setOuvert(aOuvrir); }
+    else setMessage({ type: 'erreur', texte: "Ce service n'apparaît pas sur cette période (terminé dans Odoo, ou planifié "
+      + 'une autre semaine).' });
+    const reste = new URLSearchParams(params);
+    reste.delete('service'); reste.delete('onglet');
+    setParams(reste, { replace: true });
+  }, [aOuvrir, ongletDemande, services.donnees, parId, params, setParams]);
+  const ouvrir = (id: number) => { setOnglet('affectation'); setOuvert(id); };
+  const fermerFiche = useCallback(() => setOuvert(null), []);
 
   // Tout se recalcule depuis le serveur après chaque changement : calendrier, carte, « À planifier », jours libres,
   // charge des techniciens et compteurs de la barre ; aussi au retour sur l'onglet (changement fait ailleurs).
@@ -566,12 +755,13 @@ export default function Planification() {
   // Services créés ou modifiés dans Odoo (Services sur site) : copie mise à jour à l'ouverture, au retour sur l'onglet et
   // toutes les 2 minutes (sautée si le dernier cycle a moins de 60 s), ou tout de suite par le bouton ; la
   // synchronisation automatique du serveur continue. Un changement recharge la semaine.
-  const [synchro, setSynchro] = useState<{ fin: string | null; enCours: boolean }>({ fin: null, enCours: false });
+  const [synchro, setSynchro] = useState<{ fin: string | null; enCours: boolean; erreur: boolean }>(
+    { fin: null, enCours: false, erreur: false });
   const synchroniser = async (bouton: boolean) => {
     setSynchro((x) => ({ ...x, enCours: true }));
     try {
       const r = await stats.synchroniser(bouton ? undefined : 60);
-      setSynchro({ fin: r.dernier_cycle ?? null, enCours: false });
+      setSynchro({ fin: r.dernier_cycle ?? null, enCours: false, erreur: false });
       const b = r.services;
       if (b && b.ajoutes.length + b.mis_a_jour.length + b.sortis.length > 0) rechargerRef.current();
       if (bouton) {
@@ -580,7 +770,8 @@ export default function Planification() {
           : 'Odoo est à jour.' });
       }
     } catch (e) {
-      setSynchro((x) => ({ ...x, enCours: false }));
+      const dejaEnCours = e instanceof ErreurStats && e.statut === 409;            // cycle du serveur en cours : pas une panne
+      setSynchro((x) => ({ ...x, enCours: false, erreur: !dejaEnCours }));
       if (bouton) {
         setMessage({ type: 'erreur', texte: e instanceof ErreurStats && e.statut === 409
           ? 'Synchronisation déjà en cours : réessayer dans un instant.' : `Synchronisation Odoo : ${e instanceof Error ? e.message : String(e)}` });
@@ -810,8 +1001,36 @@ export default function Planification() {
 
   return (
     <div className={`pl${glisse ? ' pl-glisse' : ''}`}>
-      <header className="pl-barre-outils">
+      <header className="pl-tete-page">
+      <div className="pl-titre-ligne">
         <h1>Planification</h1>
+        <div className="pl-etat" role="group" aria-label="Aujourd'hui">
+          <div className="pl-etat-case pl-etat-heure">
+            <time className="pl-etat-valeur" dateTime={maintenant.toISOString()}>{heure}</time>
+            <span className="pl-etat-texte"><strong>{dateParis}</strong><small>heure de Paris</small></span>
+          </div>
+          {actuel && temps_?.actuelle && siege && (
+            <div className="pl-etat-case pl-etat-meteo" title={`${actuel.libelle} à ${siege.nom}, maintenant`}>
+              <span className="pl-etat-icone" aria-hidden="true">{actuel.icone}</span>
+              <span className="pl-etat-valeur">{Math.round(temps_.actuelle.temperature)}°</span>
+              <span className="pl-etat-texte"><strong>{actuel.libelle}</strong><small>{siege.nom}</small></span>
+            </div>
+          )}
+          <div className={`pl-etat-case pl-etat-odoo${synchro.enCours ? ' en-cours' : synchro.erreur ? ' en-erreur' : ''}`}>
+            <span className="pl-etat-texte" aria-live="polite">
+              <strong><i aria-hidden="true" />{synchro.enCours ? 'Synchronisation…' : synchro.erreur ? 'Odoo injoignable'
+                : synchro.fin ? 'Odoo à jour' : 'Odoo'}</strong>
+              <small>{synchro.enCours ? 'Services sur site' : synchro.erreur ? 'nouvel essai dans 2 min'
+                : synchro.fin ? depuisQuand(synchro.fin, maintenant) : 'Services sur site'}</small>
+            </span>
+            <button type="button" className="pl-etat-synchro" disabled={synchro.enCours} onClick={() => void synchroniser(true)}
+              aria-label="Synchroniser avec Odoo maintenant"
+              title="Synchroniser avec Odoo maintenant (sinon automatique : à l'ouverture, au retour sur l'onglet, toutes les 2 min)">
+              <IconeSynchro /></button>
+          </div>
+        </div>
+      </div>
+      <div className="pl-barre-outils">
         <nav className="pl-periode" aria-label="Période">
           <button type="button" className="btn pl-auj" aria-current={surAujourdhui ? 'date' : undefined}
             onClick={() => aller(lundiDe(auj))}>Aujourd'hui</button>
@@ -846,18 +1065,8 @@ export default function Planification() {
               {aPlanifier.length ? `${aPlanifier.length} à planifier` : 'Ouvrir la semaine'}</button>
           )}
         </div>
+      </div>
       </header>
-      <p className="pl-contexte">
-        <span className="pl-horloge"><i aria-hidden="true" />{dateParis}, {heure} <small>heure de Paris</small></span>
-        {actuel && temps_?.actuelle && siege && <span className="pl-meteo" title={`${actuel.libelle} à ${siege.nom}`}>
-          <span aria-hidden="true">{actuel.icone}</span>{Math.round(temps_.actuelle.temperature)} °C, {actuel.libelle.toLowerCase()}
-          <small>{siege.nom}</small></span>}
-        <span className="pl-synchro" title="Services sur site d'Odoo : copie mise à jour automatiquement">
-          <i className={synchro.enCours ? 'en-cours' : ''} aria-hidden="true" />
-          {synchro.enCours ? 'Odoo : synchronisation…' : synchro.fin ? `Odoo à jour ${depuisQuand(synchro.fin, maintenant)}` : 'Odoo'}
-          <button type="button" className="lien-bouton" disabled={synchro.enCours} onClick={() => void synchroniser(true)}>
-            Synchroniser</button></span>
-      </p>
 
       {message && <div className={message.type === 'erreur' ? 'erreur' : 'succes'} role={message.type === 'erreur' ? 'alert' : 'status'}>{message.texte}</div>}
       {enfreintes && (
@@ -948,7 +1157,7 @@ export default function Planification() {
                                   + `${conflits.length ? ' conflit' : ''}${coupeAvant ? ' coupe-avant' : ''}${coupeApres ? ' coupe-apres' : ''}`
                                   + `${glisse?.serviceId === s.id ? ' en-glisse' : ''}${focus === s.id ? ' repere' : ''}`}
                                 style={{ gridColumn: `${de + 2} / ${a + 3}`, gridRow: voie + 1 }}
-                                onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse} onSurvol={setFocus}>
+                                onOuvrir={() => ouvrir(s.id)} onDebut={setGlisse} onFin={finGlisse} onSurvol={setFocus}>
                                 <span className="pl-service-client">{client(s)}</span>
                                 <span className="pl-service-nom">{s.name}</span>
                                 {etatDe(s) === 'brouillon' && (
@@ -983,7 +1192,7 @@ export default function Planification() {
           <section className="pl-carte-semaine" aria-labelledby="titre-carte-semaine">
             <div className="pl-liste-tete"><h2 id="titre-carte-semaine">Carte de la semaine</h2>
               <span className="pl-compte">{sitesCarte.length}</span></div>
-            <CartePlanif sites={sitesCarte} agences={agencesCarte} focus={focus} onSurvol={setFocus} onOuvrir={setOuvert} />
+            <CartePlanif sites={sitesCarte} agences={agencesCarte} focus={focus} onSurvol={setFocus} onOuvrir={ouvrir} />
             <div className="pc-legende" aria-hidden="true">
               <span><i className="pc-point etat-propose" />Proposé</span>
               <span><i className="pc-point etat-verrouille" />Verrouillé</span><span><i className="pc-point etat-publie" />Publié</span>
@@ -1012,7 +1221,7 @@ export default function Planification() {
                   <Glissable key={s.id} s={s} depuis={null}
                     className={`pl-carte${s.priority === '1' ? ' urgent' : ''}${glisse?.serviceId === s.id ? ' en-glisse' : ''}`
                       + `${enCours ? ' en-cours' : ''}${focus === s.id ? ' repere' : ''}`}
-                    onOuvrir={() => setOuvert(s.id)} onDebut={setGlisse} onFin={finGlisse} onSurvol={setFocus}>
+                    onOuvrir={() => ouvrir(s.id)} onDebut={setGlisse} onFin={finGlisse} onSurvol={setFocus}>
                     <span className="pl-carte-client">{client(s)}</span>
                     <span className="pl-carte-nom">{s.name}</span>
                     <span className="pl-carte-infos">{infos}</span>
@@ -1046,9 +1255,12 @@ export default function Planification() {
       </>)}
 
       {selection && (
-        <DialogueService key={`${selection.id}-${selection.version}`} s={selection} brouillon={brouillon} techniciens={techniciens}
-          agences={agences} propose={proposes.get(selection.id)} cause={causes.get(selection.id)} refs={refs.donnees}
-          enregistrer={enregistrer} retirer={retirer} depublier={depublier} onFermer={() => setOuvert(null)} />
+        // remontée seulement si l'affectation change (retrait de publication, conflit) : enregistrer des réglages garde
+        // l'onglet et l'équipe en cours de choix
+        <DialogueService key={`${selection.id}-${cleAffectation(selection)}`} s={selection} onglet={onglet} onOnglet={setOnglet}
+          brouillon={brouillon} techniciens={techniciens} agences={agences} propose={proposes.get(selection.id)}
+          cause={causes.get(selection.id)} refs={refs.donnees} enregistrer={enregistrer} retirer={retirer}
+          depublier={depublier} onReglages={recharger} onFermer={fermerFiche} />
       )}
       {confirmerRetrait && (
         <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-retrait"

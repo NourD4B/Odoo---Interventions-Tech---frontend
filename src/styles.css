@@ -1543,30 +1543,16 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .sv-lien { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
 .sv-lien:hover, .sv-lien:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 
-.sv-dialogue { width: min(720px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; overflow: hidden;
-  border-radius: 16px; background: var(--surface); box-shadow: 0 30px 60px -20px rgba(15, 29, 68, .45); }
-.sv-d-tete { display: flex; align-items: flex-start; gap: 16px; padding: 18px 20px 18px 24px; background: #0f1d44; color: #fff; }
-.sv-d-titre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.sv-d-titre p { margin: 0; font-size: 12px; color: #a9b8e3; }
-.sv-d-titre h2 { font-size: 20px; line-height: 1.25; font-weight: 650; letter-spacing: -.01em; overflow-wrap: anywhere; }
 .sv-fermer { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgba(255, 255, 255, .22);
   border-radius: 10px; background: transparent; color: #fff; cursor: pointer; }
 .sv-fermer svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .sv-fermer:hover { background: rgba(255, 255, 255, .08); }
 .sv-fermer:focus-visible { outline: 2px solid #7aa2ff; outline-offset: 2px; }
-.sv-d-corps { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding: 20px 24px; }
 .sv-d-faits { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 22px; padding: 16px 18px;
   border-radius: 12px; background: #f6f7f9; }
 .sv-d-faits dt { font-size: 12px; color: var(--encre-3); }
 .sv-d-faits dd { margin: 3px 0 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
 .sv-d-faits dd small { font-size: 12.5px; font-weight: 400; color: var(--encre-3); }
-.sv-d-note { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--alerte-doux); color: var(--alerte); font-size: 13px; line-height: 1.45; }
-.sv-d-note a { color: inherit; font-weight: 600; }
-.sv-d-reglages { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.sv-d-equipe { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
-  padding: 14px 16px; border: 1px solid var(--bordure); border-radius: 12px; }
-.sv-d-equipe small, .sv-d-position-tete small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--encre-3); }
-.sv-d-libelle { margin: 0; font-size: 14px; font-weight: 600; color: var(--encre); }
 .sv-pas { display: inline-flex; align-items: stretch; border: 1px solid var(--bordure-forte); border-radius: 10px; overflow: hidden; }
 .sv-pas button { width: 44px; min-height: 44px; border: 0; background: var(--surface); font: inherit; font-size: 20px; color: var(--encre-2); cursor: pointer; }
 .sv-pas button:hover:not(:disabled) { background: var(--neutre-doux); }
@@ -1575,18 +1561,13 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
   font-weight: 600; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
 .sv-pas input::-webkit-outer-spin-button, .sv-pas input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .sv-pas input:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
-.sv-d-reglages:disabled .sv-pas input { background: var(--neutre-doux); color: var(--encre-2); }
-.sv-d-position { display: flex; flex-direction: column; gap: 10px; }
-.sv-d-position-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 16px; }
-.sv-d-position .carte-site { height: 260px; border-radius: 12px; }
-.sv-d-aide { margin: 0; font-size: 13px; color: var(--accent); }
+.pf-reglages-champs:disabled .sv-pas input { background: var(--neutre-doux); color: var(--encre-2); }
 .sv-d-pied { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--bordure); background: #fafbfc; }
 .sv-d-boutons { display: flex; gap: 10px; margin-left: auto; }
 @media (max-width: 760px) {
   .sv-faits, .sv-d-faits { grid-template-columns: minmax(0, 1fr); }
   .sv-ligne { grid-template-columns: 50px minmax(0, 1fr); gap: 12px; padding: 14px 14px 14px 12px; }
   .sv-jour { width: 50px; }
-  .sv-d-corps { padding: 16px; }
 }
 
 /* ---------- Fiche d'un service : tête bleu nuit, planification, réalisé, matériel, argent ---------- */
@@ -1696,21 +1677,43 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .pl-fleches .btn { min-width: 40px; padding: 0; font-size: 18px; line-height: 1; }
 .pl-icone { display: inline-grid; place-items: center; width: 44px; padding: 0; }
 .pl-icone svg { width: 18px; height: 18px; }
-.pl-contexte { margin: -6px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 13.5px; color: var(--encre-2); }
-.pl-contexte small { margin-left: 6px; font-size: 12px; color: var(--encre-3); }
-.pl-horloge { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--encre); }
-.pl-horloge small { font-weight: 400; margin-left: 0; }
-.pl-horloge i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-doux); }
-.pl-meteo { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px 3px 8px; border: 1px solid var(--bordure);
-  border-radius: 999px; background: var(--surface); }
-.pl-meteo > span { font-size: 15px; }
-/* état de la copie d'Odoo (Services sur site) : mise à jour à l'ouverture, au retour sur l'onglet, par le bouton */
-.pl-synchro { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--encre-2); }
-.pl-synchro i { width: 7px; height: 7px; border-radius: 50%; background: #16a34a; }
-.pl-synchro i.en-cours { background: var(--accent); animation: pl-pulsation 1s ease-in-out infinite; }
-.pl-synchro .lien-bouton { font-size: 12.5px; }
-@keyframes pl-pulsation { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .pl-synchro i.en-cours { animation: none; } }
+/* en-tête : titre et bandeau du jour (heure de Paris, météo du siège, copie d'Odoo), puis la barre d'outils */
+.pl-tete-page { display: flex; flex-direction: column; gap: 14px; }
+.pl-titre-ligne { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.pl-titre-ligne h1 { margin: 0; }
+.pl-etat { display: flex; align-items: stretch; border: 1px solid var(--bordure); border-radius: 14px; background: var(--surface);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.pl-etat-case { min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 16px; }
+.pl-etat-case + .pl-etat-case { border-left: 1px solid var(--bordure); }
+.pl-etat-valeur { font-size: 22px; line-height: 1; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+  color: var(--encre); }
+.pl-etat-texte { min-width: 0; display: flex; flex-direction: column; gap: 3px; line-height: 1.2; }
+.pl-etat-texte strong { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--encre);
+  white-space: nowrap; }
+.pl-etat-texte small { font-size: 12px; color: var(--encre-3); white-space: nowrap; }
+.pl-etat-icone { font-size: 22px; line-height: 1; }
+.pl-etat-meteo .pl-etat-valeur { margin-left: -4px; }
+/* copie d'Odoo : point vert (à jour), bleu (en cours), rouge (injoignable) ; bouton rond, les flèches tournent */
+.pl-etat-odoo strong i { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
+.pl-etat-odoo.en-cours strong i { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-doux); }
+.pl-etat-odoo.en-erreur strong { color: var(--erreur); }
+.pl-etat-odoo.en-erreur strong i { background: var(--erreur); box-shadow: 0 0 0 3px var(--erreur-doux); }
+.pl-etat-synchro { flex: none; display: grid; place-items: center; width: 40px; height: 40px; margin-left: 4px; padding: 0;
+  border: 1px solid var(--bordure-forte); border-radius: 50%; background: var(--surface); color: var(--encre-2); cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s; }
+.pl-etat-synchro:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-doux); color: var(--accent); }
+.pl-etat-synchro:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pl-etat-synchro:disabled { cursor: progress; border-color: #b9cbf7; color: var(--accent); }
+.pl-etat-odoo.en-cours .pl-etat-synchro svg { animation: pl-tourne 1s linear infinite; }
+@keyframes pl-tourne { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pl-etat-odoo.en-cours .pl-etat-synchro svg { animation: none; } }
+@media (max-width: 760px) {                     /* téléphone : une case par ligne */
+  .pl-etat { width: 100%; flex-direction: column; }
+  .pl-etat-case { min-height: 52px; padding: 6px 14px; }
+  .pl-etat-case + .pl-etat-case { border-left: 0; border-top: 1px solid var(--bordure); }
+  .pl-etat-texte strong, .pl-etat-texte small { white-space: normal; }
+  .pl-etat-odoo .pl-etat-synchro { margin-left: auto; }
+}
 .pl-jour-meteo { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600;
   color: var(--encre-3); font-variant-numeric: tabular-nums; }
 .pl-jour-meteo > span { font-size: 14px; }
@@ -1861,10 +1864,85 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .pf-livraisons ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .pf-livraisons strong { color: var(--encre); }
 .pf-livraisons small { color: var(--encre-3); font-size: 12px; }
-.pf-description { display: flex; flex-direction: column; gap: 6px; }
-.pf-description .btn { align-self: flex-start; }
-.pf-description-texte { margin: 0; padding: 12px 14px; border: 1px solid var(--bordure); border-radius: 10px; font-size: 13px;
-  line-height: 1.5; color: var(--encre-2); white-space: pre-line; max-height: 220px; overflow-y: auto; }
+/* en bref (date prévue, durée, équipe, ville) et onglets, dans la tête bleu nuit */
+.pf-entete { flex: none; background: #0f1d44; color: #fff; }
+.pf-entete .pf-tete { padding-bottom: 14px; }
+.pf-reperes { margin: 2px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: #c9d4f2; }
+.pf-reperes li { display: inline-flex; align-items: center; gap: 6px; }
+.pf-reperes svg { flex: none; color: #7aa2ff; }
+.pf-onglets { display: flex; gap: 2px; padding: 0 14px; border-top: 1px solid rgba(255, 255, 255, .1); }
+.pf-onglets button { position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 46px; padding: 0 12px;
+  border: 0; background: none; font: inherit; font-size: 14px; font-weight: 600; color: #a9b8e3; cursor: pointer; }
+.pf-onglets button:hover { color: #fff; }
+.pf-onglets button[aria-selected="true"] { color: #fff; }
+.pf-onglets button[aria-selected="true"]::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px;
+  border-radius: 3px 3px 0 0; background: #7aa2ff; }
+.pf-onglets button:focus-visible { outline: 2px solid #7aa2ff; outline-offset: -6px; border-radius: 10px; }
+.pf-signal { width: 7px; height: 7px; border-radius: 50%; background: #fbbf24; box-shadow: 0 0 0 2px rgba(251, 191, 36, .25); }
+.pf-panneau { display: flex; flex-direction: column; gap: 18px; }
+.pf-panneau[hidden] { display: none; }
+.pf-taille { margin-left: auto; padding: 0; font-size: 12.5px; }
+.pf-alertes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pf-alertes li { position: relative; padding: 10px 14px 10px 36px; border-radius: 10px; background: var(--alerte-doux);
+  color: var(--alerte); font-size: 13px; line-height: 1.45; }
+.pf-alertes li::before { content: "!"; position: absolute; left: 12px; top: 11px; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--alerte); color: #fff; font-size: 11px; font-weight: 700; line-height: 16px; text-align: center; }
+.pf-alertes .lien-bouton { padding: 0; font-weight: 700; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+/* description du service (lue dans Odoo) : carte de lecture, paragraphes et puces */
+.pf-description { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 18px; border: 1px solid var(--bordure);
+  border-radius: 14px; background: #fbfbfd; }
+.pf-description-tete { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.pf-description-tete h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.pf-description-tete .lien-bouton { margin-left: auto; padding: 0; }
+.pf-description-texte { max-width: 68ch; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.6;
+  color: var(--encre); overflow-wrap: anywhere; }
+.pf-description-texte p { margin: 0; }
+.pf-description-texte ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.pf-description-texte li { position: relative; padding-left: 18px; }
+.pf-description-texte li::before { content: ""; position: absolute; left: 4px; top: .62em; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); }
+.pf-description-vide { margin: 0; font-size: 13.5px; color: var(--encre-3); }
+.pf-description-vide .lien-bouton { padding: 0; }
+.pf-description-chargement { display: flex; flex-direction: column; gap: 9px; padding: 4px 0; }
+.pf-description-chargement i { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #eceef2 0, #f6f7f9 50%, #eceef2 100%);
+  background-size: 200% 100%; animation: pf-lueur 1.2s ease-in-out infinite; }
+.pf-description-chargement i:nth-of-type(2) { width: 92%; }
+.pf-description-chargement i:nth-of-type(3) { width: 58%; }
+@keyframes pf-lueur { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .pf-description-chargement i { animation: none; } }
+
+/* onglet « Réglages » : seuls réglages modifiables ici (absents d'Odoo) */
+.pf-reglages { display: flex; flex-direction: column; gap: 16px; }
+.pf-reglages h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.pf-reglages p.pf-aide { margin: 0; }
+.pf-reglages-champs { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.pf-reglages .pf-reglage-ligne { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.pf-reglages .pf-reglage-ligne > div:first-child { flex: 1 1 260px; display: flex; flex-direction: column; gap: 3px; }
+.pf-reglage-ligne .erreur-champ { flex-basis: 100%; }
+.pf-select { align-self: flex-start; min-height: 44px; min-width: 260px; max-width: 100%; padding: 0 12px; border: 1px solid var(--bordure-forte);
+  border-radius: 10px; background: var(--surface); font: inherit; font-size: 14px; }
+.pf-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-doux); }
+.pf-puces { display: flex; flex-wrap: wrap; gap: 8px; }
+.pf-puce { position: relative; }
+.pf-puce input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.pf-puce span { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--bordure-forte);
+  border-radius: 999px; font-size: 13.5px; cursor: pointer; }
+.pf-puce input:checked + span { border-color: var(--accent); background: var(--accent-doux); color: var(--accent); font-weight: 600; }
+.pf-puce input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pf-reglages-champs:disabled .pf-puce span, .pf-reglages-champs:disabled .pf-select { cursor: not-allowed; opacity: .7; }
+.pf-reglages .pf-section.pf-position { padding-top: 16px; border-top: 1px solid #eef0f3; }
+.pf-position-tete { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 10px 16px; }
+.pf-position-tete > div { flex: 1 1 280px; display: flex; flex-direction: column; gap: 3px; }
+.pf-adresse { margin: 2px 0 0; font-size: 14px; color: var(--encre); }
+.pf-aide.precision-faible { color: var(--alerte); }
+.pf-consigne { margin: 0; font-size: 13px; font-weight: 600; color: var(--accent); }
+.pf-carte.carte-site { height: 280px; border-radius: 12px; }
+.pf-reglages-fige { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--neutre-doux); color: var(--encre-2);
+  font-size: 13px; line-height: 1.45; }
+.pf-pied .sv-d-boutons { align-items: center; flex-wrap: wrap; }
+.pf-enregistre { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--dispo); }
+.pf-enregistre::before { content: "✓"; }
 
 .pf-publiee { display: flex; align-items: flex-start; gap: 16px; padding: 16px; border: 1px solid var(--bordure); border-radius: 14px; }
 .pf-jour { flex: none; width: 62px; padding: 8px 0 7px; display: flex; flex-direction: column; align-items: center; line-height: 1;

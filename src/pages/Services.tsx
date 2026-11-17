@@ -1,16 +1,14 @@
-// Services sur site : tâches Odoo Field Service (lecture seule, créées et modifiées dans Odoo) + réglages de
-// planification absents d'Odoo, seuls champs modifiables ici : nombre de techniciens et position du site (les autres
-// réglages déjà enregistrés sont renvoyés tels quels).
-import { useEffect, useMemo, useState } from 'react';
-import { CircleMarker, MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
-import { Link, useSearchParams } from 'react-router-dom';
+// Services sur site : tâches Odoo Field Service, en lecture seule (créées et modifiées dans Odoo). Les réglages de
+// planification absents d'Odoo (techniciens sur place, type, compétences, position du site) se modifient dans la fiche
+// du service de la Planification, seul endroit d'écriture : chaque ligne y mène (onglet « Réglages » si le site est à régler).
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { aujourdhui } from '../api';
 import { Avertissements, Badge, EtatChargement, initiales, useDonnees } from '../composants';
-import { useEcriture } from '../composants/Ecriture';
 import { nomVehicule } from '../composants/Vehicule';
 import { SynchroOdoo } from '../composants/Statistiques';
 import {
-  ErreurPlanif, erreursParChamp, LIBELLES_PRECISION, LIBELLES_STATUT_PLANIF,
-  planif, type ReglagesPlanif, type Referentiels, type ServicePlanif, type StatutPlanif,
+  LIBELLES_STATUT_PLANIF, planif, type Referentiels, type ServicePlanif, type StatutPlanif,
 } from '../planification';
 import { jourCourt } from '../statistiques';
 import { villeDe } from './DossierProjet';
@@ -61,204 +59,21 @@ function jourDe(s: ServicePlanif): { iso: string; legende: string } | null {
   return null;
 }
 
-// ---------- réglages d'un service ----------
-
-const CENTRE_FRANCE: [number, number] = [46.6, 2.4];
-
-function ClicCarte({ actif, onClic }: { actif: boolean; onClic: (lat: number, lng: number) => void }) {
-  useMapEvents({ click: (e) => { if (actif) onClic(Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6))); } });
-  return null;
+/** Fiche du service dans la Planification, sur la semaine où elle le montre : celle de son affectation, sinon celle où il
+ *  peut être planifié (sa « Date prévue » Odoo, jamais avant aujourd'hui). */
+function lienPlanification(s: ServicePlanif, onglet: 'reglages' | null): string {
+  const auj = aujourdhui();
+  const prevu = s.planned_date_begin?.slice(0, 10) ?? s.fenetre_debut ?? null;
+  const p = new URLSearchParams({ semaine: s.affectation?.debut ?? (prevu && prevu > auj ? prevu : auj), service: String(s.id) });
+  if (onglet) p.set('onglet', onglet);
+  return `/planification?${p}`;
 }
-
-function reglagesDe(s: ServicePlanif): ReglagesPlanif {
-  return { type_service_id: s.type_service_id, nb_techniciens: s.nb_techniciens, competences_requises: s.competences_requises,
-    vehicule_requis: s.vehicule_requis, fenetre_debut: s.fenetre_debut, fenetre_fin: s.fenetre_fin,
-    site_lat: s.site_lat, site_lng: s.site_lng };
-}
-
-function DialogueReglages({ service: s, refs, ecrire, onFini, onConflit }: {
-  service: ServicePlanif; refs: Referentiels;
-  ecrire: <T>(action: () => Promise<T>) => Promise<T | undefined>;
-  onFini: (r: ServicePlanif | null) => void; onConflit: () => void;
-}) {
-  const [r, setR] = useState<ReglagesPlanif>(() => reglagesDe(s));
-  const [corriger, setCorriger] = useState(s.site_lat === null);
-  const [erreurs, setErreurs] = useState<Record<string, string>>({});
-  const [erreur, setErreur] = useState<{ texte: string; conflit: boolean } | null>(null);
-  const [envoi, setEnvoi] = useState(false);
-  const maj = (champs: Partial<ReglagesPlanif>) => {
-    setR((x) => ({ ...x, ...champs }));
-    setErreurs((e) => Object.fromEntries(Object.entries(e).filter(([k]) =>
-      !(k in champs) && !(k === 'position' && 'site_lat' in champs))));
-  };
-  const publie = s.statut_planification === 'publie';
-  const type = refs.types_service.find((t) => t.id === r.type_service_id);
-  const position: [number, number] | null = r.site_lat !== null && r.site_lng !== null ? [r.site_lat, r.site_lng] : null;
-  const positionModifiee = position !== null && (r.site_lat !== s.site_lat || r.site_lng !== s.site_lng);
-  const nb = Number.isFinite(r.nb_techniciens) ? r.nb_techniciens : 1;
-
-  useEffect(() => {
-    const touche = (e: KeyboardEvent) => { if (e.key === 'Escape' && !envoi) onFini(null); };
-    window.addEventListener('keydown', touche);
-    return () => window.removeEventListener('keydown', touche);
-  }, [envoi, onFini]);
-
-  const choisirType = (id: number | null) => {
-    const t = refs.types_service.find((x) => x.id === id);
-    maj(t ? { type_service_id: id, nb_techniciens: t.nb_techniciens_defaut, competences_requises: t.competences,
-      vehicule_requis: t.vehicule_requis } : { type_service_id: null });
-  };
-  const basculer = (code: string) => maj({ competences_requises: r.competences_requises.includes(code)
-    ? r.competences_requises.filter((c) => c !== code) : [...r.competences_requises, code] });
-
-  const enregistrer = async () => {
-    setErreurs({}); setErreur(null);
-    const locales: Record<string, string> = {};
-    if (!Number.isInteger(r.nb_techniciens) || r.nb_techniciens < 1 || r.nb_techniciens > 10)
-      locales.nb_techniciens = 'Entre 1 et 10 techniciens';
-    if (corriger && position === null) locales.position = 'Cliquer sur la carte pour placer le site, ou annuler la correction';
-    if (Object.keys(locales).length) { setErreurs(locales); return; }
-    const corps = { ...r, version: s.version, fenetre_debut: r.fenetre_debut || null, fenetre_fin: r.fenetre_fin || null,
-      ...(positionModifiee ? {} : { site_lat: null, site_lng: null }) };       // null = position inchangée
-    setEnvoi(true);
-    try {
-      const fini = await ecrire(() => planif.modifierPlanification(s.id, corps));
-      if (fini) onFini(fini);
-    } catch (e) {
-      const parChamp = erreursParChamp(e);
-      setErreurs(parChamp);
-      setErreur({ conflit: e instanceof ErreurPlanif && e.statut === 409, texte: Object.keys(parChamp).length
-        ? 'Corriger les champs signalés.' : e instanceof Error ? e.message : String(e) });
-    } finally { setEnvoi(false); }
-  };
-
-  return (
-    <div className="voile" role="dialog" aria-modal="true" aria-labelledby="titre-reglages"
-         onMouseDown={(e) => { if (e.target === e.currentTarget && !envoi) onFini(null); }}>
-      <form className="sv-dialogue" noValidate onSubmit={(e) => { e.preventDefault(); void enregistrer(); }}>
-        <header className="sv-d-tete">
-          <div className="sv-d-titre">
-            <p>Réglages de planification</p>
-            <h2 id="titre-reglages">{s.name}</h2>
-            <div className="badges">
-              {s.simule && <span className="badge b-simulation">simulé</span>}
-              {s.priority === '1' && <Badge type="urgent">Urgent</Badge>}
-              <Badge type={`planif-${s.statut_planification}`}>{LIBELLES_STATUT_PLANIF[s.statut_planification]}</Badge>
-            </div>
-          </div>
-          <button type="button" className="sv-fermer" aria-label="Fermer" onClick={() => onFini(null)} disabled={envoi}>
-            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
-        </header>
-
-        <div className="sv-d-corps">
-          <dl className="sv-d-faits">
-            <div><dt>Client</dt><dd>{s.partner_name ?? '—'}{s.partner_phone && <small>{s.partner_phone}</small>}</dd></div>
-            <div><dt>Commande</dt><dd>{s.commande_nom ?? 'Non facturable'}{s.article_commande && <small>{s.article_commande}</small>}</dd></div>
-            <div><dt>Priorité</dt><dd>{s.priority === '1' ? 'Urgente' : 'Normale'}</dd></div>
-            <div><dt>Dates planifiées</dt><dd>{datesOdoo(s)}</dd></div>
-            <div><dt>Temps alloué</dt><dd>{nombreH(s.allocated_hours)}</dd></div>
-            <div><dt>Étape dans Odoo</dt><dd>{s.etape_odoo ?? '—'}{s.cloture_odoo && <small>terminé ou annulé dans Odoo</small>}</dd></div>
-            {s.feuille_modele && <div><dt>Feuille de travail</dt><dd>{s.feuille_modele}</dd></div>}
-            {!!s.assignes_odoo?.length && <div><dt>Assignés dans Odoo</dt><dd>{s.assignes_odoo.join(', ')}</dd></div>}
-            {!!s.etiquettes?.length && <div><dt>Étiquettes</dt><dd>{s.etiquettes.join(', ')}</dd></div>}
-            <div><dt>Sous garantie</dt><dd>{s.under_warranty ? 'Oui' : 'Non'}</dd></div>
-            <div><dt>Adresse du site</dt><dd>{s.site_adresse ?? '—'}</dd></div>
-            {!!s.livraisons_attente?.length && <div><dt>Matériel en livraison</dt><dd>{s.livraisons_attente.map((l) => (
-              <span key={l.nom} className="sv-livraison">{l.transporteur ?? 'Livraison'} {l.nom}{l.suivi && <>, suivi {l.suivi_url
-                ? <a href={l.suivi_url} target="_blank" rel="noreferrer">{l.suivi}</a> : l.suivi}</>}{l.prevue
-                ? `, prévue le ${l.prevue.slice(8, 10)}/${l.prevue.slice(5, 7)}` : ''}</span>))}</dd></div>}
-          </dl>
-
-          {publie && <p className="sv-d-note">Service publié : réglages figés. Pour les modifier, ouvrir
-            {' '}<Link to="/planification">Planification</Link>, cliquer sur le service puis « Retirer la publication ».</p>}
-          {erreur && (
-            <div className="erreur" role="alert">{erreur.texte}
-              {erreur.conflit && <> <button type="button" className="btn btn-petit" onClick={onConflit}>Recharger</button></>}
-            </div>
-          )}
-
-          <fieldset disabled={publie || envoi} className="sv-d-reglages">
-            <legend className="visuellement-cache">Réglages de planification</legend>
-            <div className="sv-d-equipe">
-              <div>
-                <span id="libelle-nb" className="sv-d-libelle">Nombre de techniciens</span>
-                <small>Taille de l'équipe sur place, absente d'Odoo</small>
-              </div>
-              <div className="sv-pas" role="group" aria-labelledby="libelle-nb">
-                <button type="button" aria-label="Un technicien de moins" disabled={nb <= 1}
-                        onClick={() => maj({ nb_techniciens: Math.max(1, nb - 1) })}>−</button>
-                <input autoFocus type="number" min={1} max={10} step={1} value={r.nb_techniciens} aria-labelledby="libelle-nb"
-                       aria-invalid={!!erreurs.nb_techniciens} onChange={(e) => maj({ nb_techniciens: Number(e.target.value) })} />
-                <button type="button" aria-label="Un technicien de plus" disabled={nb >= 10}
-                        onClick={() => maj({ nb_techniciens: Math.min(10, nb + 1) })}>+</button>
-              </div>
-            </div>
-            {erreurs.nb_techniciens && <span className="erreur-champ" role="alert">{erreurs.nb_techniciens}</span>}
-            {refs.types_service.length > 0 && <label className="champ">Type de service
-              <select value={r.type_service_id ?? ''} onChange={(e) => choisirType(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">Aucun</option>
-                {refs.types_service.map((t) => <option key={t.id} value={t.id}>{t.nom}</option>)}
-              </select>
-              {type && <span className="muet aide">Valeurs du type appliquées. Durée habituelle {nombreH(type.duree_defaut_h)} ;
-                la durée retenue reste le temps alloué dans Odoo.</span>}
-            </label>}
-            {refs.competences_actives && (
-              <div className="cases" role="group" aria-labelledby="titre-competences">
-                <span id="titre-competences" className="libelle-groupe">Compétences requises (aucune = tout technicien terrain)</span>
-                {refs.competences.map((c) => (
-                  <label key={c.code} className="case"><input type="checkbox" checked={r.competences_requises.includes(c.code)}
-                    onChange={() => basculer(c.code)} />{c.libelle}</label>
-                ))}
-              </div>
-            )}
-          </fieldset>
-
-          <section aria-labelledby="titre-position" className="sv-d-position">
-            <div className="sv-d-position-tete">
-              <div>
-                <h3 id="titre-position" className="sv-d-libelle">Position du site</h3>
-                <small className={!positionModifiee && (s.site_lat === null || s.site_precision === 'commune') ? 'precision-faible' : undefined}>
-                  {positionModifiee ? `Nouvelle position ${r.site_lat}, ${r.site_lng}, enregistrée comme saisie à la main`
-                    : s.site_lat === null ? "Adresse introuvable par le géocodage : placer le site sur la carte, ou corriger l'adresse dans Odoo."
-                    : `Géocodée depuis l'adresse Odoo, ${LIBELLES_PRECISION[s.site_precision ?? ''] ?? s.site_precision ?? 'précision inconnue'}`}
-                </small>
-              </div>
-              {!publie && (corriger
-                ? s.site_lat !== null && <button type="button" className="btn btn-petit" onClick={() => {
-                    setCorriger(false); maj({ site_lat: s.site_lat, site_lng: s.site_lng }); }}>Annuler la correction</button>
-                : <button type="button" className="btn btn-petit" onClick={() => setCorriger(true)}>Corriger la position</button>)}
-            </div>
-            {corriger && <p className="sv-d-aide">Cliquer sur la carte à l'endroit de l'intervention.</p>}
-            {erreurs.position && <span className="erreur-champ" role="alert">{erreurs.position}</span>}
-            <div className={`carte-site${corriger && !publie ? ' carte-site-active' : ''}`}>
-              <MapContainer center={position ?? CENTRE_FRANCE} zoom={position ? 15 : 5} scrollWheelZoom={corriger}
-                            style={{ height: '100%', width: '100%' }}>
-                <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={19}
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' />
-                <ClicCarte actif={corriger && !publie} onClic={(lat, lng) => maj({ site_lat: lat, site_lng: lng })} />
-                {position && <CircleMarker center={position} radius={9}
-                  pathOptions={{ color: '#fff', weight: 2, fillColor: positionModifiee ? '#eb6834' : '#1d4ed8', fillOpacity: 1 }} />}
-              </MapContainer>
-            </div>
-          </section>
-        </div>
-
-        <footer className="sv-d-pied">
-          {s.odoo_url && <a className="btn btn-petit" href={s.odoo_url} target="_blank" rel="noreferrer">Modifier dans Odoo ↗</a>}
-          <div className="sv-d-boutons">
-            <button type="button" className="btn" onClick={() => onFini(null)} disabled={envoi}>{publie ? 'Fermer' : 'Annuler'}</button>
-            {!publie && <button type="submit" className="btn btn-primaire" disabled={envoi}>
-              {envoi ? 'Enregistrement…' : 'Enregistrer'}</button>}
-          </div>
-        </footer>
-      </form>
-    </div>
-  );
-}
+/** Visible dans la Planification : ni archivé, ni terminé dans Odoo sans y avoir été planifié. */
+const planifiable = (s: ServicePlanif) => !s.archive_odoo && !(s.cloture_odoo && !s.affectation);
 
 // ---------- liste ----------
 
-function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referentiels | null; onRegler: () => void }) {
+function LigneService({ s, refs }: { s: ServicePlanif; refs: Referentiels | null }) {
   const a = s.affectation;
   const type = refs?.types_service.find((t) => t.id === s.type_service_id)?.nom;
   const competences = s.competences_requises.map((c) => refs?.competences.find((x) => x.code === c)?.libelle ?? c);
@@ -319,8 +134,10 @@ function LigneService({ s, refs, onRegler }: { s: ServicePlanif; refs: Referenti
         )}
 
         <div className="sv-actions">
-          {!s.archive_odoo && <button type="button" className={`btn btn-petit${aRegler(s) ? ' btn-primaire' : ''}`} onClick={onRegler}>
-            {s.statut_planification === 'publie' ? 'Voir les réglages' : 'Régler la planification'}</button>}
+          {planifiable(s) && (aRegler(s)
+            ? <Link className="btn btn-petit btn-primaire" to={lienPlanification(s, 'reglages')}>Placer le site</Link>
+            : <Link className="btn btn-petit" to={lienPlanification(s, null)}>
+              {s.statut_planification === 'publie' ? 'Voir dans la planification' : 'Ouvrir dans la planification'}</Link>)}
           {s.odoo_url && <a className="sv-lien" href={s.odoo_url} target="_blank" rel="noreferrer">Ouvrir dans Odoo ↗</a>}
         </div>
       </div>
@@ -351,22 +168,6 @@ export default function Services() {
   const [texte, setTexte] = useState('');
   const [commande, setCommande] = useState<string | null>(null);     // null : toutes ; '' : sans commande
   const [simules, setSimules] = useState(true);
-  const [edition, setEdition] = useState<ServicePlanif | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const { ecrire, dialogue } = useEcriture();
-  // ?regler=<id> (lien « Réglages du service » de la planification) : ouvre directement les réglages de ce service
-  const [params, setParams] = useSearchParams();
-  const aOuvrir = Number(params.get('regler')) || null;
-  useEffect(() => {
-    if (aOuvrir === null || !liste.donnees || !refs.donnees) return;
-    const cible = liste.donnees.find((x) => x.id === aOuvrir);
-    if (cible) {
-      if (cible.simule) setSimules(true);
-      setEdition(cible);
-      window.setTimeout(() => document.getElementById(`service-${cible.id}`)?.scrollIntoView({ block: 'center' }), 0);
-    }
-    setParams({}, { replace: true });
-  }, [aOuvrir, liste.donnees, refs.donnees, setParams]);
 
   const base = useMemo(() => (liste.donnees ?? []).filter((s) => simules || !s.simule)
     .sort((a, b) => cleTri(a).localeCompare(cleTri(b)) || a.name.localeCompare(b.name, 'fr')), [liste.donnees, simules]);
@@ -397,8 +198,8 @@ export default function Services() {
       <header className="dc-entete">
         <div>
           <h1>Services sur site</h1>
-          <p className="sous-titre">Créés et modifiés dans Odoo (application Services sur site), puis « Synchroniser ». Ici, seulement
-            ce qu'Odoo ne connaît pas : le nombre de techniciens et, si besoin, la position du site.</p>
+          <p className="sous-titre">Créés et modifiés dans Odoo (application Services sur site), copiés ici automatiquement.
+            Ce qu'Odoo ne connaît pas (techniciens sur place, position du site) se règle dans la fiche du service, en Planification.</p>
         </div>
         <SynchroOdoo onFini={liste.recharger} />
       </header>
@@ -436,14 +237,13 @@ export default function Services() {
         })}
       </div>
 
-      {message && <div className="succes" role="status">{message}</div>}
       <Avertissements liste={refs.donnees?.avertissements} />
       <EtatChargement chargement={(liste.chargement && !liste.donnees) || (refs.chargement && !refs.donnees)}
                       erreur={liste.erreur ?? refs.erreur} />
 
       <section className="sv-liste" aria-label="Services">
         {services.map((s) => (
-          <LigneService key={s.id} s={s} refs={refs.donnees} onRegler={() => { setMessage(null); setEdition(s); }} />
+          <LigneService key={s.id} s={s} refs={refs.donnees} />
         ))}
         {liste.donnees && !liste.donnees.length && (
           <div className="vide">Aucun service sur site actif dans la copie Odoo. Le créer dans Odoo (Services sur site),
@@ -454,15 +254,6 @@ export default function Services() {
         )}
       </section>
 
-      {edition && refs.donnees && (
-        <DialogueReglages key={edition.id} service={edition} refs={refs.donnees} ecrire={ecrire}
-          onConflit={() => { setEdition(null); liste.recharger(); }}
-          onFini={(r) => {
-            setEdition(null);
-            if (r) { setMessage(`Réglages de « ${r.name} » enregistrés.`); liste.recharger(); }
-          }} />
-      )}
-      {dialogue}
     </>
   );
 }
