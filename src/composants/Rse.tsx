@@ -1,6 +1,7 @@
 // Briques du score RSE : note A à E (étiquette façon étiquette énergie), choix du mode de transport d'une mission,
 // détail du calcul, méthode et sources, consommation réelle d'un véhicule.
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useEcriture } from './Ecriture';
 import { co2, MODES, NOTES, rse, SOURCES, type BilanRse, type MethodeRse, type ModeTransport, type NoteRse,
          type ProfilVehicule, type RseMission } from '../rse';
@@ -50,16 +51,17 @@ export function Etiquette({ note }: { note: NoteRse | null }) {
   );
 }
 
-/** Bandeau du dossier : étiquette, émissions, part évitée, répartition par mode, missions notées, méthode. */
-export function BandeauRse({ b }: { b: BilanRse }) {
+/** Bandeau du dossier : étiquette, émissions, part évitée, répartition par mode, missions notées, méthode.
+ *  `sousTitre` remplace « N missions notées sur M » (bandeau d'une seule mission). */
+export function BandeauRse({ b, sousTitre, vide }: { b: BilanRse; sousTitre?: ReactNode; vide?: string }) {
   const max = Math.max(1, ...b.par_mode.map((p) => p.kg_co2e));
   return (
     <section className="rs-bandeau" aria-label="Score RSE des déplacements">
       <div className="rs-bandeau-note">
         <PastilleNote note={b.note} grande />
         <div><h2>Score RSE des déplacements</h2>
-          <p>{b.notees} mission{b.notees > 1 ? 's' : ''} notée{b.notees > 1 ? 's' : ''} sur {b.missions}
-            {b.sans_mode > 0 && <>, {b.sans_mode} sans mode de transport</>}</p></div>
+          <p>{sousTitre ?? <>{b.notees} mission{b.notees > 1 ? 's' : ''} notée{b.notees > 1 ? 's' : ''} sur {b.missions}
+            {b.sans_mode > 0 && <>, {b.sans_mode} sans mode de transport</>}</>}</p></div>
       </div>
       <Etiquette note={b.note} />
       <dl className="rs-chiffres">
@@ -76,11 +78,27 @@ export function BandeauRse({ b }: { b: BilanRse }) {
             <span className="rs-mode-barre"><i style={{ width: `${Math.max(2, (100 * p.kg_co2e) / max)}%` }} /></span>
             <span className="rs-mode-kg">{co2(p.kg_co2e)}</span>
           </div>))
-          : <p className="muet">Aucune mission notée : choisir le mode de transport des missions.</p>}
+          : <p className="muet">{vide ?? 'Aucune mission notée : choisir le mode de transport des missions.'}</p>}
       </div>
       <Methode />
     </section>
   );
+}
+
+/** Même bandeau pour une seule mission (onglet « Déplacement et RSE » du dossier) : le score de la mission, son mode
+ *  et d'où il vient. */
+export function BilanMission({ r }: { r: RseMission }) {
+  const note = r.kg_co2e !== null;
+  const b: BilanRse = {
+    kg_co2e: r.kg_co2e, reference_kg: r.reference_kg, evite_pct: r.evite_pct, note: r.note, missions: 1,
+    notees: note ? 1 : 0, sans_mode: r.mode === null ? 1 : 0, estime: r.estime,
+    par_mode: note && r.mode ? [{ mode: r.mode, libelle: r.mode_libelle ?? '', missions: 1, kg_co2e: r.kg_co2e! }] : [],
+  };
+  const qui = `${r.voyageurs} personne${r.voyageurs > 1 ? 's' : ''}`;
+  return <BandeauRse b={b} sousTitre={r.mode && r.source
+    ? `${r.mode_libelle}, ${SOURCES[r.source]}, ${qui}` : 'Mode de déplacement à choisir'}
+    vide={r.mode ? 'Pas encore de score : distances inconnues (équipe à planifier, ou site sans position).'
+      : 'Pas encore de score : affecter un véhicule, ou choisir le mode de déplacement ci-dessous.'} />;
 }
 
 /** Méthode et sources (lues à l'ouverture). */
@@ -114,14 +132,33 @@ export function Methode() {
   );
 }
 
-/** Choix du mode de transport d'une mission (même clé que la future sélection Odoo). */
-export function ChoixMode({ serviceId, r, onChange }: { serviceId: number; r: RseMission; onChange: () => void }) {
+const VOITURES: ModeTransport[] = ['car_thermal', 'car_electric'];
+
+/** Mode de déplacement d'une mission (même clé que la future sélection Odoo). Il dépend du véhicule choisi : véhicule
+ *  affecté, son énergie fait le mode (thermique ou électrique), rien à choisir ici, le véhicule se change dans la
+ *  planification (`lienVehicule`). Sans véhicule : transport en commun, avion ou à pied (renseigné dans Odoo : il s'y
+ *  modifie). */
+export function ChoixMode({ serviceId, r, onChange, lienVehicule, modele }: {
+  serviceId: number; r: RseMission; onChange: () => void; lienVehicule?: string; modele?: string | null;
+}) {
   const { ecrire, dialogue } = useEcriture();
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const odoo = r.source === 'odoo';
-  const actuel = r.source === 'saisie' ? r.mode_choisi : null;
-  const choisir = async (mode: ModeTransport | null) => {
+  const actuel = r.source === 'saisie' ? r.mode_choisi : odoo ? r.mode : null;
+  const v = r.source === 'planification' ? r.vehicule : null;
+  const changer = lienVehicule && <Link to={lienVehicule}>{v ? 'Changer de véhicule' : 'Affecter un véhicule'}</Link>;
+  if (v) {
+    return (
+      <div className="rs-choix rs-par-vehicule">
+        <p className="rs-vehicule-mode"><span className="rs-vehicule-icone"><IconeMode mode={r.mode} /></span>
+          <span><strong>{r.mode_libelle}</strong>{modele && <> · {modele}</>}{v.plaque && <> · {v.plaque}</>}
+            <small>{v.carburant}, {nombre(v.consommation, 2)} {v.unite}</small></span></p>
+        <p className="muet">Le mode suit le véhicule affecté.{changer && <> {changer}</>}</p>
+      </div>
+    );
+  }
+  const choisir = async (mode: ModeTransport) => {
     if (odoo || envoi || mode === actuel) return;
     setErreur(null); setEnvoi(true);
     try {
@@ -130,19 +167,19 @@ export function ChoixMode({ serviceId, r, onChange }: { serviceId: number; r: Rs
       setErreur(e instanceof Error ? e.message : String(e));
     } finally { setEnvoi(false); }
   };
+  // voiture : seulement par le véhicule affecté (un ancien choix « voiture » reste affiché tant qu'il est retenu)
+  const modes = MODES.filter((m) => !VOITURES.includes(m.cle) || m.cle === actuel);
   return (
     <div className="rs-choix">
-      <div className="rs-segments" role="radiogroup" aria-label="Mode de transport de la mission">
-        <button type="button" role="radio" aria-checked={actuel === null} disabled={odoo || envoi}
-          className={actuel === null ? 'actif' : ''} onClick={() => void choisir(null)}
-          title="Mode déduit de la planification (voiture si un véhicule est affecté)">Automatique</button>
-        {MODES.map((m) => (
+      <div className="rs-segments" role="radiogroup" aria-label="Mode de déplacement de la mission">
+        {modes.map((m) => (
           <button key={m.cle} type="button" role="radio" aria-checked={actuel === m.cle} disabled={odoo || envoi}
-            className={actuel === m.cle || (odoo && r.mode === m.cle) ? 'actif' : ''} onClick={() => void choisir(m.cle)}>
+            className={actuel === m.cle ? 'actif' : ''} onClick={() => void choisir(m.cle)}>
             <IconeMode mode={m.cle} />{m.libelle}</button>))}
       </div>
-      <p className="muet">{r.source ? <>Mode {SOURCES[r.source]}{odoo && ' : il se modifie dans Odoo'}.</>
-        : 'Aucun mode : pas de véhicule affecté, choisir le mode de transport.'}</p>
+      <p className="muet">{odoo ? 'Mode renseigné dans Odoo : il se modifie dans Odoo.'
+        : <>Sans véhicule affecté. En voiture : affecter un véhicule dans la planification, le mode suivra son énergie.
+          {changer && <> {changer}</>}</>}</p>
       {erreur && <p className="erreur">{erreur}</p>}
       {dialogue}
     </div>

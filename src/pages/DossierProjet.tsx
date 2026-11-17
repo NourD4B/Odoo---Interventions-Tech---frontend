@@ -16,7 +16,7 @@ import { BoutonExport } from '../composants/BoutonExport';
 import DescriptionOdoo from '../composants/DescriptionOdoo';
 import { useEcriture } from '../composants/Ecriture';
 import { ListePieces, usePieces, type Pieces } from '../composants/Pieces';
-import { BandeauRse, ChoixMode, DetailRse, IconeMode, PastilleNote } from '../composants/Rse';
+import { BandeauRse, BilanMission, ChoixMode, DetailRse, IconeMode, PastilleNote } from '../composants/Rse';
 import { Barre, BadgeEtat } from '../composants/Statistiques';
 import { Plaque } from '../composants/Vehicule';
 import { dossiers, type Dossier, type Itineraire, type ServiceDossier } from '../dossiers';
@@ -231,14 +231,16 @@ function Tete({ d, actif, onSite }: { d: Dossier; actif: number | null; onSite: 
     if (c?.date) faits.push(['Date de commande', jourCourt(c.date)]);
     if (c && c.montant_ht !== null) faits.push(['Montant', `${euros(c.montant_ht)} HT`]);
     if (c?.type_service) faits.push(['Type de service', c.type_service]);
-  } else faits.push(['Commande', 'Non facturable (sans commande)']);
+  }                                                   // sans commande : rien (pas de « non facturable »)
+  const urgent = d.services.some((s) => s.priorite === 'urgente' && !s.archive_odoo);
   return (
     <header className="dp-tete">
       <div className="dp-tete-infos">
         <Link to="/dossiers" className="dp-retour">‹ Dossiers d'intervention</Link>
+        {urgent && <span className="dp-urgent">Urgent</span>}
         <p className="dp-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dp-simule">simulé</span>}</p>
         <h1>{titreDossier(r)}</h1>
-        <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+        {faits.length > 0 && <dl className="dp-ident-faits">{faits.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
         {plusieurs && <Anneau d={d} />}
         <div className="dp-actions">
           <BoutonExport className="dp-odoo" libelle="Exporter (.xlsx)" nomFichier={nomFichier('dossier', p.nom)}
@@ -362,13 +364,16 @@ function Mission({ s, d, ouvert, actif, futur, ecrire, onBasculer, onSurvol, onM
       <div className="dp-rail" aria-hidden="true"><span className="dp-point" /></div>
       <article className="dp-mission">
         <header>
-          {seul
-            ? <h3 className="dp-site-titre">{s.site.adresse ?? 'Adresse du site non renseignée'}</h3>
-            : <h3><Link to={`/statistiques/services/${s.id}`}>{s.nom}</Link></h3>}
+          {/* « urgent » en haut à gauche, devant le titre ; statut à droite */}
+          <div className="dp-mission-titre">
+            {s.priorite === 'urgente' && <span className="badge b-urgent">Urgent</span>}
+            {seul
+              ? <h3 className="dp-site-titre">{s.site.adresse ?? 'Adresse du site non renseignée'}</h3>
+              : <h3><Link to={`/statistiques/services/${s.id}`}>{s.nom}</Link></h3>}
+          </div>
           <div className="badges">
             {s.etat === 'planifie' && STATUTS_PLANIF[statut]
-              ? <Badge type={`planif-${statut}`}>{STATUTS_PLANIF[statut]}</Badge> : <BadgeEtat etat={s.etat} />}
-            {s.priorite === 'urgente' && <span className="badge b-urgent">urgent</span>}</div>
+              ? <Badge type={`planif-${statut}`}>{STATUTS_PLANIF[statut]}</Badge> : <BadgeEtat etat={s.etat} />}</div>
         </header>
         {!seul && <p className="dp-site">{s.site.adresse ?? 'Adresse du site non renseignée'}</p>}
         <LigneOdoo s={s} auj={auj} />
@@ -570,11 +575,14 @@ function Materiel({ s }: { s: ServiceDossier }) {
   </>);
 }
 
-/** Trajets des techniciens (depuis leur agence) et mode de déplacement, base du score RSE. */
+/** Score RSE de la mission (même bandeau que le dossier), trajets des techniciens depuis leur agence, mode de
+ *  déplacement (celui du véhicule affecté ; il se change avec le véhicule, dans la planification) et calcul. */
 function Deplacement({ s, onModifie }: { s: ServiceDossier; onModifie: () => void }) {
   const p = s.planification;
+  const lienVehicule = planifiable(s) ? lienPlanification(s.id, p.debut, s.prevu.debut, null) : undefined;
   return (
     <div className="dp-deplacement">
+      <BilanMission r={s.rse} />
       {p.techniciens.length > 0 && <ul className="dp-trajets">{p.techniciens.map((x) => {
         const tr = p.trajet.par_technicien.find((y) => y.matricule === x.matricule);
         return (
@@ -583,7 +591,8 @@ function Deplacement({ s, onModifie }: { s: ServiceDossier; onModifie: () => voi
               : <small>{tr?.cause ?? 'trajet inconnu'}</small>}</span></li>
         );
       })}</ul>}
-      <ChoixMode serviceId={s.id} r={s.rse} onChange={onModifie} />
+      <ChoixMode serviceId={s.id} r={s.rse} onChange={onModifie} lienVehicule={lienVehicule}
+        modele={p.vehicule?.modele ?? null} />
       <DetailRse r={s.rse} />
     </div>
   );

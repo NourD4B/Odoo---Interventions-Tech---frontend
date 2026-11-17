@@ -1,7 +1,8 @@
 // Dossiers d'intervention en cartes : un dossier = une commande client et ses interventions sur site (une intervention
 // sans commande, « Non facturable » dans Odoo, est son propre dossier). Chaque carte résume le dossier (avancement,
-// équipe, véhicules, sites, argent, score RSE, retards) et liste ses services sur site, chacun avec sa date, son
-// statut de planification, ses alertes et le lien vers sa fiche dans la Planification ; elle ouvre le dossier complet.
+// équipe, véhicules, sites, argent, score RSE, retards, « Urgent » en haut à gauche) et liste ses services sur site,
+// chacun avec sa date, son statut de planification et ses alertes ; toute la carte ouvre le dossier complet (la
+// planification s'ouvre depuis le dossier).
 // Seule liste des services sur site (l'ancienne page « Services sur site » est remplacée) : filtres par statut.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -13,7 +14,7 @@ import { Plaque } from '../composants/Vehicule';
 import { exportations, nomFichier } from '../exports';
 import { LIBELLES_STATUT_PLANIF, planif, type ServicePlanif, type StatutPlanif } from '../planification';
 import { co2 } from '../rse';
-import { alertesPlanif, aReglerPlanif, lienPlanification, planifiable } from '../servicesSurSite';
+import { alertesPlanif, aReglerPlanif } from '../servicesSurSite';
 import { euros, heures, LIBELLES_ETAT, lienDossier, nombre, stats, titreDossier, type EtatService,
   type ResumeDossier } from '../statistiques';
 import { villeDe } from './DossierProjet';
@@ -85,7 +86,8 @@ function ServicesDuDossier({ p, parId, filtre }: { p: Projet; parId: Map<number,
         const j = jourDe(s);
         const alertes = s ? alertesPlanif(s) : [];
         const statut = s ? (s.archive_odoo ? 'Archivé dans Odoo' : LIBELLES_STATUT_PLANIF[s.statut_planification]) : i.etat_libelle;
-        const precisions = [i.id === prochain && j ? relatif(j) : null, s?.priority === '1' ? 'urgent' : null]
+        // « urgent » : pastille en haut à gauche de la carte ; sur la ligne seulement s'il y a plusieurs services
+        const precisions = [i.id === prochain && j ? relatif(j) : null, !seul && s?.priority === '1' ? 'urgent' : null]
           .filter((x): x is string => !!x);
         return (
           <li key={i.id} className={`dc-service${i.id === prochain ? ' prochain' : ''}${garde(filtre, s) ? '' : ' hors-filtre'}`}>
@@ -97,10 +99,6 @@ function ServicesDuDossier({ p, parId, filtre }: { p: Projet; parId: Map<number,
                 : <><strong>{i.nom}</strong><small>{[statut, ...precisions].join(', ')}</small></>}
               {alertes.length > 0 && <small className="dc-service-alerte" title={alertes.map((x) => x.texte).join(' ; ')}>
                 {alertes[0].court}{alertes.length > 1 ? ` (+${alertes.length - 1})` : ''}</small>}</span>
-            {s && planifiable(s) && <Link className="dc-service-action" to={lienPlanification(s.id, s.affectation?.debut ?? null,
-              s.planned_date_begin ?? s.fenetre_debut, aReglerPlanif(s) ? 'reglages' : null)}>
-              {aReglerPlanif(s) ? 'Placer le site' : s.statut_planification === 'publie' ? 'Voir'
-                : s.affectation ? 'Modifier' : 'Planifier'}</Link>}
           </li>
         );
       })}
@@ -114,15 +112,17 @@ function CarteDossier({ p, parId, filtre }: { p: Projet; parId: Map<number, Serv
   const equipe = p.equipe ?? [];
   const vehicules = p.vehicules ?? [];
   const villes = [...new Set((p.sites ?? []).map(villeDe).filter((v): v is string => !!v))];
+  const urgent = p.interventions.some((i) => { const s = parId.get(i.id); return s?.priority === '1' && !s.archive_odoo; });
   return (
     <li>
       <article className={`dc${retard ? ' en-retard' : ''}`}>
         <header className="dc-tete">
           <div className="dc-titre">
-            <p className="dc-client">{p.client ?? 'Client non renseigné'}{p.simule && <span className="dc-simule">simulé</span>}</p>
+            <p className="dc-client">{urgent && <span className="dc-urgent">Urgent</span>}
+              {p.client ?? 'Client non renseigné'}{p.simule && <span className="dc-simule">simulé</span>}</p>
             <h2><Link to={lienDossier(p)} className="dc-lien">{titreDossier(p)}</Link></h2>
-            {/* le montant de la commande est le « CA HT » des chiffres plus bas : pas répété ici */}
-            <p className="dc-commande">{p.type === 'commande' ? <>Commande <strong>{p.nom}</strong></> : 'Sans commande, non facturable'}</p>
+            {/* commande seulement (montant = « CA HT » plus bas) ; rien pour une intervention sans commande */}
+            {p.type === 'commande' && <p className="dc-commande">Commande <strong>{p.nom}</strong></p>}
             {/* avancement : utile à partir de deux services (pour un seul, son statut est dans sa ligne) */}
             {p.services > 1 && <p className="dc-compte">{termines} sur {pluriel(p.services, 'intervention')} terminée{termines > 1 ? 's' : ''}</p>}
           </div>

@@ -314,9 +314,9 @@ function DialogueService({ s, onglet, onOnglet, brouillon, techniciens, agences,
               <p>{client(s)}{s.simule && <span className="dc-simule">simulé</span>}</p>
               <h2 id="pl-titre-fiche">{s.name}</h2>
               <div className="pf-badges">
+                {s.priority === '1' && <span className="pf-etat urgent">Urgent</span>}
                 <span className={`pf-etat etat-${etat}`}>{{ a_planifier: 'À planifier', propose: 'Proposé',
                   verrouille: 'Verrouillé', publie: 'Publié' }[etat]}</span>
-                {s.priority === '1' && <span className="pf-etat urgent">Urgent</span>}
                 {s.etape_odoo && <span className="pf-etat odoo" title="Étape dans Odoo">{s.etape_odoo}</span>}
                 {s.under_warranty && <span className="pf-etat">Sous garantie</span>}
                 {(s.etiquettes ?? []).map((e) => <span key={e} className="pf-etat etiquette">{e}</span>)}
@@ -415,8 +415,6 @@ function DialogueService({ s, onglet, onOnglet, brouillon, techniciens, agences,
                   <h3 id="pl-equipe">Équipe</h3>
                   <span className={equipe.length === nbVoulu ? 'pf-compte ok' : 'pf-compte'}>{equipe.length} sur {nbVoulu}</span>
                   <span className="pf-aide">du {jourLong(debut)} au {jourLong(fin)}</span>
-                  <button type="button" className="lien-bouton pf-taille" onClick={() => changerOnglet('reglages')}>
-                    Dates et taille de l'équipe</button>
                 </div>
                 {parAgence.map(([code, techs]) => (
                   <div key={code} className="pl-groupe-techs">
