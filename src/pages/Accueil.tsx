@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { lienFiche, lireAccueil, type CategorieATraiter, type Controles } from '../accueil';
 import { EtatChargement, initiales, useDonnees } from '../composants';
+import Assistant from '../composants/Assistant';
 import { meteo, temps, type Meteo } from '../meteo';
 import { auteur, planif } from '../planification';
 import { ErreurStats, stats } from '../statistiques';
@@ -162,26 +163,8 @@ export default function Accueil() {
 
       <EtatChargement chargement={accueil.chargement && !d} erreur={accueil.erreur} />
       {d && <>
-        {/* l'assistant : phrases écrites depuis les faits ; chaque action mène à la liste concernée */}
-        <section className="ac-brief" aria-labelledby="ac-bonjour">
-          <div className="ac-brief-tete">
-            <span className="ac-etoile" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2.5c.6 4.6 2.9 6.9 7.5 7.5-4.6.6-6.9 2.9-7.5 7.5-.6-4.6-2.9-6.9-7.5-7.5 4.6-.6 6.9-2.9 7.5-7.5z" />
-                <path d="M19 15.5c.25 1.9 1.1 2.75 3 3-1.9.25-2.75 1.1-3 3-.25-1.9-1.1-2.75-3-3 1.9-.25 2.75-1.1 3-3z" /></svg></span>
-            <h2 id="ac-bonjour">Bonjour{prenom ? ` ${prenom}` : ''}.</h2>
-          </div>
-          <ul className="ac-phrases">
-            {d.brief.map((p) => (
-              <li key={p.texte} className={`ton-${p.ton}`}>
-                <p>{p.texte}</p>
-                {p.actions.length > 0 && <span className="ac-phrase-actions">{p.actions.map((a) => (
-                  <button key={a.categorie} type="button" onClick={() => allerA(a.categorie)}>{libelleAction(a.categorie)}</button>))}
-                </span>}
-              </li>
-            ))}
-          </ul>
-          <p className="ac-brief-pied">Écrit à partir de la planification et de la copie d'Odoo. Aucun chiffre n'est estimé.</p>
-        </section>
+        {/* l'assistant : brief du jour puis questions ; modèle de phrases ou petit modèle local au choix */}
+        <Assistant phrases={d.brief} prenom={prenom} libelleAction={libelleAction} onAction={allerA} />
 
         <div className="ac-grille">
           <section className="ac-carte ac-traiter" aria-labelledby="ac-titre-traiter">
