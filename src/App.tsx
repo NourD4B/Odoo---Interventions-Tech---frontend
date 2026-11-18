@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api';
 import { useDonnees } from './composants';
+import Assistant, { ModeleAssistantProvider } from './composants/Assistant';
 import Accueil from './pages/Accueil';
 import CarteLive from './pages/CarteLive';
 import DossierProjet from './pages/DossierProjet';
@@ -38,6 +39,7 @@ export default function App() {
   const { pathname } = useLocation();
   useEffect(() => { setMenuOuvert(false); }, [pathname]);
   return (
+    <ModeleAssistantProvider>
     <div className="app">
       <nav className={`barre-laterale${menuOuvert ? ' ouverte' : ''}`} aria-label="Navigation principale">
         <div className="barre-tete">
@@ -94,6 +96,9 @@ export default function App() {
           <Route path="/materiel" element={<Materiel />} />
         </Routes>
       </main>
+      {/* assistant flottant, sur toutes les pages : la conversation reste ouverte d'une page à l'autre */}
+      <Assistant />
     </div>
+    </ModeleAssistantProvider>
   );
 }

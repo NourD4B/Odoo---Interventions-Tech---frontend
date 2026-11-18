@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { lienFiche, lireAccueil, type CategorieATraiter, type Controles } from '../accueil';
 import { EtatChargement, initiales, useDonnees } from '../composants';
-import Assistant, { useModeleAssistant } from '../composants/Assistant';
+import { useModeleAssistant } from '../composants/Assistant';
 import BriefDuJour from '../composants/BriefDuJour';
 import { meteo, temps, type Meteo } from '../meteo';
 import { auteur, planif } from '../planification';
@@ -166,12 +166,9 @@ export default function Accueil() {
 
       <EtatChargement chargement={accueil.chargement && !d} erreur={accueil.erreur} />
       {d && <>
-        {/* le brief du jour (gardé pour la journée) à côté de la conversation avec l'assistant (questions seulement) */}
-        <div className="ac-haut">
-          <BriefDuJour phrases={d.brief} prenom={prenom} modele={ia.modele} libelleModele={ia.libelle}
-            libelleAction={libelleAction} onAction={allerA} />
-          <Assistant modeles={ia.modeles} modele={ia.modele} onModele={ia.choisir} libelleModele={ia.libelle} />
-        </div>
+        {/* le brief du jour (gardé pour la journée) ; la conversation est dans l'assistant flottant (bouton en bas) */}
+        <BriefDuJour phrases={d.brief} prenom={prenom} modele={ia.modele} libelleModele={ia.libelle}
+          libelleAction={libelleAction} onAction={allerA} />
 
         <div className="ac-grille">
           <section className="ac-carte ac-traiter" aria-labelledby="ac-titre-traiter">
