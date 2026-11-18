@@ -1,6 +1,5 @@
 // « À valider » (accueil) : les affectations proposées (par le solveur, ou choisies sans verrou) qui attendent un
-// planificateur. « Valider » les verrouille telles quelles (le solveur ne les changera plus ; à publier ensuite avec la
-// période) ; « Refuser » retire la proposition après une confirmation sur la ligne (le service repasse à planifier).
+// planificateur. « Valider » les publie telles quelles (équipe, dates, véhicule) ; « Refuser » retire la proposition après une confirmation sur la ligne (le service repasse à planifier).
 // Chaque action passe par l'API de la planification (journalisée sous le nom saisi) ; Odoo n'est jamais modifié.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -36,7 +35,7 @@ export default function AValider({ propositions, moi, onFait }: {
       else await planif.retirerAffectation(p.service_id, p.version);
       setTraites((t) => new Set(t).add(p.service_id));
       setAConfirmer(null);
-      setAnnonce(valider ? `« ${p.nom} » validée : verrouillée, à publier avec sa période.`
+      setAnnonce(valider ? `« ${p.nom} » validée et publiée.`
         : `Proposition retirée : « ${p.nom} » repasse à planifier.`);
       onFait();
     } catch (e) {
@@ -84,8 +83,8 @@ export default function AValider({ propositions, moi, onFait }: {
                   <button type="button" className="av-bouton" disabled={bloque} onClick={() => setAConfirmer(p.service_id)}
                     title={moi ? 'Retirer cette proposition' : 'Indiquez votre nom (Planification) pour agir'}>Refuser</button>
                   <button type="button" className="av-bouton valider" disabled={bloque} onClick={() => void agir(p, true)}
-                    title={moi ? 'Verrouiller telle quelle (à publier ensuite)' : 'Indiquez votre nom (Planification) pour agir'}>
-                    {occupe === p.service_id ? 'Validation…' : 'Valider'}</button>
+                    title={moi ? 'Publier telle quelle (équipe, dates, véhicule)' : 'Indiquez votre nom (Planification) pour agir'}>
+                    {occupe === p.service_id ? 'Publication…' : 'Valider'}</button>
                 </>}
               </div>
               {erreur?.id === p.service_id && <p className="av-erreur" role="alert">{erreur.texte}</p>}

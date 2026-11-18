@@ -214,7 +214,7 @@ export const planif = {
     appel<ChoixVehicule[]>('GET', `/vehicules/${serviceId}`, { params }),
   affecter: (serviceId: number, corps: CorpsAffectation) =>
     appel<ServicePlanif>('PUT', `/affectations/${serviceId}`, { corps }),
-  /** Valide une proposition (« À valider » de l'accueil) : elle passe verrouillée telle quelle. */
+  /** Valide une proposition (« À valider » de l'accueil) : elle est publiée telle quelle. */
   valider: (serviceId: number, version: number) =>
     appel<ServicePlanif>('POST', `/services/${serviceId}/valider`, { corps: { version } }),
   depublier: (serviceId: number, version: number, motif: string | null) =>
