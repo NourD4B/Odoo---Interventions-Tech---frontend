@@ -7,6 +7,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { lireModeles, outilDirect, poserQuestion, SANS_IA, type Modeles } from '../accueil';
 import { auteur } from '../planification';
+import ReponseAssistant from './ReponseAssistant';
 
 const CLE_MODELE = 'd4b.assistant.modele';
 // suggestions : chacune appelle son outil directement (sans modèle)
@@ -19,7 +20,8 @@ const SUGGESTIONS: { libelle: string; outil: string; arguments?: Record<string, 
 ];
 const SANS_MODELE: Modeles = { ollama: false, erreur: 'modèles illisibles', defaut: SANS_IA,
   modeles: [{ nom: SANS_IA, libelle: 'Sans IA', taille: null }] };
-const secondes = (ms: number) => `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
+const secondes = (ms: number) => ms < 100 ? '< 0,1 s'
+  : `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
 
 // ---------- modèle choisi, partagé entre le brief du jour et la conversation ----------
 
@@ -75,6 +77,8 @@ export default function Assistant() {
   const [nonLu, setNonLu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState('');
+  // suggestions empilées : ouvertes tant que la conversation est vide, puis repliées (bouton « Suggestions »)
+  const [suggestions, setSuggestions] = useState(true);
   const fil = useRef<HTMLDivElement>(null);
   const champ = useRef<HTMLInputElement>(null);
   const lanceur = useRef<HTMLButtonElement>(null);
@@ -105,6 +109,7 @@ export default function Assistant() {
   /** Pose la question (bulle), attend la réponse (du modèle ou du logiciel) et la remplace dans la conversation. */
   const demander = async (q: string, reponse: () => Promise<Partial<Message>>, parModele: boolean) => {
     const idQ = suivant.current++, idR = suivant.current++;
+    setSuggestions(false);
     setMessages((m) => [...m, { id: idQ, qui: 'moi', texte: q },
       { id: idR, qui: 'assistant', texte: null, modele: parModele ? modele! : undefined, enCours: true }]);
     try {
@@ -162,8 +167,8 @@ export default function Assistant() {
               ? <p key={m.id} className="as-bulle moi">{m.texte}</p>
               : <div key={m.id} className="as-reponse">
                   {m.enCours ? <p className="as-bulle assistant attente"><Points />
-                      <span>{m.modele ? `${libelle(m.modele)} cherche dans la planification…` : 'Calcul en cours…'}</span></p>
-                    : m.texte ? <><p className="as-bulle assistant">{m.texte}</p>
+                      <span className="visuellement-cache">L'assistant réfléchit</span></p>
+                    : m.texte ? <><ReponseAssistant texte={m.texte} />
                         <p className="as-signature">{m.source === 'modele'
                           ? `${libelle(m.modele!)}, ${secondes(m.duree_ms ?? 0)} ; nombres vérifiés`
                           : `Calculé par le logiciel, ${secondes(m.duree_ms ?? 0)}${m.raison ? ` (réponse du modèle écartée : ${m.raison})` : ''}`}</p></>
@@ -172,8 +177,14 @@ export default function Assistant() {
           </div>
 
           <form className="as-saisie" onSubmit={soumettre}>
-            <span className="as-suggestions" aria-label="Suggestions de questions">{SUGGESTIONS.map((s) => (
-              <button key={s.libelle} type="button" onClick={() => suggerer(s)} disabled={attend}>{s.libelle}</button>))}</span>
+            {messages.length > 0 && (
+              <button type="button" className="as-bascule" aria-expanded={suggestions} aria-controls="as-suggestions"
+                onClick={() => setSuggestions((o) => !o)}>
+                Suggestions
+                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d={suggestions ? 'm4 10 4-4 4 4' : 'm4 6 4 4 4-4'} /></svg>
+              </button>)}
+            {suggestions && <span className="as-suggestions" id="as-suggestions" aria-label="Suggestions de questions">{SUGGESTIONS.map((s) => (
+              <button key={s.libelle} type="button" onClick={() => suggerer(s)} disabled={attend}>{s.libelle}</button>))}</span>}
             <span className="as-champ">
               <label className="visuellement-cache" htmlFor="as-question">Question à l'assistant</label>
               <input id="as-question" ref={champ} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={500}
