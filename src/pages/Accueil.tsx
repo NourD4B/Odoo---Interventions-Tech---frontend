@@ -1,16 +1,20 @@
 // Accueil du dispatcher (page d'entrée), pensé pour plusieurs planificateurs. En haut le brief du jour (lignes écrites
-// sans IA depuis les faits, résumé du modèle local en exergue). Puis : à traiter (par urgence), chaque ligne pouvant être
-// prise en charge (« je m'en occupe », journalisé) ; depuis votre dernière visite (collègues et Odoo) ; prêt pour le
-// prochain jour ouvré (ce qui manque à chaque intervention). Le détail (qui est où, une semaine, un technicien…) est
-// dans l'assistant. Chaque ligne ouvre l'écran où l'on agit. Les statistiques restent dans la page Statistiques.
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// sans IA depuis les faits, résumé du modèle local en exergue). Colonne principale : à valider (propositions à
+// verrouiller ou refuser), en cours (interventions du jour et leur avancement d'après le planning), à traiter (par
+// urgence, chaque ligne pouvant être prise en charge). Colonne de droite : météo (7 jours, alertes sur les chantiers),
+// depuis votre dernière visite (collègues et Odoo), prêt pour le prochain jour ouvré. Le détail (qui est où, une
+// semaine, un technicien…) est dans l'assistant ; la recherche, dans Dossiers. Les statistiques restent dans la page
+// Statistiques.
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { lienFiche, lireAccueil, prendreEnCharge, type CategorieATraiter, type Controles, type ElementATraiter } from '../accueil';
 import { EtatChargement, initiales, useDonnees } from '../composants';
+import AValider from '../composants/AValider';
 import { useModeleAssistant } from '../composants/Assistant';
 import BriefDuJour from '../composants/BriefDuJour';
+import EnCours from '../composants/EnCours';
+import MeteoAccueil from '../composants/MeteoAccueil';
 import NouveautesEquipe from '../composants/NouveautesEquipe';
-import { meteo, temps, type Meteo } from '../meteo';
 import { auteur, planif } from '../planification';
 import { ErreurStats, stats } from '../statistiques';
 
@@ -95,7 +99,6 @@ function Categorie({ c, ouverte, onBasculer, moi, onPrendre }: {
 }
 
 export default function Accueil() {
-  const navigate = useNavigate();
   const accueil = useDonnees(() => lireAccueil(), []);
   const d = accueil.donnees;
   const ia = useModeleAssistant();
@@ -128,19 +131,13 @@ export default function Accueil() {
     return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', auRetour); };
   }, []);
 
-  // météo au siège (Open-Meteo, libre et sans clé ; seule la position du siège est envoyée)
+  // siège : lieu de la météo (Open-Meteo, libre et sans clé ; positions arrondies)
   const agences = useDonnees(() => planif.agences(), []);
   const siege = useMemo(() => {
     const placees = (agences.donnees?.agences ?? []).filter((a) => a.lat !== null && a.lng !== null);
-    return placees.find((a) => a.code === 'noisy') ?? placees[0] ?? null;
+    const a = placees.find((x) => x.code === 'noisy') ?? placees[0];
+    return a ? { nom: a.nom, lat: a.lat!, lng: a.lng! } : null;
   }, [agences.donnees]);
-  const [ciel, setCiel] = useState<Meteo | null>(null);
-  useEffect(() => {
-    if (!siege || !d) return;
-    let vivant = true;
-    meteo(siege.lat!, siege.lng!, d.jour, d.jour).then((m) => { if (vivant) setCiel(m); }).catch(() => undefined);
-    return () => { vivant = false; };
-  }, [siege, d?.jour]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [ouvertes, setOuvertes] = useState<Set<string>>(() => new Set());
   const basculer = (cle: string) => setOuvertes((o) => { const n = new Set(o); if (n.has(cle)) n.delete(cle); else n.add(cle); return n; });
@@ -161,14 +158,7 @@ export default function Accueil() {
     if (!moi) return;
     prendreEnCharge(moi, cle, e.service_id, oui).then(() => accueil.actualiser()).catch(() => undefined);
   };
-  const [recherche, setRecherche] = useState('');
-  const chercher = (e: FormEvent) => {
-    e.preventDefault();
-    if (recherche.trim()) navigate(`/dossiers?q=${encodeURIComponent(recherche.trim())}`);
-  };
-
   const prenom = auteur()?.trim().split(/\s+/)[0] ?? null;
-  const actuel = ciel?.actuelle ? temps(ciel.actuelle.code) : null;
   const libelleAction = (cle: string) => cle === 'prochain' ? `Voir ${d?.prochain.etiquette.toLowerCase()}`
     : d?.a_traiter.find((c) => c.cle === cle)?.libelle ?? cle;
   const prets = d ? d.prochain.services.filter((x) => x.pret).length : 0;
@@ -180,15 +170,7 @@ export default function Accueil() {
           <h1>{d ? dateLongue(d.jour) : 'Accueil'}</h1>
           {d && <span>Semaine {semaine(d.jour)}</span>}
         </div>
-        <form className="ac-recherche" role="search" onSubmit={chercher}>
-          <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.75" /><path d="m13 13 4.5 4.5" /></svg>
-          <label className="visuellement-cache" htmlFor="ac-q">Rechercher dans les dossiers</label>
-          <input id="ac-q" type="search" value={recherche} onChange={(e) => setRecherche(e.target.value)}
-            placeholder="Service, client, technicien, véhicule" />
-        </form>
         <div className="ac-etat">
-          {actuel && siege && <span className="ac-meteo" title={`${actuel.libelle} à ${siege.nom}`}>
-            <span aria-hidden="true">{actuel.icone}</span>{Math.round(ciel!.actuelle!.temperature)}°<small>{siege.nom.replace(/\s*\(.*\)$/, '')}</small></span>}
           <button type="button" className={`ac-synchro${synchro.enCours ? ' en-cours' : ''}${synchro.erreur ? ' erreur' : ''}`}
             onClick={() => void synchroniser(true)} disabled={synchro.enCours} title={synchro.erreur ?? 'Synchroniser avec Odoo'}>
             <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M16.2 8.3A6.5 6.5 0 0 0 4.4 6.6" />
@@ -206,17 +188,22 @@ export default function Accueil() {
           libelleAction={libelleAction} onAction={allerA} />
 
         <div className="ac-grille">
-          <section className="ac-carte ac-traiter" aria-labelledby="ac-titre-traiter">
-            <header><h2 id="ac-titre-traiter">À traiter</h2>
-              {d.a_traiter.length > 0 && <span>{d.a_traiter.reduce((t, c) => t + c.nombre, 0)} points</span>}</header>
-            {d.a_traiter.length
-              ? <ul className="ac-cats">{d.a_traiter.map((c) => (
-                <Categorie key={c.cle} c={c} ouverte={ouvertes.has(c.cle)} onBasculer={() => basculer(c.cle)} moi={moi}
-                  onPrendre={(e, oui) => prendre(c.cle, e, oui)} />))}</ul>
-              : <p className="ac-vide ok">Rien à traiter. Tout est en ordre.</p>}
-          </section>
+          <div className="ac-colonne">
+            <AValider propositions={d.propositions} moi={moi} onFait={() => accueil.actualiser()} />
+            <EnCours interventions={d.en_cours} jour={d.jour} />
+            <section className="ac-carte ac-traiter" aria-labelledby="ac-titre-traiter">
+              <header><h2 id="ac-titre-traiter">À traiter</h2>
+                {d.a_traiter.length > 0 && <span>{d.a_traiter.reduce((t, c) => t + c.nombre, 0)} points</span>}</header>
+              {d.a_traiter.length
+                ? <ul className="ac-cats">{d.a_traiter.map((c) => (
+                  <Categorie key={c.cle} c={c} ouverte={ouvertes.has(c.cle)} onBasculer={() => basculer(c.cle)} moi={moi}
+                    onPrendre={(e, oui) => prendre(c.cle, e, oui)} />))}</ul>
+                : <p className="ac-vide ok">Rien à traiter. Tout est en ordre.</p>}
+            </section>
+          </div>
 
           <div className="ac-colonne">
+            <MeteoAccueil siege={siege} jour={d.jour} chantiers={d.chantiers} />
             <NouveautesEquipe auteur={moi} version={d} />
 
             {/* prochain jour ouvré : chaque intervention et ce qui lui manque (le détail : bouton du brief, assistant) */}

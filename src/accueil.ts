@@ -30,6 +30,25 @@ export interface Accueil {
   };
   brief: { texte: string; ton: Ton; actions: { categorie: string; libelle: string }[] }[];
   avertissements: string[];
+  propositions: Proposition[];
+  en_cours: EnCours[];
+  chantiers: Chantier[];
+}
+/** À valider : une affectation proposée (solveur, ou choix sans verrou), pas encore verrouillée. */
+export interface Proposition {
+  service_id: number; nom: string; client: string | null; ville: string | null; debut: string; fin: string;
+  equipe: string[]; plaque: string | null; propose_par: 'solveur' | 'dispatcher' | string; version: number; semaine: string;
+}
+/** En cours aujourd'hui (verrouillée ou publiée) ; `progression` : d'après le planning (8 h – 18 h), en %. */
+export interface EnCours {
+  service_id: number; nom: string; client: string | null; ville: string | null; debut: string; fin: string;
+  equipe: string[]; plaque: string | null; publie: boolean; jour_n: number; jours: number; progression: number;
+  semaine: string;
+}
+/** Intervention des 7 prochains jours ; position du site arrondie (≈ 1 km), pour la météo. */
+export interface Chantier {
+  service_id: number; nom: string; ville: string | null; debut: string; fin: string; semaine: string;
+  lat: number | null; lng: number | null;
 }
 
 export async function lireAccueil(): Promise<Accueil> {
