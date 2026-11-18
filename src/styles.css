@@ -2363,6 +2363,10 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .ra-jour { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 42px;
   padding: 3px 0; border-radius: 9px; background: var(--accent-doux); color: var(--accent); font-size: 11px; line-height: 1.2; }
 .ra-jour b { font-size: 10.5px; text-transform: capitalize; }
+.ra-periode { flex: none; min-width: 52px; padding: 4px 8px; border-radius: 9px; background: var(--accent-doux); color: var(--accent);
+  font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; }
+.g-absences .ra-icone { background: var(--erreur-doux); color: var(--erreur); }
+.g-absences .ra-valeur { color: var(--erreur); font-weight: 600; }
 .ra-gravite { flex: none; width: 10px; height: 10px; margin: 5px 8px 0 4px; border-radius: 50%; background: #9aa3b2;
   box-shadow: 0 0 0 4px #eef0f3; }
 .ra-gravite.gv-urgent { background: var(--erreur); box-shadow: 0 0 0 4px var(--erreur-doux); }

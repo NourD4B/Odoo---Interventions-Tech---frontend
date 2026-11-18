@@ -8,7 +8,8 @@ import type { ReactNode } from 'react';
 
 type Ligne = { libelle: string | null; valeur: string };
 type Bloc = { titre: string | null; lignes: Ligne[]; notes: Ligne[] };
-type Genre = 'programme' | 'dispo' | 'traiter' | 'preparation' | 'semaine' | 'vehicule' | 'technicien' | 'service' | 'autre';
+type Genre = 'interventions' | 'absences' | 'programme' | 'dispo' | 'traiter' | 'preparation' | 'semaine' | 'vehicule'
+  | 'technicien' | 'service' | 'autre';
 
 // ---------- icônes (traits, 24 × 24) ----------
 
@@ -38,7 +39,7 @@ function Icone({ nom, taille = 16 }: { nom: string; taille?: number }) {
 }
 
 const ICONE_GENRE: Record<Genre, string> = {
-  programme: 'calendrier', dispo: 'equipe', traiter: 'alerte', preparation: 'liste', semaine: 'calendrier',
+  interventions: 'planifie', absences: 'absent', programme: 'calendrier', dispo: 'equipe', traiter: 'alerte', preparation: 'liste', semaine: 'calendrier',
   vehicule: 'camion', technicien: 'personne', service: 'outil', autre: 'recherche' };
 const ICONE_LIBELLE: Record<string, string> = {
   Commande: 'commande', 'Étape Odoo': 'etape', Planification: 'planifie', Équipe: 'equipe', 'Date prévue dans Odoo': 'calendrier',
@@ -75,6 +76,14 @@ export function structurer(texte: string): Bloc[] | null {
 function entete(b: Bloc): { genre: Genre; titre: string; sous?: string; badge?: string; marques?: string[] } {
   const t = b.titre ?? '';
   let m: RegExpMatchArray | null;
+  if ((m = t.match(/^Interventions du (.+?) au (.+?)((?:, .+)*)$/))) {
+    const filtres = m[3].split(', ').filter(Boolean);
+    return { genre: 'interventions', titre: 'Interventions', sous: [`${m[1]} → ${m[2]}`, ...filtres].join(' · ') };
+  }
+  if ((m = t.match(/^Absences du (.+?) au (.+?)((?:, .+)*)$/))) {
+    const filtres = m[3].split(', ').filter(Boolean);
+    return { genre: 'absences', titre: 'Absences', sous: [`${m[1]} → ${m[2]}`, ...filtres].join(' · ') };
+  }
   if ((m = t.match(/^Programme du (.+?)( \(jour non travaillé\))?$/))) return { genre: 'programme', titre: 'Programme', sous: m[1], badge: m[2] ? 'jour non travaillé' : undefined };
   if ((m = t.match(/^Disponibilités du (.+)$/))) return { genre: 'dispo', titre: 'Disponibilités', sous: m[1] };
   if ((m = t.match(/^À traiter \((.+)\)$/))) return { genre: 'traiter', titre: 'À traiter', sous: m[1] };
@@ -147,7 +156,8 @@ function Valeur({ libelle, valeur }: Ligne) {
 
 /** Début de ligne selon la sorte de réponse : avatar, pastille de jour, point de gravité, icône. */
 function Repere({ genre, libelle }: { genre: Genre; libelle: string }) {
-  if (genre === 'programme') return <span className="ra-avatar" aria-hidden="true">{initiales(libelle)}</span>;
+  if (genre === 'programme' || genre === 'absences') return <span className="ra-avatar" aria-hidden="true">{initiales(libelle)}</span>;
+  if (genre === 'interventions') return <span className="ra-periode" aria-hidden="true">{libelle}</span>;
   if (genre === 'semaine') {
     const [jour, date] = libelle.split(' ');
     return <span className="ra-jour" aria-hidden="true"><b>{jour.slice(0, 3)}</b>{date}</span>;
@@ -160,6 +170,10 @@ function Repere({ genre, libelle }: { genre: Genre; libelle: string }) {
 
 function Carte({ b }: { b: Bloc }) {
   const e = entete(b);
+  // « Total : 3 interventions. » : en badge dans l'en-tête plutôt qu'en note
+  const total = b.notes.find((n) => n.libelle === 'Total');
+  if (total && !e.badge) e.badge = total.valeur.replace(/\.$/, '');
+  const notes = b.notes.filter((n) => n !== total);
   return (
     <section className={`ra-carte g-${e.genre}`}>
       {b.titre && (
@@ -179,15 +193,15 @@ function Carte({ b }: { b: Bloc }) {
             <li key={j} className="ra-ligne">
               {l.libelle && <Repere genre={e.genre} libelle={l.libelle} />}
               <div className="ra-corps">
-                {l.libelle && e.genre !== 'semaine' && (
+                {l.libelle && e.genre !== 'semaine' && e.genre !== 'interventions' && (
                   <span className="ra-libelle">{e.genre === 'preparation' ? <Service valeur={l.libelle} /> : l.libelle}</span>)}
-                {l.libelle && e.genre === 'semaine' && <span className="visuellement-cache">{l.libelle}</span>}
+                {l.libelle && (e.genre === 'semaine' || e.genre === 'interventions') && <span className="visuellement-cache">{l.libelle}</span>}
                 <span className="ra-valeur"><Valeur {...l} /></span>
               </div>
             </li>))}
         </ul>
       )}
-      {b.notes.map((n, j) => (
+      {notes.map((n, j) => (
         <p key={j} className="ra-note">
           {n.libelle && ICONE_LIBELLE[n.libelle] && <Icone nom={ICONE_LIBELLE[n.libelle]} taille={13} />}
           {n.libelle ? <><b>{n.libelle}</b> {n.valeur}</> : n.valeur}

@@ -70,8 +70,10 @@ export async function lireModeles(): Promise<Modeles> {
 /** Brief du jour : celui gardé par le serveur (tout de suite), ou un nouveau avec `rafraichir` (« Réécrire »). */
 export const demanderBrief = (modele: string, rafraichir = false, signal?: AbortSignal) =>
   envoyer<BriefModele>('/assistant/brief', { modele, rafraichir }, signal);
-export const poserQuestion = (modele: string, question: string, signal?: AbortSignal) =>
-  envoyer<ReponseModele>('/assistant/question', { modele, question }, signal);
+/** Question libre ; `historique` : derniers échanges de la conversation (3 au plus), pour « et demain ? ». */
+export interface Echange { question: string; reponse: string }
+export const poserQuestion = (modele: string, question: string, historique: Echange[] = [], signal?: AbortSignal) =>
+  envoyer<ReponseModele>('/assistant/question', { modele, question, historique }, signal);
 /** Suggestion : l'outil répond directement, sans modèle (tout de suite, même sans Ollama). */
 export const outilDirect = (outil: string, args: Record<string, string> = {}, signal?: AbortSignal) =>
   envoyer<ReponseOutil>('/assistant/outil', { outil, arguments: args }, signal);

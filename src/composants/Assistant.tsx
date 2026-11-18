@@ -5,7 +5,7 @@
 // suite, sans modèle. La conversation reste ouverte d'une page à l'autre ; rien n'est enregistré. Un seul modèle : celui
 // réglé sur le serveur (OLLAMA_MODELE_DEFAUT, Ministral), qui sert aussi au brief du jour (contexte partagé).
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { lireModeles, outilDirect, poserQuestion, SANS_IA, type Modeles } from '../accueil';
+import { lireModeles, outilDirect, poserQuestion, SANS_IA, type Echange, type Modeles } from '../accueil';
 import { auteur } from '../planification';
 import ReponseAssistant from './ReponseAssistant';
 
@@ -104,12 +104,24 @@ export default function Assistant() {
     }
     if (!ouvertRef.current) setNonLu(true);              // réponse arrivée panneau fermé : pastille sur le bouton
   };
+  /** Les 3 derniers échanges terminés (question, réponse), pour les questions qui s'enchaînent ; rien n'est gardé
+   * ailleurs que dans ce panneau. */
+  const historique = (): Echange[] => {
+    const echanges: Echange[] = [];
+    messages.forEach((m, i) => {
+      const r = messages[i + 1];
+      if (m.qui === 'moi' && m.texte && r?.qui === 'assistant' && r.texte && !r.enCours) {
+        echanges.push({ question: m.texte.slice(0, 500), reponse: r.texte.slice(0, 1500) });
+      }
+    });
+    return echanges.slice(-3);
+  };
   const envoyer = (texte: string) => {
     const q = texte.trim();
     if (!q || !avecIa || attend) return;
     setQuestion('');
     void demander(q, async () => {
-      const r = await poserQuestion(modele!, q);
+      const r = await poserQuestion(modele!, q, historique());
       return { texte: r.reponse, source: r.source, duree_ms: r.duree_ms, raison: r.raison, donnees: r.donnees };
     }, true);
   };
