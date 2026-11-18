@@ -1,5 +1,6 @@
 // Client de l'API /api/rse et types du score RSE des déplacements (calcul côté serveur, config/rse.json).
 // Les clés de mode sont celles de la future sélection Odoo project.task.transport_mode.
+import { entetesAuteur } from './identite';
 import { auteur, AuteurManquant, ErreurPlanif } from './planification';
 
 export type ModeTransport = 'car_thermal' | 'car_electric' | 'plane' | 'public_transport' | 'walk';
@@ -57,7 +58,7 @@ async function appel<T>(methode: 'GET' | 'PUT', chemin: string, corps?: unknown)
   if (methode !== 'GET') {
     const nom = auteur();
     if (!nom) throw new AuteurManquant('Indiquez votre nom (journal des modifications)');
-    entetes['X-Auteur'] = encodeURIComponent(nom);
+    Object.assign(entetes, entetesAuteur(nom));
     entetes['Content-Type'] = 'application/json';
   }
   const r = await fetch(`/api/rse${chemin}`, { method: methode, headers: entetes,

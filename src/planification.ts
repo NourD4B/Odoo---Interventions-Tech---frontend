@@ -1,5 +1,7 @@
 // Client de l'API /api/planification. Noms de champs identiques à l'API (= champs Odoo project.task).
-// Écritures : en-tête X-Auteur (nom de la personne, encodé URL pour les accents), demandé à la première écriture.
+// Écritures : en-tête X-Auteur (nom de la personne, encodé URL pour les accents), demandé à la première écriture ;
+// dans Odoo, l'utilisateur connecté (jeton signé X-Odoo-Jeton, voir identite.ts) et aucun nom à saisir.
+import { entetesAuteur, nomOdoo } from './identite';
 
 export type StatutPlanif = 'a_planifier' | 'propose' | 'verrouille' | 'publie';
 export type EtatAffectation = 'propose' | 'verrouille' | 'publie';
@@ -140,7 +142,10 @@ export interface AgencePlanif {
 const CLE_AUTEUR = 'd4b.auteur';
 let auteurMemoire: string | null = null;
 
+/** Nom de la personne : dans Odoo, l'utilisateur connecté (jeton signé) ; sinon le nom saisi dans ce navigateur. */
 export function auteur(): string | null {
+  const odoo = nomOdoo();
+  if (odoo) return odoo;
   try { return localStorage.getItem(CLE_AUTEUR) ?? auteurMemoire; } catch { return auteurMemoire; }
 }
 
@@ -173,7 +178,7 @@ async function appel<T>(methode: string, chemin: string, options: { corps?: unkn
   if (methode !== 'GET' || options.avecAuteur) {               // écriture, ou lecture journalisée
     const nom = auteur();
     if (!nom) throw new AuteurManquant('Indiquez votre nom (journal des modifications)');
-    entetes['X-Auteur'] = encodeURIComponent(nom);
+    Object.assign(entetes, entetesAuteur(nom));                 // dans Odoo : + jeton signé (X-Odoo-Jeton)
   }
   if (options.corps !== undefined) entetes['Content-Type'] = 'application/json';
   const reponse = await fetch(url.toString(), { method: methode, headers: entetes,

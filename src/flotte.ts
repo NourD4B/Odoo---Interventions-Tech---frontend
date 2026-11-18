@@ -1,5 +1,6 @@
 // API /api/flotte : véhicules (copie Odoo fleet.vehicle), fiche constructeur du modèle, rôle dans la planification,
 // photos ajoutées dans l'application (Odoo n'a que les logos des marques). Écritures : en-tête X-Auteur.
+import { entetesAuteur } from './identite';
 import { auteur, AuteurManquant, ErreurPlanif } from './planification';
 
 export interface PhotoVehicule {
@@ -114,7 +115,7 @@ async function envoyer<T>(methode: string, chemin: string, corps?: Blob, type?: 
   if (methode !== 'GET') {
     const nom = auteur();
     if (!nom) throw new AuteurManquant('Indiquez votre nom (journal des modifications)');
-    entetes['X-Auteur'] = encodeURIComponent(nom);
+    Object.assign(entetes, entetesAuteur(nom));
   }
   if (type) entetes['Content-Type'] = type;
   const reponse = await fetch(`/api/flotte${chemin}`, { method: methode, headers: entetes, body: corps });
@@ -130,7 +131,7 @@ async function envoyer<T>(methode: string, chemin: string, corps?: Blob, type?: 
 export async function lireAvecAuteur(url: string): Promise<Blob> {
   const nom = auteur();
   if (!nom) throw new AuteurManquant('Indiquez votre nom : chaque consultation de pièce est journalisée');
-  const reponse = await fetch(url, { headers: { 'X-Auteur': encodeURIComponent(nom) } });
+  const reponse = await fetch(url, { headers: entetesAuteur(nom) });
   if (!reponse.ok) {
     let detail: unknown = null;
     try { detail = (await reponse.json()).detail; } catch { /* corps non JSON */ }

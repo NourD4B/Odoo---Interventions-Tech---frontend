@@ -1,4 +1,6 @@
 // Accueil du dispatcher : faits du jour calculés par le serveur (GET /api/accueil) et brief écrit depuis ces faits.
+import { entetesAuteur } from './identite';
+
 export type Niveau = 'urgent' | 'attention' | 'info';
 export type Ton = 'urgent' | 'attention' | 'normal' | 'ok';
 
@@ -63,7 +65,7 @@ export async function lireAccueil(): Promise<Accueil> {
 export async function prendreEnCharge(auteur: string, categorie: string, service_id: number, prendre: boolean)
   : Promise<{ pris_par: PrisPar | null }> {
   const r = await fetch('/api/accueil/prise-en-charge', { method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Auteur': encodeURIComponent(auteur) },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...entetesAuteur(auteur) },
     body: JSON.stringify({ categorie, service_id, prendre }) });
   if (!r.ok) throw new Error(`prise en charge : erreur ${r.status}`);
   return r.json() as Promise<{ pris_par: PrisPar | null }>;
@@ -77,7 +79,7 @@ export interface Nouveautes {
 /** Depuis `depuis` : actions des collègues (les miennes exclues), services nouveaux ou modifiés et retirés dans Odoo. */
 export async function lireNouveautes(depuis: string, auteur: string | null): Promise<Nouveautes> {
   const r = await fetch(`/api/accueil/nouveautes?depuis=${encodeURIComponent(depuis)}`, {
-    headers: { Accept: 'application/json', ...(auteur ? { 'X-Auteur': encodeURIComponent(auteur) } : {}) } });
+    headers: { Accept: 'application/json', ...(auteur ? entetesAuteur(auteur) : {}) } });
   if (!r.ok) throw new Error(`nouveautés : erreur ${r.status}`);
   return r.json() as Promise<Nouveautes>;
 }
