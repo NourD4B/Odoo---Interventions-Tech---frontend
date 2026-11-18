@@ -22,15 +22,23 @@ const SANS_MODELE: Modeles = { ollama: false, erreur: 'modèles illisibles', def
 
 // ---------- le modèle du serveur, partagé entre le brief du jour et la conversation ----------
 
-interface ModeleAssistant { modeles: Modeles | null; modele: string | null; libelle: (nom: string) => string }
+/** Une question posée depuis la page (bouton du brief) : l'assistant s'ouvre et l'outil répond, sans modèle. */
+export interface DemandeAssistant { libelle: string; outil: string; arguments?: Record<string, string> }
+interface ModeleAssistant {
+  modeles: Modeles | null; modele: string | null; libelle: (nom: string) => string;
+  ouvrir: (d: DemandeAssistant) => void; demande: (DemandeAssistant & { id: number }) | null;
+}
 const Contexte = createContext<ModeleAssistant | null>(null);
 
 /** Le modèle réglé sur le serveur (OLLAMA_MODELE_DEFAUT) s'il est installé, sinon aucun (suggestions seulement). */
 export function ModeleAssistantProvider({ children }: { children: ReactNode }) {
   const [modeles, setModeles] = useState<Modeles | null>(null);
+  const [demande, setDemande] = useState<(DemandeAssistant & { id: number }) | null>(null);
   useEffect(() => { lireModeles().then(setModeles).catch(() => setModeles(SANS_MODELE)); }, []);
   const libelle = (nom: string) => modeles?.modeles.find((x) => x.nom === nom)?.libelle ?? nom;
-  return <Contexte.Provider value={{ modeles, modele: modeles?.defaut ?? null, libelle }}>{children}</Contexte.Provider>;
+  const ouvrir = (d: DemandeAssistant) => setDemande({ ...d, id: Date.now() });
+  return <Contexte.Provider value={{ modeles, modele: modeles?.defaut ?? null, libelle, ouvrir, demande }}>
+    {children}</Contexte.Provider>;
 }
 
 export function useModeleAssistant(): ModeleAssistant {
@@ -55,7 +63,7 @@ const Croix = () => <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden=
 const Points = () => <span className="as-points" aria-hidden="true"><i /><i /><i /></span>;
 
 export default function Assistant() {
-  const { modeles, modele } = useModeleAssistant();
+  const { modeles, modele, demande: demandePage } = useModeleAssistant();
   const [ouvert, setOuvert] = useState(false);
   const [nonLu, setNonLu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -133,6 +141,14 @@ export default function Assistant() {
     }, false);
   };
   const soumettre = (e: FormEvent) => { e.preventDefault(); envoyer(question); };
+  // question posée depuis la page (bouton du brief) : ouvrir le panneau et répondre par l'outil
+  const traitee = useRef<number | null>(null);
+  useEffect(() => {
+    if (!demandePage || traitee.current === demandePage.id) return;
+    traitee.current = demandePage.id;
+    setOuvert(true);
+    suggerer(demandePage);
+  }, [demandePage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="as-flottant">

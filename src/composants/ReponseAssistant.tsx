@@ -5,6 +5,7 @@
 // paragraphe. Icônes en SVG dans la page (formes Lucide, licence ISC) : ni police ni bibliothèque, reprises telles
 // quelles dans le module Odoo (gabarits OWL), avec les mêmes classes « ra- ».
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 
 type Ligne = { libelle: string | null; valeur: string };
 type Bloc = { titre: string | null; lignes: Ligne[]; notes: Ligne[] };
@@ -34,7 +35,7 @@ const TRACES: Record<string, ReactNode> = {
   terrain: <><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>,
   recherche: <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></>,
 };
-function Icone({ nom, taille = 16 }: { nom: string; taille?: number }) {
+export function Icone({ nom, taille = 16 }: { nom: string; taille?: number }) {
   return <svg className="ra-svg" viewBox="0 0 24 24" width={taille} height={taille} aria-hidden="true">{TRACES[nom] ?? TRACES.liste}</svg>;
 }
 
@@ -117,7 +118,10 @@ function Service({ valeur }: { valeur: string }) {
   const etat = details.length && ETATS.includes(details[details.length - 1]) ? details.pop()! : null;
   return (
     <span className="ra-service">
-      <span className="ra-service-tete"><b>{m[1]}</b>{etat && <Etat texte={etat} />}</span>
+      <span className="ra-service-tete">
+        {/* le service ouvre ses dossiers (recherche par nom) : de la réponse à l'écran où l'on agit */}
+        <Link className="ra-lien" to={`/dossiers?q=${encodeURIComponent(m[1])}`}>{m[1]}</Link>
+        {etat && <Etat texte={etat} />}</span>
       <small>{[m[2], ...details].join(' · ')}</small>
     </span>
   );

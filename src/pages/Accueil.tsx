@@ -1,14 +1,15 @@
-// Accueil du dispatcher (page d'entrée). Le brief résume la journée (phrases écrites depuis les faits calculés par le
-// serveur, ou reformulées une fois par jour par un modèle local), à côté de la conversation avec l'assistant
-// (questions seulement), puis les mêmes faits à parcourir : à traiter (par
-// urgence), aujourd'hui (qui est sur quel service, libres, absents) et le prochain jour ouvré (ce qui manque à chaque
-// intervention). Chaque ligne ouvre l'écran où l'on agit. Les statistiques restent dans la page Statistiques.
+// Accueil du dispatcher (page d'entrée), pensé pour plusieurs planificateurs. En haut le brief du jour (lignes écrites
+// sans IA depuis les faits, résumé du modèle local en exergue). Puis : à traiter (par urgence), chaque ligne pouvant être
+// prise en charge (« je m'en occupe », journalisé) ; depuis votre dernière visite (collègues et Odoo) ; prêt pour le
+// prochain jour ouvré (ce qui manque à chaque intervention). Le détail (qui est où, une semaine, un technicien…) est
+// dans l'assistant. Chaque ligne ouvre l'écran où l'on agit. Les statistiques restent dans la page Statistiques.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { lienFiche, lireAccueil, type CategorieATraiter, type Controles } from '../accueil';
+import { lienFiche, lireAccueil, prendreEnCharge, type CategorieATraiter, type Controles, type ElementATraiter } from '../accueil';
 import { EtatChargement, initiales, useDonnees } from '../composants';
 import { useModeleAssistant } from '../composants/Assistant';
 import BriefDuJour from '../composants/BriefDuJour';
+import NouveautesEquipe from '../composants/NouveautesEquipe';
 import { meteo, temps, type Meteo } from '../meteo';
 import { auteur, planif } from '../planification';
 import { ErreurStats, stats } from '../statistiques';
@@ -32,22 +33,45 @@ function depuisQuand(iso: string, maintenant: Date): string {
 }
 const CONTROLES: [keyof Controles, string][] = [
   ['equipe', 'Équipe'], ['vehicule', 'Véhicule'], ['materiel', 'Matériel'], ['site', 'Site'], ['publie', 'Publié']];
-const ETATS: Record<string, string> = { propose: 'proposé', verrouille: 'verrouillé', publie: 'publié' };
 
 function Chevron() {
   return <svg className="ac-chevron" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m5 6 3 3 3-3" /></svg>;
 }
 
-/** Une catégorie « à traiter » : nombre, libellé, action ; dépliée, ses services, chacun ouvrant sa fiche. */
-function Categorie({ c, ouverte, onBasculer }: { c: CategorieATraiter; ouverte: boolean; onBasculer: () => void }) {
+/** Qui s'occupe d'une ligne : « Je m'en occupe » si personne, « Vous · Laisser » si c'est moi, le collègue sinon. */
+function Prise({ e, moi, onPrendre }: { e: ElementATraiter; moi: string | null; onPrendre: (oui: boolean) => void }) {
+  const p = e.pris_par;
+  if (p && p.auteur === moi) {
+    return <span className="ac-prise moi"><span className="ac-prise-av" aria-hidden="true">{initiales(p.auteur)}</span>Vous
+      <button type="button" onClick={() => onPrendre(false)}>Laisser</button></span>;
+  }
+  if (p) {
+    return <span className="ac-prise"><span className="ac-prise-av" aria-hidden="true">{initiales(p.auteur.replace(/\s*\(simulé\)$/, ''))}</span>
+      {p.auteur} s'en occupe</span>;
+  }
+  return <button type="button" className="ac-prendre" onClick={() => onPrendre(true)} disabled={!moi}
+    title={moi ? 'Indiquer aux collègues que vous vous en occupez' : 'Indiquez votre nom (Planification) pour prendre en charge'}>
+    Je m'en occupe</button>;
+}
+
+/** Une catégorie « à traiter » : nombre, libellé, action ; dépliée, ses services, chacun ouvrant sa fiche et pouvant
+ * être pris en charge. Repliée, les initiales de qui s'en occupe déjà. */
+function Categorie({ c, ouverte, onBasculer, moi, onPrendre }: {
+  c: CategorieATraiter; ouverte: boolean; onBasculer: () => void; moi: string | null;
+  onPrendre: (e: ElementATraiter, oui: boolean) => void;
+}) {
   const seul = c.elements.length === 1 ? c.elements[0] : null;
+  const pris = c.elements.filter((e) => e.pris_par);
   return (
     <li id={`ac-cat-${c.cle}`} className={`ac-cat niveau-${c.niveau}${ouverte ? ' ouverte' : ''}`}>
       <div className="ac-cat-ligne">
         <button type="button" className="ac-cat-titre" aria-expanded={ouverte} aria-controls={`ac-liste-${c.cle}`}
           onClick={onBasculer}>
           <span className="ac-cat-point" aria-hidden="true" /><strong className="ac-cat-nombre">{c.nombre}</strong>
-          <span className="ac-cat-libelle">{c.libelle}</span><Chevron /></button>
+          <span className="ac-cat-libelle">{c.libelle}</span>
+          {pris.length > 0 && <span className="ac-cat-pris" title={`${pris.length} sur ${c.elements.length} pris en charge`}>
+            {pris.slice(0, 3).map((e) => <i key={e.service_id}>{initiales(e.pris_par!.auteur.replace(/\s*\(simulé\)$/, ''))}</i>)}</span>}
+          <Chevron /></button>
         {seul
           ? <Link className="ac-cat-action" to={lienFiche(seul.service_id, seul.semaine, seul.onglet)}>{c.action}</Link>
           : <button type="button" className="ac-cat-action" onClick={onBasculer}>{ouverte ? 'Masquer' : 'Voir'}</button>}
@@ -55,12 +79,13 @@ function Categorie({ c, ouverte, onBasculer }: { c: CategorieATraiter; ouverte: 
       {ouverte && (
         <ul className="ac-elements" id={`ac-liste-${c.cle}`}>
           {c.elements.map((e) => (
-            <li key={e.service_id}>
+            <li key={e.service_id} className="ac-element">
               <Link to={lienFiche(e.service_id, e.semaine, e.onglet)}>
                 <span className="ac-el-nom"><strong>{e.nom}</strong>
                   <small>{[e.client, e.detail].filter(Boolean).join(' · ')}</small></span>
                 {e.jour && <span className="ac-el-jour">{jj(e.jour)}</span>}
               </Link>
+              <Prise e={e} moi={moi} onPrendre={(oui) => onPrendre(e, oui)} />
             </li>
           ))}
         </ul>
@@ -119,11 +144,22 @@ export default function Accueil() {
 
   const [ouvertes, setOuvertes] = useState<Set<string>>(() => new Set());
   const basculer = (cle: string) => setOuvertes((o) => { const n = new Set(o); if (n.has(cle)) n.delete(cle); else n.add(cle); return n; });
-  /** Action d'une phrase du brief : déplie la catégorie et y mène. */
+  /** Action d'une phrase du brief : le prochain jour ouvré s'ouvre dans l'assistant (ce qui manque, intervention par
+   * intervention) ; une catégorie à traiter se déplie et la page y mène. */
   const allerA = (cle: string) => {
-    if (cle !== 'prochain') setOuvertes((o) => new Set(o).add(cle));
-    window.requestAnimationFrame(() => document.getElementById(cle === 'prochain' ? 'ac-prochain' : `ac-cat-${cle}`)
+    if (cle === 'prochain') {
+      ia.ouvrir({ libelle: `Que manque-t-il pour ${d?.prochain.etiquette.toLowerCase() ?? 'demain'} ?`, outil: 'preparation' });
+      return;
+    }
+    setOuvertes((o) => new Set(o).add(cle));
+    window.requestAnimationFrame(() => document.getElementById(`ac-cat-${cle}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  };
+  // « je m'en occupe » : écrit dans le journal sous mon nom, puis les faits sont relus
+  const moi = auteur()?.trim() || null;
+  const prendre = (cle: string, e: ElementATraiter, oui: boolean) => {
+    if (!moi) return;
+    prendreEnCharge(moi, cle, e.service_id, oui).then(() => accueil.actualiser()).catch(() => undefined);
   };
   const [recherche, setRecherche] = useState('');
   const chercher = (e: FormEvent) => {
@@ -135,7 +171,6 @@ export default function Accueil() {
   const actuel = ciel?.actuelle ? temps(ciel.actuelle.code) : null;
   const libelleAction = (cle: string) => cle === 'prochain' ? `Voir ${d?.prochain.etiquette.toLowerCase()}`
     : d?.a_traiter.find((c) => c.cle === cle)?.libelle ?? cle;
-  const nbAujourdhui = d ? new Set(d.aujourdhui.techniciens.flatMap((t) => t.services.map((x) => x.service_id))).size : 0;
   const prets = d ? d.prochain.services.filter((x) => x.pret).length : 0;
 
   return (
@@ -176,58 +211,38 @@ export default function Accueil() {
               {d.a_traiter.length > 0 && <span>{d.a_traiter.reduce((t, c) => t + c.nombre, 0)} points</span>}</header>
             {d.a_traiter.length
               ? <ul className="ac-cats">{d.a_traiter.map((c) => (
-                <Categorie key={c.cle} c={c} ouverte={ouvertes.has(c.cle)} onBasculer={() => basculer(c.cle)} />))}</ul>
+                <Categorie key={c.cle} c={c} ouverte={ouvertes.has(c.cle)} onBasculer={() => basculer(c.cle)} moi={moi}
+                  onPrendre={(e, oui) => prendre(c.cle, e, oui)} />))}</ul>
               : <p className="ac-vide ok">Rien à traiter. Tout est en ordre.</p>}
           </section>
 
-          <section className="ac-carte ac-jour" aria-labelledby="ac-titre-jour">
-            <header><h2 id="ac-titre-jour">Aujourd'hui</h2>
-              <span>{nbAujourdhui ? `${nbAujourdhui} intervention${nbAujourdhui > 1 ? 's' : ''}` : ''}</span></header>
-            {d.aujourdhui.techniciens.length
-              ? <ul className="ac-techs">{d.aujourdhui.techniciens.map((t) => (
-                <li key={t.matricule}>
-                  <span className="ac-avatar" aria-hidden="true">{initiales(t.nom)}</span>
-                  <div className="ac-tech">
-                    <strong>{t.nom}</strong>
-                    {t.services.map((x) => (
-                      <Link key={x.service_id} className="ac-mission" to={lienFiche(x.service_id, x.semaine)}>
-                        <span>{x.nom}{x.etat && x.etat !== 'publie' && <em>{ETATS[x.etat] ?? x.etat}</em>}</span>
-                        <small>{[x.ville, x.jours > 1 ? `jour ${x.jour_n} sur ${x.jours}` : null, x.plaque].filter(Boolean).join(' · ')}</small>
-                      </Link>
-                    ))}
-                  </div>
-                </li>))}</ul>
-              : <p className="ac-vide">{d.aujourdhui.ouvre ? "Aucune intervention aujourd'hui." : 'Jour non travaillé.'}</p>}
-            <footer className="ac-dispo">
-              <p><span>Libres</span>{d.aujourdhui.libres.length
-                ? d.aujourdhui.libres.map((n) => <span key={n} className="ac-libre">{n}</span>) : <em>personne</em>}</p>
-              {d.aujourdhui.absents.length > 0 && <p><span>Absents</span>{d.aujourdhui.absents.map((n) => (
-                <span key={n} className="ac-absent">{n}</span>))}</p>}
-              {/* libres et absents dépendent des congés : dire s'ils n'ont pas pu être lus */}
-              {d.avertissements.length > 0 && <ul className="ac-avertissements">{d.avertissements.map((a) => <li key={a}>{a}</li>)}</ul>}
-            </footer>
-          </section>
+          <div className="ac-colonne">
+            <NouveautesEquipe auteur={moi} version={d} />
+
+            {/* prochain jour ouvré : chaque intervention et ce qui lui manque (le détail : bouton du brief, assistant) */}
+            <section className="ac-carte ac-pret" id="ac-prochain" aria-labelledby="ac-titre-prochain">
+              <header><h2 id="ac-titre-prochain">Prêt pour {d.prochain.etiquette.toLowerCase()}
+                <small>{dateLongue(d.prochain.jour)}</small></h2>
+                {d.prochain.services.length > 0 && <span className={`ac-pret-compte${prets === d.prochain.services.length ? ' ok' : ''}`}>
+                  {prets}/{d.prochain.services.length} prête{prets > 1 ? 's' : ''}</span>}</header>
+              {d.prochain.services.length
+                ? <ul className="ac-pret-liste">{d.prochain.services.map((x) => (
+                  <li key={x.service_id}>
+                    <Link to={lienFiche(x.service_id, x.semaine)} className="ac-pret-ligne">
+                      <span className="ac-pret-nom"><strong>{x.nom}</strong>
+                        <small>{[x.client, x.ville].filter(Boolean).join(' · ')}</small></span>
+                      {x.pret ? <span className="ac-pret-ok">✓ prête</span>
+                        : <span className="ac-pret-manques"><span className="visuellement-cache">manque :</span>
+                          {CONTROLES.filter(([k]) => !x.controles[k]).map(([k, libelle]) => <span key={k}>{libelle}</span>)}</span>}
+                    </Link>
+                  </li>))}</ul>
+                : <p className="ac-vide">Aucune intervention prévue.</p>}
+            </section>
+          </div>
         </div>
 
-        <section className="ac-carte ac-prochain" id="ac-prochain" aria-labelledby="ac-titre-prochain">
-          <header><h2 id="ac-titre-prochain">{d.prochain.etiquette}<small>{dateLongue(d.prochain.jour)}</small></h2>
-            {d.prochain.services.length > 0 && <span className={prets === d.prochain.services.length ? 'ok' : ''}>
-              {prets} sur {d.prochain.services.length} prêt{prets > 1 ? 's' : ''}</span>}</header>
-          {d.prochain.services.length
-            ? <ul className="ac-tuiles">{d.prochain.services.map((x) => (
-              <li key={x.service_id}>
-                <Link to={lienFiche(x.service_id, x.semaine)} className={`ac-tuile${x.pret ? ' pret' : ''}`}>
-                  <strong>{x.nom}</strong>
-                  <small>{[x.client, x.ville].filter(Boolean).join(' · ')}</small>
-                  <span className="ac-controles">{CONTROLES.map(([k, libelle]) => (
-                    <span key={k} className={x.controles[k] ? 'oui' : 'non'}>
-                      <span aria-hidden="true">{x.controles[k] ? '✓' : '✗'}</span>{libelle}
-                      <span className="visuellement-cache">{x.controles[k] ? ' : prêt' : ' : manquant'}</span></span>))}
-                  </span>
-                </Link>
-              </li>))}</ul>
-            : <p className="ac-vide">Aucune intervention prévue.</p>}
-        </section>
+        {/* libres, absents et techniciens dépendent des congés et d'Odoo : dire s'ils n'ont pas pu être lus */}
+        {d.avertissements.length > 0 && <ul className="ac-avertissements ac-note">{d.avertissements.map((a) => <li key={a}>{a}</li>)}</ul>}
       </>}
     </div>
   );

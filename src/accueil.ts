@@ -2,9 +2,11 @@
 export type Niveau = 'urgent' | 'attention' | 'info';
 export type Ton = 'urgent' | 'attention' | 'normal' | 'ok';
 
+/** Qui s'occupe d'une ligne à traiter (« je m'en occupe », écrit dans le journal). */
+export interface PrisPar { auteur: string; depuis: string | null }
 export interface ElementATraiter {
   service_id: number; nom: string; client: string | null; jour: string | null; semaine: string;
-  onglet: 'reglages' | null; detail: string | null;
+  onglet: 'reglages' | null; detail: string | null; pris_par: PrisPar | null;
 }
 export interface CategorieATraiter {
   cle: string; niveau: Niveau; libelle: string; action: string; nombre: number; elements: ElementATraiter[];
@@ -34,6 +36,31 @@ export async function lireAccueil(): Promise<Accueil> {
   const r = await fetch('/api/accueil', { headers: { Accept: 'application/json' } });
   if (!r.ok) throw new Error(`accueil : erreur ${r.status}`);
   return r.json() as Promise<Accueil>;
+}
+
+// ---------- à plusieurs : prise en charge et nouveautés depuis la dernière visite ----------
+
+/** « Je m'en occupe » (ou « je laisse ») ; journalisé sous le nom de la personne (en-tête X-Auteur). */
+export async function prendreEnCharge(auteur: string, categorie: string, service_id: number, prendre: boolean)
+  : Promise<{ pris_par: PrisPar | null }> {
+  const r = await fetch('/api/accueil/prise-en-charge', { method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Auteur': encodeURIComponent(auteur) },
+    body: JSON.stringify({ categorie, service_id, prendre }) });
+  if (!r.ok) throw new Error(`prise en charge : erreur ${r.status}`);
+  return r.json() as Promise<{ pris_par: PrisPar | null }>;
+}
+
+export interface ActionCollegue { quand: string; auteur: string; action: string; texte: string; service_id: number | null }
+export interface ServiceOdoo { id: number; nom: string; client: string | null; quand: string | null }
+export interface Nouveautes {
+  depuis: string; equipe: ActionCollegue[]; odoo: { modifies: ServiceOdoo[]; retires: ServiceOdoo[] };
+}
+/** Depuis `depuis` : actions des collègues (les miennes exclues), services nouveaux ou modifiés et retirés dans Odoo. */
+export async function lireNouveautes(depuis: string, auteur: string | null): Promise<Nouveautes> {
+  const r = await fetch(`/api/accueil/nouveautes?depuis=${encodeURIComponent(depuis)}`, {
+    headers: { Accept: 'application/json', ...(auteur ? { 'X-Auteur': encodeURIComponent(auteur) } : {}) } });
+  if (!r.ok) throw new Error(`nouveautés : erreur ${r.status}`);
+  return r.json() as Promise<Nouveautes>;
 }
 
 // ---------- assistant : petit modèle local (Ollama, CPU seulement), vérifié par le serveur ----------
