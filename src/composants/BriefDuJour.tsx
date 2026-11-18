@@ -2,12 +2,11 @@
 // phrases (rédigé une fois par jour et gardé par le serveur ; « Réécrire » en demande un nouveau). Dessous : une ligne
 // par sujet (ce qui presse, aujourd'hui, le prochain jour ouvré, le reste à voir), écrite sans IA depuis les faits,
 // avec son icône à la couleur du ton et ses boutons d'action. Un résumé écarté (nombre absent des faits, panne, délai)
-// laisse les lignes seules.
+// laisse les lignes seules, sans mention (pas de signature sous le brief).
 import { useEffect, useRef, useState } from 'react';
 import { demanderBrief, SANS_IA, type BriefModele, type Phrase } from '../accueil';
 import { Icone } from './ReponseAssistant';
 
-const heure = (iso: string) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const Points = () => <span className="as-points" aria-hidden="true"><i /><i /><i /></span>;
 const ICONES: Record<string, string> = { urgent: 'alerte', attention: 'liste', ok: 'libre', normal: 'calendrier' };
 
@@ -60,14 +59,6 @@ export default function BriefDuJour({ phrases, prenom, modele, libelleModele, li
             </span>}
           </li>))}
       </ul>
-
-      <p className="br-signature">
-        {resume && b ? <>Résumé par {libelleModele(b.modele)}{b.redige_le ? ` à ${heure(b.redige_le)}` : ''} ; chaque nombre
-          vérifié dans les faits. Lignes écrites sans IA depuis la planification et Odoo.</>
-          : b?.repli ? <>Résumé écarté ({b.raison}) : lignes écrites sans IA depuis la planification et Odoo.</>
-          : etat.erreur ? <>Résumé indisponible ({etat.erreur}) : lignes écrites sans IA.</>
-          : <>Écrit sans IA, depuis la planification et Odoo.</>}
-      </p>
     </section>
   );
 }
