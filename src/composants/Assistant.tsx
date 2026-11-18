@@ -2,14 +2,13 @@
 // Une question libre : le petit modèle local (Ollama, CPU seulement) choisit un outil en lecture seule (programme,
 // disponibilités, service, technicien, véhicule…), le serveur calcule, le modèle reformule et chaque nombre est
 // vérifié (sinon le résultat du logiciel tel quel). Les suggestions appellent l'outil directement : réponse tout de
-// suite, sans modèle. La conversation reste ouverte d'une page à l'autre ; rien n'est enregistré. Le modèle choisi est
-// retenu par ce navigateur et sert aussi au brief du jour (contexte partagé).
+// suite, sans modèle. La conversation reste ouverte d'une page à l'autre ; rien n'est enregistré. Un seul modèle : celui
+// réglé sur le serveur (OLLAMA_MODELE_DEFAUT, Ministral), qui sert aussi au brief du jour (contexte partagé).
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { lireModeles, outilDirect, poserQuestion, SANS_IA, type Modeles } from '../accueil';
 import { auteur } from '../planification';
 import ReponseAssistant from './ReponseAssistant';
 
-const CLE_MODELE = 'd4b.assistant.modele';
 // suggestions : chacune appelle son outil directement (sans modèle)
 const SUGGESTIONS: { libelle: string; outil: string; arguments?: Record<string, string> }[] = [
   { libelle: 'Que faut-il traiter ?', outil: 'a_traiter' },
@@ -20,34 +19,18 @@ const SUGGESTIONS: { libelle: string; outil: string; arguments?: Record<string, 
 ];
 const SANS_MODELE: Modeles = { ollama: false, erreur: 'modèles illisibles', defaut: SANS_IA,
   modeles: [{ nom: SANS_IA, libelle: 'Sans IA', taille: null }] };
-const secondes = (ms: number) => ms < 100 ? '< 0,1 s'
-  : `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
 
-// ---------- modèle choisi, partagé entre le brief du jour et la conversation ----------
+// ---------- le modèle du serveur, partagé entre le brief du jour et la conversation ----------
 
-interface ModeleAssistant {
-  modeles: Modeles | null; modele: string | null; choisir: (nom: string) => void; libelle: (nom: string) => string;
-}
+interface ModeleAssistant { modeles: Modeles | null; modele: string | null; libelle: (nom: string) => string }
 const Contexte = createContext<ModeleAssistant | null>(null);
 
-/** Modèles proposés et modèle choisi (retenu par ce navigateur s'il est encore installé, sinon le défaut du serveur). */
+/** Le modèle réglé sur le serveur (OLLAMA_MODELE_DEFAUT) s'il est installé, sinon aucun (suggestions seulement). */
 export function ModeleAssistantProvider({ children }: { children: ReactNode }) {
   const [modeles, setModeles] = useState<Modeles | null>(null);
-  const [modele, setModele] = useState<string | null>(null);
-  useEffect(() => {
-    lireModeles().then((m) => {
-      setModeles(m);
-      let retenu: string | null = null;
-      try { retenu = localStorage.getItem(CLE_MODELE); } catch { /* stockage indisponible */ }
-      setModele(retenu && m.modeles.some((x) => x.nom === retenu) ? retenu : m.defaut);
-    }).catch(() => { setModeles(SANS_MODELE); setModele(SANS_IA); });
-  }, []);
-  const choisir = (nom: string) => {
-    setModele(nom);
-    try { localStorage.setItem(CLE_MODELE, nom); } catch { /* stockage indisponible */ }
-  };
+  useEffect(() => { lireModeles().then(setModeles).catch(() => setModeles(SANS_MODELE)); }, []);
   const libelle = (nom: string) => modeles?.modeles.find((x) => x.nom === nom)?.libelle ?? nom;
-  return <Contexte.Provider value={{ modeles, modele, choisir, libelle }}>{children}</Contexte.Provider>;
+  return <Contexte.Provider value={{ modeles, modele: modeles?.defaut ?? null, libelle }}>{children}</Contexte.Provider>;
 }
 
 export function useModeleAssistant(): ModeleAssistant {
@@ -59,7 +42,7 @@ export function useModeleAssistant(): ModeleAssistant {
 // ---------- conversation ----------
 
 type Message = { id: number; qui: 'moi' | 'assistant'; texte: string | null; modele?: string; duree_ms?: number;
-  raison?: string | null; enCours?: boolean; source?: 'modele' | 'logiciel' | null };
+  raison?: string | null; enCours?: boolean; source?: 'modele' | 'logiciel' | null; donnees?: string | null };
 
 function Etoile({ taille = 22 }: { taille?: number }) {
   return (
@@ -72,7 +55,7 @@ const Croix = () => <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden=
 const Points = () => <span className="as-points" aria-hidden="true"><i /><i /><i /></span>;
 
 export default function Assistant() {
-  const { modeles, modele, choisir, libelle } = useModeleAssistant();
+  const { modeles, modele } = useModeleAssistant();
   const [ouvert, setOuvert] = useState(false);
   const [nonLu, setNonLu] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -127,7 +110,7 @@ export default function Assistant() {
     setQuestion('');
     void demander(q, async () => {
       const r = await poserQuestion(modele!, q);
-      return { texte: r.reponse, source: r.source, duree_ms: r.duree_ms, raison: r.raison };
+      return { texte: r.reponse, source: r.source, duree_ms: r.duree_ms, raison: r.raison, donnees: r.donnees };
     }, true);
   };
   const suggerer = (s: (typeof SUGGESTIONS)[number]) => {
@@ -147,30 +130,30 @@ export default function Assistant() {
             <span className="as-avatar"><Etoile /></span>
             <div className="as-titres">
               <h2 id="as-titre">Assistant D4B</h2>
-              <label className="as-modele">
-                <span className="visuellement-cache">Modèle</span>
-                <select value={modele ?? SANS_IA} onChange={(e) => choisir(e.target.value)} disabled={!modeles}>
-                  {(modeles ?? SANS_MODELE).modeles.map((m) => (
-                    <option key={m.nom} value={m.nom}>{m.libelle}{m.taille ? ` · ${m.taille}` : ''}</option>))}
-                </select>
-              </label>
+              <p className="as-statut"><span className={`as-voyant${avecIa ? ' actif' : ''}`} aria-hidden="true" />
+                {avecIa ? 'En ligne · planification et Odoo' : modeles ? 'Suggestions seulement' : 'Connexion…'}</p>
             </div>
             <button type="button" className="as-fermer" onClick={fermer} aria-label="Fermer l'assistant"><Croix /></button>
           </header>
-          {modeles && !modeles.ollama && <p className="as-note">Aucun modèle local détecté (Ollama arrêté ou absent).</p>}
+          {modeles && !avecIa && <p className="as-note">Questions libres indisponibles (modèle local arrêté) : les
+            suggestions répondent quand même.</p>}
 
           <div className="as-fil" ref={fil} role="log" aria-live="polite" aria-label="Conversation avec l'assistant">
-            <p className="as-bulle assistant">{`Bonjour${prenom ? ` ${prenom}` : ''}, `}{avecIa
-              ? 'que voulez-vous savoir sur la planification ?'
-              : 'choisissez une suggestion, ou un modèle en haut pour poser vos propres questions.'}</p>
+            <div className="as-bulle assistant as-accueil">
+              <p><strong>👋 Bonjour{prenom ? ` ${prenom}` : ''} !</strong></p>
+              <p>Je connais la planification d'aujourd'hui et des semaines à venir 📅. Demandez-moi qui est libre, ce
+                qui manque pour demain ou le détail d'un service 🔧.</p>
+              <p className="as-accueil-pied">{avecIa ? 'Écrivez votre question, ou choisissez une suggestion 👇'
+                : 'Choisissez une suggestion 👇'}</p>
+            </div>
             {messages.map((m) => m.qui === 'moi'
               ? <p key={m.id} className="as-bulle moi">{m.texte}</p>
               : <div key={m.id} className="as-reponse">
                   {m.enCours ? <p className="as-bulle assistant attente"><Points />
                       <span className="visuellement-cache">L'assistant réfléchit</span></p>
-                    : m.texte ? <><ReponseAssistant texte={m.texte} />
-                        {m.source === 'modele' && <p className="as-signature">
-                          {libelle(m.modele!)}, {secondes(m.duree_ms ?? 0)} ; nombres vérifiés</p>}</>
+                    : m.texte && m.source === 'modele' && m.donnees
+                      ? <><p className="as-bulle assistant">{m.texte}</p><ReponseAssistant texte={m.donnees} /></>
+                    : m.texte ? <ReponseAssistant texte={m.texte} />
                     : <p className="as-bulle assistant muet">Pas de réponse fiable : {m.raison}</p>}
                 </div>)}
           </div>
@@ -187,7 +170,7 @@ export default function Assistant() {
             <span className="as-champ">
               <label className="visuellement-cache" htmlFor="as-question">Question à l'assistant</label>
               <input id="as-question" ref={champ} value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={500}
-                disabled={!avecIa} placeholder={avecIa ? 'Écrivez votre question…' : 'Choisissez un modèle'} />
+                disabled={!avecIa} placeholder={avecIa ? 'Écrivez votre question…' : 'Questions libres indisponibles'} />
               <button type="submit" disabled={!avecIa || !question.trim() || attend} aria-label="Envoyer">
                 <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 15.5v-11M5.5 9 10 4.5 14.5 9" /></svg>
               </button>

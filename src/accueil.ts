@@ -52,6 +52,7 @@ export interface BriefModele {
 export interface ReponseModele {
   modele: string; reponse: string | null; duree_ms: number; repli: boolean; raison: string | null;
   source: 'modele' | 'logiciel' | null; outils: { nom: string; arguments: Record<string, string> }[];
+  donnees: string | null;                        // résultat des outils, mis en forme sous la phrase du modèle
 }
 export interface ReponseOutil { outil: string; reponse: string; source: 'logiciel'; duree_ms: number }
 

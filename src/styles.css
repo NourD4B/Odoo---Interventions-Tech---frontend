@@ -2316,9 +2316,6 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .as-avatar svg { fill: #2f56c6; }
 .as-titres { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .as-titres h2 { margin: 0; font-size: 15.5px; letter-spacing: -.01em; }
-.as-modele select { max-width: 100%; padding: 0 18px 0 0; border: 0; background: transparent; color: var(--encre-3);
-  font: inherit; font-size: 12.5px; cursor: pointer; text-overflow: ellipsis; }
-.as-modele select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .as-fermer { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 50%;
   background: #0f1d44; color: #fff; cursor: pointer; }
 .as-fermer svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
@@ -2335,38 +2332,74 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
 .as-bulle.muet { color: var(--encre-3); }
 .as-bulle.attente { display: inline-flex; align-items: center; padding: 14px 16px; }   /* les points seulement */
 
-/* réponse structurée (résultat d'un outil) : carte large, titre, tableau libellé | valeur, pastilles, badges */
-.as-bulle.ra { width: 100%; max-width: 100%; padding: 4px 14px; white-space: normal; }
-.ra-bloc { padding: 10px 0; }
-.ra-bloc + .ra-bloc { border-top: 1px solid var(--bordure); }
-.ra-titre { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--encre); letter-spacing: -.005em; }
-.ra-table { margin: 0; display: grid; grid-template-columns: minmax(70px, max-content) minmax(0, 1fr); column-gap: 12px; }
-.ra-table.empile { grid-template-columns: minmax(0, 1fr); }
-.ra-table.empile dt { padding-bottom: 2px; }
-.ra-table.empile dd { padding-top: 0; border-top: 0; }
-.ra-ligne { display: contents; }
-.ra-ligne dt, .ra-ligne dd { margin: 0; padding: 6px 0; border-top: 1px solid #eef1f6; font-size: 13px; line-height: 1.45; }
-.ra-ligne:first-child dt, .ra-ligne:first-child dd { border-top: 0; }
-.ra-ligne dt { color: var(--encre-3); font-weight: 600; }
-.ra-ligne dd { color: var(--encre-2); min-width: 0; overflow-wrap: anywhere; }
-.ra-ligne.seule dd { grid-column: 1 / -1; }
-.ra-noms { display: flex; flex-wrap: wrap; gap: 4px; }
-.ra-nom { padding: 2px 8px; border-radius: 999px; background: var(--accent-doux); color: var(--accent); font-size: 12px; font-weight: 600; }
-.ra-compte { display: flex; align-items: flex-start; gap: 8px; }
-.ra-badge { flex: none; min-width: 22px; padding: 1px 6px; border-radius: 6px; background: #0f1d44; color: #fff; font-size: 12px;
-  text-align: center; }
-.ra-elements { display: flex; flex-direction: column; gap: 2px; }
-.ra-service { display: flex; flex-direction: column; gap: 1px; }
+/* réponse d'un outil : une carte par sorte (programme, disponibilités, à traiter, préparation, semaine, service,
+   technicien, véhicule) ; en-tête avec icône, titre et date ; lignes avec avatar, pastille de jour, point de gravité
+   ou icône ; état en pastille de couleur. Mêmes classes « ra- » dans le module Odoo. */
+.as-bulle.ra { width: 100%; max-width: 100%; padding: 0; overflow: hidden; white-space: normal; }
+.ra-carte + .ra-carte { border-top: 1px solid var(--bordure); }
+.ra-tete { display: flex; align-items: center; gap: 10px; padding: 12px 14px 10px;
+  background: linear-gradient(180deg, #f5f8ff 0%, #fff 100%); }
+.ra-icone { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
+  background: var(--accent-doux); color: var(--accent); }
+.g-traiter .ra-icone { background: var(--erreur-doux); color: var(--erreur); }
+.g-preparation .ra-icone { background: var(--en-route-doux); color: var(--en-route); }
+.g-dispo .ra-icone, .g-technicien .ra-icone { background: var(--dispo-doux); color: var(--dispo); }
+.ra-svg { flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ra-titres { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ra-titres h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--encre); letter-spacing: -.01em; }
+.ra-titres small { font-size: 12px; color: var(--encre-3); }
+.ra-badge-tete { flex: none; padding: 3px 9px; border-radius: 999px; background: #0f1d44; color: #fff; font-size: 11.5px; font-weight: 700; }
+.ra-lignes { list-style: none; margin: 0; padding: 2px 14px 8px; }
+.ra-ligne { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; }
+.ra-ligne + .ra-ligne { border-top: 1px dashed #e6eaf2; }
+.ra-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ra-libelle { font-size: 12px; font-weight: 600; color: var(--encre-3); }
+.ra-valeur { font-size: 13px; line-height: 1.45; color: var(--encre-2); overflow-wrap: anywhere; }
+.g-programme .ra-libelle, .g-technicien .ra-libelle, .g-vehicule .ra-libelle { color: var(--encre); font-size: 12.5px; }
+.ra-icone-ligne { flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 1px; border-radius: 8px;
+  background: #f1f4fa; color: var(--encre-3); }
+.ra-avatar { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, #3a63dc, #1b3275); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.ra-jour { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 42px;
+  padding: 3px 0; border-radius: 9px; background: var(--accent-doux); color: var(--accent); font-size: 11px; line-height: 1.2; }
+.ra-jour b { font-size: 10.5px; text-transform: capitalize; }
+.ra-gravite { flex: none; width: 10px; height: 10px; margin: 5px 8px 0 4px; border-radius: 50%; background: #9aa3b2;
+  box-shadow: 0 0 0 4px #eef0f3; }
+.ra-gravite.gv-urgent { background: var(--erreur); box-shadow: 0 0 0 4px var(--erreur-doux); }
+.ra-gravite.gv-attention { background: #d97706; box-shadow: 0 0 0 4px var(--alerte-doux); }
+.ra-service { display: flex; flex-direction: column; gap: 2px; }
+.ra-service-tete { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ra-service b { color: var(--encre); font-weight: 650; }
 .ra-service small { color: var(--encre-3); font-size: 12px; }
-.ra-etat { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-.ra-etat.ok { background: var(--dispo-doux); color: #115e59; }
-.ra-etat.manque { background: var(--en-route-doux); color: var(--en-route); }
-.ra-muet { color: var(--encre-3); }
-.ra-note { margin: 8px 0 0; font-size: 12.5px; color: var(--encre-2); }
+.ra-noms { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ra-nom { padding: 2px 9px; border-radius: 999px; background: var(--accent-doux); color: var(--accent); font-size: 12px; font-weight: 600; }
+.g-dispo .ra-ligne:nth-child(2) .ra-nom { background: var(--dispo-doux); color: #115e59; }          /* libres */
+.g-dispo .ra-ligne:nth-child(3) .ra-nom { background: var(--erreur-doux); color: var(--erreur); }  /* absents */
+.ra-compte { display: flex; align-items: flex-start; gap: 8px; }
+.ra-badge { flex: none; min-width: 22px; padding: 1px 6px; border-radius: 6px; background: #0f1d44; color: #fff; font-size: 12px; text-align: center; }
+.ra-elements { display: flex; flex-direction: column; gap: 2px; }
+.ra-etat { flex: none; padding: 1px 8px; border-radius: 999px; background: var(--neutre-doux); color: var(--encre-2);
+  font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.ra-etat.e-publie, .ra-etat.e-pret { background: var(--dispo-doux); color: #115e59; }
+.ra-etat.e-propose { background: var(--accent-doux); color: var(--accent); }
+.ra-etat.e-verrouille { background: #efedff; color: #5b3fc4; }
+.ra-etat.e-manque { background: var(--en-route-doux); color: var(--en-route); }
+.ra-etat.e-depassee, .ra-etat.e-urgent { background: var(--erreur-doux); color: var(--erreur); }
+.ra-retard { display: inline-flex; align-items: center; gap: 6px; }
+.ra-muet { color: var(--encre-3); font-style: italic; }
+.ra-note { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 14px 12px; font-size: 12.5px; color: var(--encre-2);
+  border-top: 1px solid var(--bordure); background: #fafbfd; }
 .ra-note b { color: var(--encre-3); }
+
+/* en-tête : état du modèle ; 1er message : bienvenue */
+.as-statut { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--encre-3); }
+.as-voyant { width: 8px; height: 8px; border-radius: 50%; background: #9aa3b2; }
+.as-voyant.actif { background: #16a34a; box-shadow: 0 0 0 3px #dcfce7; }
+.as-accueil { display: flex; flex-direction: column; gap: 6px; }
+.as-accueil p { margin: 0; }
+.as-accueil strong { font-size: 15px; color: var(--encre); }
+.as-accueil-pied { font-size: 12.5px; color: var(--encre-3); }
 .as-reponse { display: flex; flex-direction: column; align-items: flex-start; }
-.as-signature { margin: 4px 0 0 6px; font-size: 11px; color: var(--encre-3); }
 .as-points { display: inline-flex; gap: 3px; }
 .as-points i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: as-point 1.2s ease-in-out infinite; }
 .as-points i:nth-child(2) { animation-delay: .2s; }
