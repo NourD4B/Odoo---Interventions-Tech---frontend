@@ -47,7 +47,13 @@ export interface BriefModele {
   modele: string; phrases: Phrase[]; texte: string | null; duree_ms: number; repli: boolean; raison: string | null;
   en_cache: boolean; redige_le: string | null;
 }
-export interface ReponseModele { modele: string; reponse: string | null; duree_ms: number; repli: boolean; raison: string | null }
+/** Réponse à une question : `source` « modele » (reformulée, nombres vérifiés) ou « logiciel » (résultat de l'outil tel
+ * quel, ou ce que l'assistant sait faire). `outils` : outils choisis par le modèle (lecture seule). */
+export interface ReponseModele {
+  modele: string; reponse: string | null; duree_ms: number; repli: boolean; raison: string | null;
+  source: 'modele' | 'logiciel' | null; outils: { nom: string; arguments: Record<string, string> }[];
+}
+export interface ReponseOutil { outil: string; reponse: string; source: 'logiciel'; duree_ms: number }
 
 async function envoyer<T>(chemin: string, corps: unknown, signal?: AbortSignal): Promise<T> {
   const r = await fetch(`/api/accueil${chemin}`, { method: 'POST', signal,
@@ -65,6 +71,9 @@ export const demanderBrief = (modele: string, rafraichir = false, signal?: Abort
   envoyer<BriefModele>('/assistant/brief', { modele, rafraichir }, signal);
 export const poserQuestion = (modele: string, question: string, signal?: AbortSignal) =>
   envoyer<ReponseModele>('/assistant/question', { modele, question }, signal);
+/** Suggestion : l'outil répond directement, sans modèle (tout de suite, même sans Ollama). */
+export const outilDirect = (outil: string, args: Record<string, string> = {}, signal?: AbortSignal) =>
+  envoyer<ReponseOutil>('/assistant/outil', { outil, arguments: args }, signal);
 
 /** Fiche du service dans la Planification, sur la bonne semaine (onglet Réglages pour placer un site). */
 export const lienFiche = (id: number, semaine: string, onglet: 'reglages' | null = null) =>
