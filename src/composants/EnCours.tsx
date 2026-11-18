@@ -49,7 +49,6 @@ export default function EnCours({ interventions, jour }: { interventions: Interv
             </Link>
           </li>))}</ul>}
       {interventions.length > MAX && <p className="ac-suite">{interventions.length - MAX} autre{interventions.length - MAX > 1 ? 's' : ''} en cours</p>}
-      {interventions.length > 0 && <p className="ac-pied">Avancement d'après le planning (8 h – 18 h chaque jour).</p>}
     </section>
   );
 }
