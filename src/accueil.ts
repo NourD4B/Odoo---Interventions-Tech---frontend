@@ -94,7 +94,8 @@ export async function lireModeles(): Promise<Modeles> {
   if (!r.ok) throw new Error(`modèles : erreur ${r.status}`);
   return r.json() as Promise<Modeles>;
 }
-/** Brief du jour : celui gardé par le serveur (tout de suite), ou un nouveau avec `rafraichir` (« Réécrire »). */
+/** Brief du jour : celui gardé par le serveur tant que les faits ne changent pas (tout de suite), sinon un nouveau ;
+ * `rafraichir` en force un nouveau (l'écran ne s'en sert plus). */
 export const demanderBrief = (modele: string, rafraichir = false, signal?: AbortSignal) =>
   envoyer<BriefModele>('/assistant/brief', { modele, rafraichir }, signal);
 /** Question libre ; `historique` : derniers échanges de la conversation (3 au plus), pour « et demain ? ». */

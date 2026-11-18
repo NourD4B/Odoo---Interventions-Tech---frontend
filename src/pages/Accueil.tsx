@@ -202,7 +202,7 @@ export default function Accueil() {
       <EtatChargement chargement={accueil.chargement && !d} erreur={accueil.erreur} />
       {d && <>
         {/* le brief du jour (gardé pour la journée) ; la conversation est dans l'assistant flottant (bouton en bas) */}
-        <BriefDuJour phrases={d.brief} prenom={prenom} modele={ia.modele} libelleModele={ia.libelle}
+        <BriefDuJour phrases={d.brief} prenom={prenom} modele={ia.modele} version={d}
           libelleAction={libelleAction} onAction={allerA} />
 
         <div className="ac-grille">

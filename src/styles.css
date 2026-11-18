@@ -2267,14 +2267,10 @@ button.dp-odoo:disabled { opacity: .6; cursor: wait; }
   background: radial-gradient(90% 120% at 0% 0%, #eef3ff 0%, var(--surface) 55%); }
 .br-tete { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .br-bonjour { margin: 0; font-size: 24px; font-weight: 750; letter-spacing: -.02em; color: var(--encre); }
-.br-reecrire { flex: none; min-height: 30px; padding: 0 12px; border: 1px solid var(--bordure-forte); border-radius: 9px;
-  background: var(--surface); color: var(--encre-2); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-.br-reecrire:hover, .br-reecrire:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
 .br-resume { margin: 0; max-width: 72ch; padding: 2px 0 2px 14px; border-left: 3px solid var(--accent);
-  font-size: 16px; line-height: 1.55; color: var(--encre); }
-.br-resume.attente { display: flex; align-items: center; gap: 10px; border-left-color: var(--bordure-forte);
-  color: var(--encre-3); font-size: 14px; }
-.br-resume.attente .as-points i { background: var(--accent); }
+  font-size: 16px; line-height: 1.55; color: var(--encre); animation: br-apparait .45s ease-out; }
+@keyframes br-apparait { from { opacity: 0; } to { opacity: 1; } }   /* nouveau résumé : les données ont changé */
+@media (prefers-reduced-motion: reduce) { .br-resume { animation: none; } }
 .br-lignes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .br-ligne { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 12px; border-radius: 12px;
   background: var(--surface); border: 1px solid #edf0f5; }
