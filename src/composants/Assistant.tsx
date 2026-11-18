@@ -169,9 +169,8 @@ export default function Assistant() {
                   {m.enCours ? <p className="as-bulle assistant attente"><Points />
                       <span className="visuellement-cache">L'assistant réfléchit</span></p>
                     : m.texte ? <><ReponseAssistant texte={m.texte} />
-                        <p className="as-signature">{m.source === 'modele'
-                          ? `${libelle(m.modele!)}, ${secondes(m.duree_ms ?? 0)} ; nombres vérifiés`
-                          : `Calculé par le logiciel, ${secondes(m.duree_ms ?? 0)}${m.raison ? ` (réponse du modèle écartée : ${m.raison})` : ''}`}</p></>
+                        {m.source === 'modele' && <p className="as-signature">
+                          {libelle(m.modele!)}, {secondes(m.duree_ms ?? 0)} ; nombres vérifiés</p>}</>
                     : <p className="as-bulle assistant muet">Pas de réponse fiable : {m.raison}</p>}
                 </div>)}
           </div>
