@@ -42,8 +42,10 @@ export const SANS_IA = 'sans_ia';
 export interface ModeleAssistant { nom: string; libelle: string; taille: string | null }
 export interface Modeles { ollama: boolean; erreur: string | null; defaut: string; modeles: ModeleAssistant[] }
 export type Phrase = Accueil['brief'][number];
+/** Brief d'un modèle : gardé par le serveur pour la journée (`en_cache`), `redige_le` = heure de rédaction. */
 export interface BriefModele {
   modele: string; phrases: Phrase[]; texte: string | null; duree_ms: number; repli: boolean; raison: string | null;
+  en_cache: boolean; redige_le: string | null;
 }
 export interface ReponseModele { modele: string; reponse: string | null; duree_ms: number; repli: boolean; raison: string | null }
 
@@ -58,8 +60,9 @@ export async function lireModeles(): Promise<Modeles> {
   if (!r.ok) throw new Error(`modèles : erreur ${r.status}`);
   return r.json() as Promise<Modeles>;
 }
-export const demanderBrief = (modele: string, signal?: AbortSignal) =>
-  envoyer<BriefModele>('/assistant/brief', { modele }, signal);
+/** Brief du jour : celui gardé par le serveur (tout de suite), ou un nouveau avec `rafraichir` (« Réécrire »). */
+export const demanderBrief = (modele: string, rafraichir = false, signal?: AbortSignal) =>
+  envoyer<BriefModele>('/assistant/brief', { modele, rafraichir }, signal);
 export const poserQuestion = (modele: string, question: string, signal?: AbortSignal) =>
   envoyer<ReponseModele>('/assistant/question', { modele, question }, signal);
 

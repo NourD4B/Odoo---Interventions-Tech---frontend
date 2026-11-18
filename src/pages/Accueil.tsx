@@ -1,12 +1,14 @@
-// Accueil du dispatcher (page d'entrée). L'assistant résume la journée en quelques phrases écrites depuis les faits
-// calculés par le serveur (aucune IA, aucun nombre inventé), puis les mêmes faits à parcourir : à traiter (par
+// Accueil du dispatcher (page d'entrée). Le brief résume la journée (phrases écrites depuis les faits calculés par le
+// serveur, ou reformulées une fois par jour par un modèle local), à côté de la conversation avec l'assistant
+// (questions seulement), puis les mêmes faits à parcourir : à traiter (par
 // urgence), aujourd'hui (qui est sur quel service, libres, absents) et le prochain jour ouvré (ce qui manque à chaque
 // intervention). Chaque ligne ouvre l'écran où l'on agit. Les statistiques restent dans la page Statistiques.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { lienFiche, lireAccueil, type CategorieATraiter, type Controles } from '../accueil';
 import { EtatChargement, initiales, useDonnees } from '../composants';
-import Assistant from '../composants/Assistant';
+import Assistant, { useModeleAssistant } from '../composants/Assistant';
+import BriefDuJour from '../composants/BriefDuJour';
 import { meteo, temps, type Meteo } from '../meteo';
 import { auteur, planif } from '../planification';
 import { ErreurStats, stats } from '../statistiques';
@@ -71,6 +73,7 @@ export default function Accueil() {
   const navigate = useNavigate();
   const accueil = useDonnees(() => lireAccueil(), []);
   const d = accueil.donnees;
+  const ia = useModeleAssistant();
   const [maintenant, setMaintenant] = useState(() => new Date());
   useEffect(() => { const t = window.setInterval(() => setMaintenant(new Date()), 60_000); return () => window.clearInterval(t); }, []);
 
@@ -163,8 +166,12 @@ export default function Accueil() {
 
       <EtatChargement chargement={accueil.chargement && !d} erreur={accueil.erreur} />
       {d && <>
-        {/* l'assistant : brief du jour puis questions ; modèle de phrases ou petit modèle local au choix */}
-        <Assistant phrases={d.brief} prenom={prenom} libelleAction={libelleAction} onAction={allerA} />
+        {/* le brief du jour (gardé pour la journée) à côté de la conversation avec l'assistant (questions seulement) */}
+        <div className="ac-haut">
+          <BriefDuJour phrases={d.brief} prenom={prenom} modele={ia.modele} libelleModele={ia.libelle}
+            libelleAction={libelleAction} onAction={allerA} />
+          <Assistant modeles={ia.modeles} modele={ia.modele} onModele={ia.choisir} libelleModele={ia.libelle} />
+        </div>
 
         <div className="ac-grille">
           <section className="ac-carte ac-traiter" aria-labelledby="ac-titre-traiter">
