@@ -1,57 +1,48 @@
-// Identité quand l'application est ouverte dans Odoo (module d4b_interventions). Odoo passe un jeton signé (utilisateur
-// connecté) dans le fragment de l'adresse (#odoo_jeton=…&odoo_origine=…), jamais envoyé au serveur : il est gardé
-// pour l'onglet (sessionStorage, sinon en mémoire), retiré de l'adresse, puis renouvelé par Odoo toutes les 20 minutes
-// (message accepté de l'origine d'Odoo seulement). Chaque écriture l'envoie (en-tête X-Odoo-Jeton) : le serveur le
-// vérifie et journalise sous le nom Odoo. Le nom lu ici sert seulement à l'affichage (« Bonjour … ») et à ne plus
-// demander de nom. Hors d'Odoo : rien ne change (nom saisi, en-tête X-Auteur).
-const CLE_JETON = 'd4b.odoo.jeton';
-const CLE_ORIGINE = 'd4b.odoo.origine';
-let jetonMemoire: string | null = null;
-let origineMemoire: string | null = null;
+// Mode Odoo (« npm run build:odoo ») : l'application est servie par le module Odoo d4b_interventions, sous
+// /d4b_interventions/app, avec les mêmes écrans. Ses appels /api/… passent par Odoo (/d4b_interventions/api/…), qui
+// vérifie la session Odoo, ajoute l'identité signée de l'utilisateur connecté et les relaie au backend : aucun nom à
+// saisir, et le nom envoyé par le navigateur est ignoré. Le nom affiché (« Bonjour … ») vient de la page servie par
+// Odoo (window.__D4B_ODOO__). Hors mode Odoo (npm run build, npm run dev) : rien ne change.
+export const DANS_ODOO = import.meta.env.MODE === 'odoo';
+export const RACINE = DANS_ODOO ? '/d4b_interventions/app' : '';          // racine des écrans (React Router)
+const API_ODOO = '/d4b_interventions/api';
+const ENTETE_APPEL = 'X-D4B-Interventions';                               // appel de l'application (contre le CSRF)
 
-function lire(cle: string): string | null {
-  try { return sessionStorage.getItem(cle); } catch { return null; }
-}
-function ecrire(cle: string, valeur: string): void {
-  try { sessionStorage.setItem(cle, valeur); } catch { /* stockage indisponible : mémoire seule */ }
-}
+interface ConfigOdoo { nom?: string }
+declare global { interface Window { __D4B_ODOO__?: ConfigOdoo } }
 
-export const jetonOdoo = (): string | null => jetonMemoire ?? lire(CLE_JETON);
-export const origineOdoo = (): string | null => origineMemoire ?? lire(CLE_ORIGINE);
-
-/** Nom de l'utilisateur Odoo d'après le jeton (affichage seulement : la signature est vérifiée par le serveur). */
+/** Nom de l'utilisateur Odoo connecté (mode Odoo) ; sinon null. */
 export function nomOdoo(): string | null {
-  const jeton = jetonOdoo();
-  if (!jeton) return null;
-  try {
-    const b64 = jeton.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
-    const octets = Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
-    const nom = String((JSON.parse(new TextDecoder().decode(octets)) as { nom?: unknown }).nom ?? '').trim();
-    return nom || null;
-  } catch { return null; }
+  return DANS_ODOO ? (window.__D4B_ODOO__?.nom ?? '').trim() || null : null;
 }
 
-/** En-têtes d'identité d'une écriture : le nom (X-Auteur) et, dans Odoo, le jeton signé qui le remplace côté serveur. */
+/** Adresse d'un appel /api/… (mode Odoo : par le relais d'Odoo), pour ce qui n'est pas un fetch (image…). */
+export function adresseApi(chemin: string): string {
+  return DANS_ODOO && chemin.startsWith('/api/') ? API_ODOO + chemin.slice(4) : chemin;
+}
+
+/** En-tête d'identité d'une écriture hors d'Odoo (nom saisi) ; dans Odoo, le relais le remplace par l'utilisateur
+ * connecté. */
 export function entetesAuteur(nom: string): Record<string, string> {
-  const jeton = jetonOdoo();
-  return { 'X-Auteur': encodeURIComponent(nom), ...(jeton ? { 'X-Odoo-Jeton': jeton } : {}) };
+  return { 'X-Auteur': encodeURIComponent(nom) };
 }
 
-/** Au chargement de l'application : reprend le jeton passé par Odoo et écoute ses renouvellements. */
-export function capterIdentiteOdoo(): void {
-  const fragment = new URLSearchParams(window.location.hash.slice(1));
-  const jeton = fragment.get('odoo_jeton');
-  const origine = fragment.get('odoo_origine');
-  if (jeton !== null || origine !== null) {
-    if (jeton) { jetonMemoire = jeton; ecrire(CLE_JETON, jeton); }
-    if (origine) { origineMemoire = origine; ecrire(CLE_ORIGINE, origine); }
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
-  }
-  window.addEventListener('message', (e: MessageEvent) => {
-    const attendue = origineOdoo();
-    const d = e.data as { type?: unknown; jeton?: unknown } | null;
-    if (!attendue || e.origin !== attendue || !d || d.type !== 'd4b-odoo-jeton' || typeof d.jeton !== 'string') return;
-    jetonMemoire = d.jeton;
-    ecrire(CLE_JETON, d.jeton);
-  });
+/** Mode Odoo, au démarrage : chaque fetch vers /api/… de la même origine passe par le relais d'Odoo, avec l'en-tête
+ * d'appel de l'application ; session Odoo terminée (renvoi vers la connexion) : la page Odoo est rechargée. */
+export function installerModeOdoo(): void {
+  if (!DANS_ODOO) return;
+  const fetchNatif = window.fetch.bind(window);
+  window.fetch = async (entree: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    if (entree instanceof Request) return fetchNatif(entree, init);
+    const url = new URL(String(entree), window.location.href);
+    if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/')) return fetchNatif(entree, init);
+    url.pathname = API_ODOO + url.pathname.slice(4);
+    const entetes = new Headers(init?.headers);
+    entetes.set(ENTETE_APPEL, '1');
+    const reponse = await fetchNatif(url.href, { ...init, headers: entetes, credentials: 'same-origin' });
+    if (reponse.redirected && new URL(reponse.url).pathname.startsWith('/web/login')) {
+      window.top?.location.reload();                                       // reconnexion à Odoo
+    }
+    return reponse;
+  };
 }

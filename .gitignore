@@ -8,3 +8,4 @@ dist/
 .idea/
 Thumbs.db
 *.tsbuildinfo
+dist-odoo

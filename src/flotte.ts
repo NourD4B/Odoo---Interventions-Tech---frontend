@@ -1,6 +1,6 @@
 // API /api/flotte : véhicules (copie Odoo fleet.vehicle), fiche constructeur du modèle, rôle dans la planification,
 // photos ajoutées dans l'application (Odoo n'a que les logos des marques). Écritures : en-tête X-Auteur.
-import { entetesAuteur } from './identite';
+import { adresseApi, entetesAuteur } from './identite';
 import { auteur, AuteurManquant, ErreurPlanif } from './planification';
 
 export interface PhotoVehicule {
@@ -152,5 +152,5 @@ export const flotte = {
   cadrerPhoto: (id: number, c: Cadrage) => envoyer<PhotoVehicule>('PUT', `/vehicules/${id}/photo/cadrage`,
     new Blob([JSON.stringify(c)], { type: 'application/json' }), 'application/json'),
   urlPhoto: (id: number, photo: PhotoVehicule, taille: 'vignette' | 'grande' = 'vignette') =>
-    `/api/flotte/vehicules/${id}/photo?taille=${taille}&v=${photo.version}`,
+    adresseApi(`/api/flotte/vehicules/${id}/photo?taille=${taille}&v=${photo.version}`),
 };
